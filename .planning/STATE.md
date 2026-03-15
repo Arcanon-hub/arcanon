@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Service Dependency Intelligence
 status: planning
-stopped_at: Completed 16-02-PLAN.md — all 5 MCP tools implemented
-last_updated: "2026-03-15T17:32:45.632Z"
+stopped_at: Completed 16-03-PLAN.md — lint guard and bats tests for MCP server
+last_updated: "2026-03-15T17:37:23.280Z"
 last_activity: 2026-03-15 — Roadmap created, 8 phases defined (14-21)
 progress:
   total_phases: 8
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 19
-  completed_plans: 8
+  completed_plans: 9
   percent: 0
 ---
 
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 14-storage-foundation P02 | 5min | 2 tasks | 3 files |
 | Phase 15-worker-lifecycle P02 | 6min | 2 tasks | 3 files |
 | Phase 16-mcp-server P02 | 16min | 2 tasks | 3 files |
+| Phase 16-mcp-server P03 | 10min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 15-02]: Startup order: parse args → read settings → mkdir → write PID → register routes → listen → write port → log
 - [Phase 16-mcp-server]: Pure query functions exported as named exports (queryImpact etc.) to decouple from MCP SDK — enables unit testing with in-memory SQLite
 - [Phase 16-mcp-server]: FTS5 fallback catches 'no such table: connections_fts' specifically — avoids masking real query errors
+- [Phase 16-mcp-server]: MCP console.log guard placed before step-4 file check in lint.sh so CI invocations without file args still run the check
+- [Phase 16-mcp-server]: Bats assert for DB-absent test uses unquoted 'results' substring since MCP SDK JSON-encodes tool response text
 
 ### Pending Todos
 
@@ -101,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T17:32:42.053Z
-Stopped at: Completed 16-02-PLAN.md — all 5 MCP tools implemented
+Last session: 2026-03-15T17:37:23.275Z
+Stopped at: Completed 16-03-PLAN.md — lint guard and bats tests for MCP server
 Resume file: None
