@@ -1,126 +1,100 @@
-# Requirements: AllClear
+# Requirements: AllClear v2.0
 
 **Defined:** 2026-03-15
 **Core Value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
 
-## v1 Requirements
+## v2.0 Requirements
 
-### Plugin Foundation
+### Storage Foundation
 
-- [x] **PLGN-01**: Plugin follows Claude Code plugin format with plugin.json manifest, skills/, hooks/, and scripts/ directories at the plugin root
-- [x] **PLGN-02**: Plugin detects project type from manifest files (pyproject.toml → Python, Cargo.toml → Rust, package.json → Node/TS, go.mod → Go)
-- [x] **PLGN-03**: Plugin supports mixed-language projects by detecting all applicable project types in a directory
-- [x] **PLGN-04**: Plugin uses `${CLAUDE_PLUGIN_ROOT}` for all internal path references to survive cache-copy installation
-- [x] **PLGN-05**: Plugin provides shared bash library functions in lib/ for project detection and sibling repo discovery
-- [x] **PLGN-06**: Plugin can be installed via git clone and symlink into ~/.claude/plugins/
-- [x] **PLGN-07**: Hook scripts use jq for JSON parsing (same pattern as GSD: `printf '%s\n' "$JSON" | jq -r '.field // empty'`)
-- [x] **PLGN-08**: All hook scripts route debug output to stderr only — stdout is reserved for structured JSON responses
+- [ ] **STOR-01**: SQLite database created at `~/.allclear/projects/<hash>/impact-map.db` with WAL mode and FTS5 indexes
+- [ ] **STOR-02**: Schema supports repos, services, connections, schemas, fields, map_versions, repo_state tables
+- [ ] **STOR-03**: Query engine supports transitive impact queries via recursive CTEs with cycle detection and depth limit
+- [ ] **STOR-04**: FTS5 indexes on service names, endpoint paths, and field names for keyword search
+- [ ] **STOR-05**: Database migrations system for schema evolution across versions
 
-### Auto-Format Hook
+### Worker Process
 
-- [x] **FMTH-01**: Auto-format hook fires on PostToolUse for Edit and Write tool events
-- [x] **FMTH-02**: Hook formats Python files with ruff format (fallback: black)
-- [x] **FMTH-03**: Hook formats Rust files with rustfmt
-- [x] **FMTH-04**: Hook formats TypeScript/JavaScript files with prettier (fallback: eslint --fix)
-- [x] **FMTH-05**: Hook formats Go files with gofmt
-- [x] **FMTH-06**: Hook formats JSON/YAML files with prettier
-- [x] **FMTH-07**: Hook is silent on success (no output cluttering conversation)
-- [x] **FMTH-08**: Hook skips formatting if formatter is not installed (no nag)
-- [x] **FMTH-09**: Hook skips files in virtual envs, node_modules, and generated directories
-- [x] **FMTH-10**: Hook never blocks edits on formatter failure — exits 0 always
+- [ ] **WRKR-01**: Node.js worker runs as background daemon with PID file at `~/.allclear/worker.pid`
+- [ ] **WRKR-02**: Worker writes actual bound port to `~/.allclear/worker.port` for shell command discovery
+- [ ] **WRKR-03**: Worker supports graceful shutdown on SIGTERM/SIGINT
+- [ ] **WRKR-04**: Worker health check endpoint at `/api/readiness` confirms startup complete
+- [ ] **WRKR-05**: Duplicate worker prevention via PID file check before spawn
+- [ ] **WRKR-06**: Worker reads settings from `~/.allclear/settings.json`
+- [ ] **WRKR-07**: Worker logs to `~/.allclear/logs/` with configurable log level
 
-### Auto-Lint Hook
+### MCP Server
 
-- [x] **LNTH-01**: Auto-lint hook fires on PostToolUse for Edit and Write tool events
-- [x] **LNTH-02**: Hook lints Python files with ruff check
-- [x] **LNTH-03**: Hook lints Rust files with cargo clippy (throttled to max once per 30 seconds)
-- [x] **LNTH-04**: Hook lints TypeScript/JavaScript files with eslint
-- [x] **LNTH-05**: Hook lints Go files with golangci-lint
-- [x] **LNTH-06**: Hook outputs lint warnings to conversation so Claude can see and address them
-- [x] **LNTH-07**: Hook never blocks edits — informational only, exits 0 always
-- [x] **LNTH-08**: Hook skips if linter is not installed
+- [ ] **MCPS-01**: stdio MCP server registered via `.mcp.json` at plugin root, auto-discovered by Claude Code
+- [ ] **MCPS-02**: `impact_query` tool finds consumers/producers of an endpoint or service with transitive option
+- [ ] **MCPS-03**: `impact_scan` tool triggers repo scan (incremental or full)
+- [ ] **MCPS-04**: `impact_changed` tool reports what's affected by current git diff
+- [ ] **MCPS-05**: `impact_graph` tool returns dependency subgraph for a service with configurable depth and direction
+- [ ] **MCPS-06**: `impact_search` tool provides semantic search across the map (ChromaDB) or keyword search (FTS5 fallback)
+- [ ] **MCPS-07**: MCP server is a separate Node.js stdio process (spawned by Claude Code via `.mcp.json`), reads SQLite directly — no dependency on worker being running for queries
+- [ ] **MCPS-08**: MCP server implemented with @modelcontextprotocol/sdk using `McpServer` + `StdioServerTransport`
 
-### Sensitive File Guard Hook
+### HTTP Server & Web UI
 
-- [x] **GRDH-01**: Guard hook fires on PreToolUse for Edit and Write tool events
-- [x] **GRDH-02**: Hook hard-blocks edits to lock files (*.lock, Cargo.lock, poetry.lock, package-lock.json, bun.lock) using PreToolUse permissionDecision: "deny" schema
-- [x] **GRDH-03**: Hook hard-blocks edits to secret/credential files (.env, .env.*, *credentials*, *secret*, *.pem, *.key) with path normalization via realpath
-- [x] **GRDH-08**: Hook provides clear explanation in block messages ("AllClear: blocked write to .env — sensitive file protected")
-- [x] **GRDH-04**: Hook hard-blocks edits to generated directories (node_modules/, .venv/, target/)
-- [x] **GRDH-05**: Hook warns but allows edits to SQL migration files with immutability notice
-- [x] **GRDH-06**: Hook warns but allows edits to generated code files (*.pb.go, *_generated.*, *.gen.*)
-- [x] **GRDH-07**: Hook warns but allows edits to CHANGELOG.md with auto-generation notice
+- [ ] **HTTP-01**: Fastify HTTP server on configurable localhost port serving REST API and web UI
+- [ ] **HTTP-02**: `GET /graph` returns full service dependency graph as JSON
+- [ ] **HTTP-03**: `GET /impact?change=<endpoint>` returns affected services for a change
+- [ ] **HTTP-04**: `GET /service/:name` returns service details and all connections
+- [ ] **HTTP-05**: `POST /scan` triggers repo scan via API
+- [ ] **HTTP-06**: `GET /versions` returns map version history
+- [ ] **WEBUI-01**: Interactive D3 Canvas graph renders services as nodes and connections as edges
+- [ ] **WEBUI-02**: Clicking a node highlights all its connections (upstream and downstream)
+- [ ] **WEBUI-03**: Impact path highlighting shows transitive blast radius for a selected service
+- [ ] **WEBUI-04**: Protocol filter toggles visibility by connection type (REST, gRPC, events, internal)
+- [ ] **WEBUI-05**: Search box filters services by name
+- [ ] **WEBUI-06**: Web UI is a single `index.html` with ESM CDN imports — zero build step
 
-### Session Start Hook
+### Agent Scanning
 
-- [x] **SSTH-01**: Session start hook fires on SessionStart event with UserPromptSubmit fallback for brand-new sessions (upstream bug #10373)
-- [x] **SSTH-02**: Hook detects project type and displays available allclear commands
-- [x] **SSTH-03**: Hook is lightweight — checks files only, no tool execution
-- [x] **SSTH-04**: Hook can be disabled via ALLCLEAR_DISABLE_SESSION_START environment variable
-- [x] **SSTH-05**: Hook deduplicates — if both SessionStart and UserPromptSubmit fire, context is injected only once
+- [ ] **SCAN-01**: `/allclear:map` spawns Claude agents into each confirmed repo path
+- [ ] **SCAN-02**: Agents extract services, endpoints exposed/consumed, events produced/consumed, internal calls
+- [ ] **SCAN-03**: Agents extract schemas with field-level detail (name, type, required)
+- [ ] **SCAN-04**: Agents return findings with confidence levels (high/low)
+- [ ] **SCAN-05**: Incremental scan detects changed files via git diff since last scanned commit
+- [ ] **SCAN-06**: First scan forces full repo scan automatically
+- [ ] **SCAN-07**: `--full` flag forces full scan on subsequent runs
+- [ ] **SCAN-08**: Agents work on any language/framework with no external parser dependencies
 
-### Quality Gate Skill
+### User Confirmation
 
-- [x] **GATE-01**: `/allclear` skill runs all quality checks (lint, format, test, typecheck) appropriate to detected project type
-- [x] **GATE-02**: Skill supports subcommands: lint, format, test, typecheck, quick (lint+format only), fix (auto-fix lint+format)
-- [x] **GATE-03**: Skill prefers Makefile targets (make lint, make format, etc.) over direct tool invocation when Makefile exists
-- [x] **GATE-04**: Skill reports results with pass/fail status, timing, and command used for each check
-- [x] **GATE-05**: Skill offers auto-fix for lint/format failures only (never auto-fix test or typecheck)
+- [ ] **UCON-01**: All findings require user confirmation before persistence, regardless of confidence level
+- [ ] **UCON-02**: High-confidence findings presented as a batch summary for single confirm/edit
+- [ ] **UCON-03**: Low-confidence findings prompt specific clarification questions (service boundaries, ambiguous targets, protocol)
+- [ ] **UCON-04**: User can edit findings before confirmation (add, remove, modify services/connections)
 
-### Cross-Repo Impact Skill
+### Repo Discovery
 
-- [x] **IMPT-01**: `/allclear impact` skill scans sibling repos for references to specified search terms
-- [x] **IMPT-02**: Skill auto-detects sibling repos by scanning parent directory for .git/ directories
-- [x] **IMPT-03**: Skill supports `--changed` flag to auto-detect symbols from git diff HEAD~1
-- [x] **IMPT-04**: Skill classifies matches by type: code, config, documentation, test
-- [x] **IMPT-05**: Skill groups results by repo with match counts and file locations
-- [x] **IMPT-06**: Skill supports config override for sibling repo paths via allclear.config.json
-- [x] **IMPT-07**: Skill supports --exclude flag to skip specific repos
+- [ ] **DISC-01**: `/allclear:map` checks `allclear.config.json` for existing `linked-repos`
+- [ ] **DISC-02**: Even with config, checks memory + parent dir for repos NOT yet in config
+- [ ] **DISC-03**: Presents combined repo list to user with newly discovered repos highlighted
+- [ ] **DISC-04**: User confirms/edits repo list before scanning
+- [ ] **DISC-05**: Confirmed list saved to `allclear.config.json`
+- [ ] **DISC-06**: `--view` flag opens graph UI without scanning or repo confirmation
 
-### Cross-Repo Drift Skill
+### Command Layer
 
-- [x] **DRFT-01**: `/allclear drift` skill checks version alignment of shared dependencies across sibling repos
-- [x] **DRFT-02**: Skill checks type definition consistency for shared models across repos
-- [x] **DRFT-03**: Skill checks OpenAPI spec consistency for shared endpoints
-- [x] **DRFT-04**: Skill supports subcommands: versions, types, openapi
-- [x] **DRFT-05**: Skill reports drift with specific divergences and which repos are affected
-- [x] **DRFT-06**: Skill output uses severity levels and defaults to actionable differences only (not wall of text)
+- [ ] **CMDL-01**: `/allclear:map` orchestrates full flow: discover repos → confirm → scan → validate → persist → open UI
+- [ ] **CMDL-02**: `/allclear:cross-impact` queries impact map for services affected by current changes
+- [ ] **CMDL-03**: `/allclear:cross-impact` auto-detects changes from git diff when no args provided
+- [ ] **CMDL-04**: `/allclear:cross-impact` walks graph transitively and classifies impact as CRITICAL/WARN/INFO
+- [ ] **CMDL-05**: `/allclear:cross-impact` falls back to grep-based symbol scan when no map exists
+- [ ] **CMDL-06**: After impact report, suggests full re-scan if map may be stale
 
-### Service Health Skill
+### Integration & Config
 
-- [x] **PULS-01**: `/allclear pulse` skill checks health of running services via kubectl or ingress
-- [x] **PULS-02**: Skill parses /health endpoint responses (alive, ready, status, components)
-- [x] **PULS-03**: Skill compares running version to latest git tag
-- [x] **PULS-04**: Skill gracefully skips if kubectl is not available with clear message
-- [x] **PULS-05**: Skill supports targeting specific environments (dev, staging, prod)
+- [ ] **INTG-01**: `session-start.sh` auto-starts worker when `impact-map` section exists in `allclear.config.json`
+- [ ] **INTG-02**: `impact-map` section created automatically after first `/allclear:map` run
+- [ ] **INTG-03**: ChromaDB sync runs asynchronously after SQLite writes when configured
+- [ ] **INTG-04**: Search fallback chain: ChromaDB semantic → FTS5 keyword → direct SQL filter
+- [ ] **INTG-05**: First map build recommends configuring ChromaDB and adding MCP server
+- [ ] **INTG-06**: Map versioning creates SQLite snapshot before overwriting on re-scan (if user opts in)
 
-### Deploy Verification Skill
-
-- [x] **DPLY-01**: `/allclear deploy` skill compares expected state (kustomize/helm) to actual cluster state
-- [x] **DPLY-02**: Skill checks image tags match between code and deployed pods
-- [x] **DPLY-03**: Skill checks configmap values match between overlays and cluster
-- [x] **DPLY-04**: Skill gracefully skips if kubectl is not available with clear message
-- [x] **DPLY-05**: Skill supports --diff flag to show specific differences
-
-### Configuration
-
-- [x] **CONF-01**: Plugin supports allclear.config.json for overriding sibling repo paths
-- [x] **CONF-02**: Plugin supports environment variables for hook toggles (ALLCLEAR_DISABLE_FORMAT, ALLCLEAR_DISABLE_LINT, ALLCLEAR_DISABLE_GUARD)
-- [x] **CONF-03**: Plugin supports ALLCLEAR_LINT_THROTTLE for configuring clippy throttle interval
-- [x] **CONF-04**: Plugin supports ALLCLEAR_EXTRA_BLOCKED for additional blocked file patterns
-
-### Testing
-
-- [x] **TEST-01**: Bats test suite covers auto-format hook for each language (Python, Rust, TS, Go)
-- [x] **TEST-02**: Bats test suite covers auto-lint hook for each language
-- [x] **TEST-03**: Bats test suite covers sensitive file guard hook (hard blocks and soft warnings)
-- [x] **TEST-04**: Bats test suite covers session start hook
-- [x] **TEST-05**: Bats test suite covers project type detection library
-- [x] **TEST-06**: Bats test suite covers sibling repo discovery library
-- [x] **TEST-07**: Bats tests verify non-blocking guarantee (PostToolUse hooks always exit 0)
-- [x] **TEST-08**: Bats tests verify correct exit codes for PreToolUse blocking (exit 2)
-
-## v2 Requirements
+## v3.0 Requirements
 
 ### Distribution
 
@@ -130,110 +104,94 @@
 
 ### Enhanced Features
 
-- **ENHN-01**: LSP server bundling for real-time diagnostics beyond PostToolUse hooks
+- **ENHN-01**: Rust MCP server rewrite for faster startup if latency becomes a problem
+- **ENHN-02**: Multi-cluster kubectl context support for pulse/deploy commands
+- **ENHN-03**: D3 layout toggle (force-directed vs hierarchical) for large graphs
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Issue tracker integration (Linear, GitHub Issues) | Other plugins handle this; keeps AllClear zero external deps |
-| Blocking hooks for format/lint failures | Anti-pattern — blocks Claude's flow; warn and continue is correct |
-| Per-language config files (.allclear-python.json) | Config sprawl; delegate to underlying tools (ruff.toml, etc.) |
-| CI/CD pipeline integration | Separate concern; focus on local dev loop |
-| Monorepo support (Nx, Turborepo, Bazel) | AllClear targets multi-repo teams; monorepo orchestrators already solve this |
-| Real-time file watcher daemon | PostToolUse hooks already fire on every Claude edit |
-| Framework-specific rules | Violates framework-agnostic constraint; run native linters instead |
-| Auto-fix for test/typecheck failures | Unsafe — may silently alter code semantics |
+| External parser dependencies (tree-sitter, stack-graphs) | Agents read code directly; no tooling setup required |
+| Auto-persist findings without user confirmation | Silent graph corruption propagates to all impact queries |
+| OpenAPI-only schema detection | Must discover schemas from code regardless of spec existence |
+| Real-time file watching for map updates | On-demand scanning via `/allclear:map` is sufficient |
+| Multi-user concurrent map editing | Single-developer local tool; SQLite WAL handles read concurrency |
+| Cloud-hosted impact map service | Local-first; ChromaDB remote is optional enhancement, not a requirement |
+| SVG renderer for D3 graph | Performance cliff at 30+ nodes; Canvas only |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLGN-01 | Phase 1 | Complete |
-| PLGN-04 | Phase 1 | Complete |
-| PLGN-06 | Phase 1 | Complete |
-| PLGN-02 | Phase 2 | Complete |
-| PLGN-03 | Phase 2 | Complete |
-| PLGN-05 | Phase 2 | Complete |
-| PLGN-07 | Phase 2 | Complete |
-| PLGN-08 | Phase 2 | Complete |
-| FMTH-01 | Phase 3 | Complete |
-| FMTH-02 | Phase 3 | Complete |
-| FMTH-03 | Phase 3 | Complete |
-| FMTH-04 | Phase 3 | Complete |
-| FMTH-05 | Phase 3 | Complete |
-| FMTH-06 | Phase 3 | Complete |
-| FMTH-07 | Phase 3 | Complete |
-| FMTH-08 | Phase 3 | Complete |
-| FMTH-09 | Phase 3 | Complete |
-| FMTH-10 | Phase 3 | Complete |
-| LNTH-01 | Phase 4 | Complete |
-| LNTH-02 | Phase 4 | Complete |
-| LNTH-03 | Phase 4 | Complete |
-| LNTH-04 | Phase 4 | Complete |
-| LNTH-05 | Phase 4 | Complete |
-| LNTH-06 | Phase 4 | Complete |
-| LNTH-07 | Phase 4 | Complete |
-| LNTH-08 | Phase 4 | Complete |
-| GRDH-01 | Phase 5 | Complete |
-| GRDH-02 | Phase 5 | Complete |
-| GRDH-03 | Phase 5 | Complete |
-| GRDH-04 | Phase 5 | Complete |
-| GRDH-05 | Phase 5 | Complete |
-| GRDH-06 | Phase 5 | Complete |
-| GRDH-07 | Phase 5 | Complete |
-| GRDH-08 | Phase 5 | Complete |
-| SSTH-01 | Phase 6 | Complete |
-| SSTH-02 | Phase 6 | Complete |
-| SSTH-03 | Phase 6 | Complete |
-| SSTH-04 | Phase 6 | Complete |
-| SSTH-05 | Phase 6 | Complete |
-| GATE-01 | Phase 7 | Complete |
-| GATE-02 | Phase 7 | Complete |
-| GATE-03 | Phase 7 | Complete |
-| GATE-04 | Phase 7 | Complete |
-| GATE-05 | Phase 7 | Complete |
-| CONF-01 | Phase 8 | Complete |
-| CONF-02 | Phase 8 | Complete |
-| CONF-03 | Phase 8 | Complete |
-| CONF-04 | Phase 8 | Complete |
-| IMPT-01 | Phase 9 | Complete |
-| IMPT-02 | Phase 9 | Complete |
-| IMPT-03 | Phase 9 | Complete |
-| IMPT-04 | Phase 9 | Complete |
-| IMPT-05 | Phase 9 | Complete |
-| IMPT-06 | Phase 9 | Complete |
-| IMPT-07 | Phase 9 | Complete |
-| DRFT-01 | Phase 10 | Complete |
-| DRFT-02 | Phase 10 | Complete |
-| DRFT-03 | Phase 10 | Complete |
-| DRFT-04 | Phase 10 | Complete |
-| DRFT-05 | Phase 10 | Complete |
-| DRFT-06 | Phase 10 | Complete |
-| PULS-01 | Phase 11 | Complete |
-| PULS-02 | Phase 11 | Complete |
-| PULS-03 | Phase 11 | Complete |
-| PULS-04 | Phase 11 | Complete |
-| PULS-05 | Phase 11 | Complete |
-| DPLY-01 | Phase 12 | Complete |
-| DPLY-02 | Phase 12 | Complete |
-| DPLY-03 | Phase 12 | Complete |
-| DPLY-04 | Phase 12 | Complete |
-| DPLY-05 | Phase 12 | Complete |
-| TEST-01 | Phase 13 | Complete |
-| TEST-02 | Phase 13 | Complete |
-| TEST-03 | Phase 13 | Complete |
-| TEST-04 | Phase 13 | Complete |
-| TEST-05 | Phase 13 | Complete |
-| TEST-06 | Phase 13 | Complete |
-| TEST-07 | Phase 13 | Complete |
-| TEST-08 | Phase 13 | Complete |
+| STOR-01 | TBD | Pending |
+| STOR-02 | TBD | Pending |
+| STOR-03 | TBD | Pending |
+| STOR-04 | TBD | Pending |
+| STOR-05 | TBD | Pending |
+| WRKR-01 | TBD | Pending |
+| WRKR-02 | TBD | Pending |
+| WRKR-03 | TBD | Pending |
+| WRKR-04 | TBD | Pending |
+| WRKR-05 | TBD | Pending |
+| WRKR-06 | TBD | Pending |
+| WRKR-07 | TBD | Pending |
+| MCPS-01 | TBD | Pending |
+| MCPS-02 | TBD | Pending |
+| MCPS-03 | TBD | Pending |
+| MCPS-04 | TBD | Pending |
+| MCPS-05 | TBD | Pending |
+| MCPS-06 | TBD | Pending |
+| MCPS-07 | TBD | Pending |
+| MCPS-08 | TBD | Pending |
+| HTTP-01 | TBD | Pending |
+| HTTP-02 | TBD | Pending |
+| HTTP-03 | TBD | Pending |
+| HTTP-04 | TBD | Pending |
+| HTTP-05 | TBD | Pending |
+| HTTP-06 | TBD | Pending |
+| WEBUI-01 | TBD | Pending |
+| WEBUI-02 | TBD | Pending |
+| WEBUI-03 | TBD | Pending |
+| WEBUI-04 | TBD | Pending |
+| WEBUI-05 | TBD | Pending |
+| WEBUI-06 | TBD | Pending |
+| SCAN-01 | TBD | Pending |
+| SCAN-02 | TBD | Pending |
+| SCAN-03 | TBD | Pending |
+| SCAN-04 | TBD | Pending |
+| SCAN-05 | TBD | Pending |
+| SCAN-06 | TBD | Pending |
+| SCAN-07 | TBD | Pending |
+| SCAN-08 | TBD | Pending |
+| UCON-01 | TBD | Pending |
+| UCON-02 | TBD | Pending |
+| UCON-03 | TBD | Pending |
+| UCON-04 | TBD | Pending |
+| DISC-01 | TBD | Pending |
+| DISC-02 | TBD | Pending |
+| DISC-03 | TBD | Pending |
+| DISC-04 | TBD | Pending |
+| DISC-05 | TBD | Pending |
+| DISC-06 | TBD | Pending |
+| CMDL-01 | TBD | Pending |
+| CMDL-02 | TBD | Pending |
+| CMDL-03 | TBD | Pending |
+| CMDL-04 | TBD | Pending |
+| CMDL-05 | TBD | Pending |
+| CMDL-06 | TBD | Pending |
+| INTG-01 | TBD | Pending |
+| INTG-02 | TBD | Pending |
+| INTG-03 | TBD | Pending |
+| INTG-04 | TBD | Pending |
+| INTG-05 | TBD | Pending |
+| INTG-06 | TBD | Pending |
 
 **Coverage:**
-- v1 requirements: 79 total
-- Mapped to phases: 79
-- Unmapped: 0
+- v2.0 requirements: 58 total
+- Mapped to phases: 0
+- Unmapped: 58 ⚠️
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 after roadmap revision to parallel structure*
+*Last updated: 2026-03-15 after milestone v2.0 definition*
