@@ -90,7 +90,8 @@ test('querySearch: null db returns empty results', async () => {
 
 test('querySearch: FTS5 query returns matching rows', async () => {
   const db = createTestDb({ withFts: true });
-  const result = await querySearch(db, { query: 'payment', limit: 20 });
+  // FTS5 uses token-based matching: "payments" is the token in the path "/payments/charge"
+  const result = await querySearch(db, { query: 'payments', limit: 20 });
   db.close();
   assert.ok(Array.isArray(result.results), 'results should be array');
   assert.ok(result.results.length >= 1, 'expected at least one FTS match');

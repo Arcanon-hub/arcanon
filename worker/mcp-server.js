@@ -288,6 +288,105 @@ export async function queryGraph(db, { service, depth = 2, direction = 'both' })
   return { nodes, edges };
 }
 
+/**
+ * Full-text search across connections via FTS5, with SQL LIKE fallback.
+ * @param {Database|null} db
+ * @param {{ query: string, limit?: number }} params
+ * @returns {{ results: Array, search_mode: string }}
+ */
+export async function querySearch(db, { query, limit = 20 }) {
+  if (!db) return { results: [] };
+
+  // Attempt FTS5 query first
+  try {
+    const rows = db.prepare(`
+      SELECT c.path, c.protocol,
+             s_src.name as source_service,
+             s_tgt.name as target_service
+      FROM connections_fts fts
+      JOIN connections c ON c.rowid = fts.rowid
+      JOIN services s_src ON c.source_service_id = s_src.id
+      JOIN services s_tgt ON c.target_service_id = s_tgt.id
+      WHERE connections_fts MATCH ?
+      LIMIT ?
+    `).all(query, limit);
+    return { results: rows, search_mode: 'fts5' };
+  } catch (err) {
+    // If FTS5 table doesn't exist, fall back to SQL LIKE
+    if (err.message && err.message.includes('no such table: connections_fts')) {
+      const pattern = `%${query}%`;
+      const rows = db.prepare(`
+        SELECT c.path, c.protocol,
+               s_src.name as source_service,
+               s_tgt.name as target_service
+        FROM connections c
+        JOIN services s_src ON c.source_service_id = s_src.id
+        JOIN services s_tgt ON c.target_service_id = s_tgt.id
+        WHERE c.path LIKE ? OR c.source_file LIKE ?
+        LIMIT ?
+      `).all(pattern, pattern, limit);
+      return { results: rows, search_mode: 'sql_fallback' };
+    }
+    console.error('[allclear-mcp] querySearch error:', err.message);
+    return { results: [], search_mode: 'error' };
+  }
+}
+
+/**
+ * Trigger a scan via the HTTP worker, or return unavailable if worker is not running.
+ * @param {{ repo?: string, full?: boolean }} params
+ * @returns {{ status: string, message: string }}
+ */
+export async function queryScan({ repo, full = false } = {}) {
+  try {
+    const portFilePath = path.join(process.cwd(), '.allclear', 'worker.port');
+    let port;
+    try {
+      port = fs.readFileSync(portFilePath, 'utf8').trim();
+    } catch {
+      return {
+        status: 'unavailable',
+        message: 'Worker not running. Run /allclear:map to build the dependency map.',
+      };
+    }
+
+    if (!port) {
+      return {
+        status: 'unavailable',
+        message: 'Worker not running. Run /allclear:map to build the dependency map.',
+      };
+    }
+
+    // Check readiness with 2-second timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    try {
+      const res = await fetch(`http://localhost:${port}/api/readiness`, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) {
+        return { status: 'unavailable', message: `Worker not responding on port ${port}.` };
+      }
+    } catch (err) {
+      clearTimeout(timeout);
+      return { status: 'unavailable', message: `Worker not responding on port ${port}.` };
+    }
+
+    // Trigger scan
+    try {
+      await fetch(`http://localhost:${port}/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo, full }),
+      });
+      return { status: 'triggered', message: 'Scan started. Results will be available after confirmation.' };
+    } catch (err) {
+      return { status: 'error', message: err.message };
+    }
+  } catch (err) {
+    return { status: 'error', message: err.message };
+  }
+}
+
 // ─────────────────────────────────────────────────────────────
 // MCP Server setup
 // ─────────────────────────────────────────────────────────────
@@ -349,7 +448,35 @@ server.tool(
   }
 );
 
-// Tools for impact_search and impact_scan will be added in Task 2.
+// ── impact_search ─────────────────────────────────────────────
+server.tool(
+  'impact_search',
+  'Full-text search across all service connections by path, protocol, or file name. Falls back to SQL LIKE when FTS5 index is unavailable.',
+  {
+    query: z.string().describe('Search term to match against connection paths, protocols, and file names'),
+    limit: z.number().int().min(1).max(100).default(20).describe('Maximum number of results to return'),
+  },
+  async (params) => {
+    const db = openDb();
+    const result = await querySearch(db, params);
+    if (db) db.close();
+    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+  }
+);
+
+// ── impact_scan ──────────────────────────────────────────────
+server.tool(
+  'impact_scan',
+  'Trigger a dependency scan via the AllClear HTTP worker. Returns unavailable when the worker is not running.',
+  {
+    repo: z.string().optional().describe('Absolute path to the repo to scan (defaults to cwd)'),
+    full: z.boolean().default(false).describe('When true, forces a full re-scan instead of an incremental scan'),
+  },
+  async (params) => {
+    const result = await queryScan(params);
+    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+  }
+);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
