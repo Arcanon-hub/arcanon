@@ -70,34 +70,46 @@ Save confirmed list to `allclear.config.json`.
 
 **This is the main task.** For each confirmed repo, spawn an agent to analyze the code.
 
-1. Read the agent prompt template:
+**Scan mode:** If `--full` flag is present OR this is the first scan (no existing data), scan all files in every repo. Otherwise, only scan repos with changes since last scan — check git HEAD against the last scanned commit.
 
-```bash
-cat ${CLAUDE_PLUGIN_ROOT}/worker/agent-prompt.md
-```
+**For each repo:**
 
-2. For each repo, replace `{{REPO_PATH}}` with the absolute path and `{{SERVICE_HINT}}` with empty string.
+1. **Check if scan is needed** (skip for `--full` or first scan):
 
-3. **Spawn an agent for each repo** using the Agent tool:
+   ```bash
+   LAST_COMMIT=$(git -C "${REPO_PATH}" rev-parse HEAD 2>/dev/null)
+   ```
 
-```
-Agent(
-  prompt="<filled prompt with repo path>",
-  subagent_type="Explore",
-  description="Scan <repo-name> for services"
-)
-```
+   Compare with the repo's `last_scanned_commit` from the database. If they match and `--full` is not set, skip this repo and print: "Skipping <repo> (no changes since last scan)".
 
-4. The agent returns a JSON code block with `services`, `connections`, and `schemas` arrays. Extract the JSON from between the ``` markers.
+2. Read the agent prompt template:
 
-5. Print progress:
+   ```bash
+   cat ${CLAUDE_PLUGIN_ROOT}/worker/agent-prompt.md
+   ```
 
-```
-Scanning 1/N: api... done (3 services, 5 connections)
-Scanning 2/N: auth... done (1 service, 2 connections)
-```
+3. Replace `{{REPO_PATH}}` with the absolute path and `{{SERVICE_HINT}}` with empty string.
 
-6. Collect all findings. Group by confidence (high/low).
+4. **Spawn an agent** using the Agent tool:
+
+   ```
+   Agent(
+     prompt="<filled prompt with repo path>",
+     subagent_type="Explore",
+     description="Scan <repo-name> for services"
+   )
+   ```
+
+5. The agent returns a JSON code block with `services`, `connections`, and `schemas` arrays. Extract the JSON from between the ``` markers.
+
+6. Print progress:
+
+   ```
+   Scanning 1/N: api... done (3 services, 5 connections)
+   Scanning 2/N: auth... (skipped — no changes)
+   ```
+
+7. Collect all findings. Group by confidence (high/low).
 
 ---
 
