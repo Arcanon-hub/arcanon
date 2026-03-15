@@ -92,7 +92,10 @@ Plans:
   4. Opening the web UI in a browser renders all services as Canvas nodes with labeled edges; clicking a node highlights all its direct connections in a distinct color
   5. The transitive blast radius for a selected service is visually highlighted across all hops; the protocol filter toggles hide/show connections by type; the search box filters the visible node set by name
   6. The web UI is a single `index.html` file that loads via ESM CDN imports with no build step — no bundler, no npm install required to view it
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 17-01-PLAN.md — Fastify HTTP server with all REST API routes and npm dependency setup
+- [ ] 17-02-PLAN.md — D3 Canvas web UI with force-directed graph, interactions, and visual verification
 
 ### Phase 18: Agent Scanning
 **Goal**: The scan manager can dispatch Claude agents into linked repos, collect structured service dependency findings with confidence levels, and perform incremental scans based on git history
@@ -117,7 +120,10 @@ Plans:
   4. Low-confidence findings trigger specific clarifying questions (service boundaries, ambiguous call targets, protocol identification); at most 10 low-confidence findings are presented per scan run
   5. The user can edit any finding (add, remove, or modify services and connections) before confirming; no findings are written to SQLite until the user explicitly confirms
   6. Running `/allclear:map --view` opens the graph UI directly without triggering repo discovery, scanning, or any confirmation flow
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 19-01-PLAN.md — Repo discovery module (loadFromConfig, discoverNew, saveConfirmed, formatRepoList, isViewOnlyMode)
+- [ ] 19-02-PLAN.md — User confirmation flow (groupByConfidence, formatHighConfidenceSummary, formatLowConfidenceQuestions, applyEdits, buildConfirmationPrompt)
 
 ### Phase 20: Command Layer
 **Goal**: `/allclear:map` and `/allclear:cross-impact` are fully operational as user-facing commands that orchestrate the worker pipeline and degrade gracefully when no map exists
@@ -153,6 +159,6 @@ Plans:
 | 16. MCP Server | v2.0 | 0/? | Not started | - |
 | 17. HTTP Server & Web UI | v2.0 | 0/? | Not started | - |
 | 18. Agent Scanning | v2.0 | 0/? | Not started | - |
-| 19. Repo Discovery & User Confirmation | v2.0 | 0/? | Not started | - |
+| 19. Repo Discovery & User Confirmation | v2.0 | 0/2 | Not started | - |
 | 20. Command Layer | v2.0 | 0/? | Not started | - |
 | 21. Integration & Config | v2.0 | 0/? | Not started | - |
