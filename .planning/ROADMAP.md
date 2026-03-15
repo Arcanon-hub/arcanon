@@ -154,7 +154,7 @@ Plans:
   3. Sibling repos are discovered automatically from the parent directory; `allclear.config.json` can override the list; `--exclude <repo>` skips specific repos from the scan
 **Plans:** 1 plan
 Plans:
-- [ ] 02-01-PLAN.md — Create lib/detect.sh and lib/siblings.sh shared libraries
+- [ ] 09-01-PLAN.md — Create sibling discovery library, impact scan engine, and SKILL.md
 
 ### Phase 10: Drift Skill
 **Goal**: Developers can detect version and type inconsistencies across sibling repos with one command, with actionable differences shown by default and severity levels for triage
@@ -227,7 +227,7 @@ All phases are independent and can execute in parallel. No ordering constraints.
 | 6. Session Hook | 0/TBD | Not started | - |
 | 7. Quality Gate Skill | 0/TBD | Not started | - |
 | 8. Config Layer | 0/1 | Planned | - |
-| 9. Impact Skill | 0/TBD | Not started | - |
+| 9. Impact Skill | 0/1 | Planning complete | - |
 | 10. Drift Skill | 0/TBD | Not started | - |
 | 11. Pulse Skill | 0/1 | Planning complete | - |
 | 12. Deploy Skill | 0/1 | Planning complete | - |
