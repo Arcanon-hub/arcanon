@@ -82,7 +82,11 @@ Plans:
   3. `impact_changed` tool called in a repo with uncommitted changes returns the services affected by those specific file changes
   4. All five MCP tools (`impact_query`, `impact_scan`, `impact_changed`, `impact_graph`, `impact_search`) return empty results (not errors) when the database does not yet exist
   5. No `console.log` call in `worker/mcp-server.js` — all logging goes to stderr — verified by a CI lint check; calling any tool returns a valid JSON-RPC response without stdout corruption
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 16-01-PLAN.md — MCP server skeleton: package.json deps, worker/mcp-server.js foundation, .mcp.json registration
+- [ ] 16-02-PLAN.md — All 5 MCP tools: impact_query, impact_changed, impact_graph, impact_search, impact_scan
+- [ ] 16-03-PLAN.md — CI lint check (console.log guard), bats test suite, human verification checkpoint
 
 ### Phase 17: HTTP Server & Web UI
 **Goal**: Users can open a browser and see their service dependency graph as an interactive force-directed visualization, and the REST API supports all graph query operations
@@ -170,9 +174,9 @@ Plans:
 | 1-13 | v1.0 | 17/17 | Complete | 2026-03-15 |
 | 14. Storage Foundation | v2.0 | 0/2 | In progress | - |
 | 15. Worker Lifecycle | v2.0 | 0/2 | Planned | - |
-| 16. MCP Server | v2.0 | 0/? | Not started | - |
-| 17. HTTP Server & Web UI | v2.0 | 0/? | Not started | - |
+| 16. MCP Server | v2.0 | 0/3 | Planned | - |
+| 17. HTTP Server & Web UI | v2.0 | 0/2 | Planned | - |
 | 18. Agent Scanning | v2.0 | 0/2 | Not started | - |
 | 19. Repo Discovery & User Confirmation | v2.0 | 0/2 | Not started | - |
 | 20. Command Layer | v2.0 | 0/2 | Planned | - |
-| 21. Integration & Config | v2.0 | 0/? | Not started | - |
+| 21. Integration & Config | v2.0 | 0/4 | Planned | - |
