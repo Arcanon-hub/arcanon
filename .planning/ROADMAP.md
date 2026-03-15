@@ -20,7 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Format Hook** - Auto-format on every Claude edit for Python, Rust, TypeScript, Go, JSON, YAML (completed 2026-03-15)
 - [ ] **Phase 4: Lint Hook** - Auto-lint on every Claude edit with per-language linter invocation
 - [ ] **Phase 5: Guard Hook** - Hard-block and soft-warn PreToolUse hook for sensitive and generated files
-- [ ] **Phase 6: Session Hook** - Session-start context injection with project type and available commands
+- [x] **Phase 6: Session Hook** - Session-start context injection with project type and available commands (completed 2026-03-15)
 - [ ] **Phase 7: Quality Gate Skill** - `/allclear` slash-command for full quality checks and subcommands
 - [x] **Phase 8: Config Layer** - allclear.config.json overrides and environment variable toggles (completed 2026-03-15)
 - [ ] **Phase 9: Impact Skill** - `/allclear impact` cross-repo reference scanning
@@ -110,7 +110,7 @@ Plans:
   3. If both SessionStart and UserPromptSubmit fire in the same session, context is injected only once
   4. The hook performs no tool execution — it reads manifest files only
   5. Setting `ALLCLEAR_DISABLE_SESSION_START=1` suppresses the hook entirely
-**Plans:** 1 plan
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 02-01-PLAN.md — Create lib/detect.sh and lib/siblings.sh shared libraries
 
@@ -225,7 +225,7 @@ All phases are independent and can execute in parallel. No ordering constraints.
 | 3. Format Hook | 1/1 | Complete   | 2026-03-15 |
 | 4. Lint Hook | 0/1 | Planned | - |
 | 5. Guard Hook | 0/1 | Planned | - |
-| 6. Session Hook | 0/2 | Planning complete | - |
+| 6. Session Hook | 2/2 | Complete   | 2026-03-15 |
 | 7. Quality Gate Skill | 0/1 | Planning complete | - |
 | 8. Config Layer | 1/1 | Complete   | 2026-03-15 |
 | 9. Impact Skill | 0/1 | Planning complete | - |

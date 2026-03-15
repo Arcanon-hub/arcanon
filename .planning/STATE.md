@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 06-session-hook-02-PLAN.md
-last_updated: "2026-03-15T10:12:07.447Z"
+stopped_at: Completed 09-impact-skill 09-01-PLAN.md
+last_updated: "2026-03-15T10:12:24.860Z"
 last_activity: 2026-03-15 — Roadmap revised to parallel structure, 7 sequential phases replaced with 13 independent phases
 progress:
   total_phases: 13
-  completed_phases: 10
+  completed_phases: 11
   total_plans: 17
-  completed_plans: 12
+  completed_plans: 14
   percent: 29
 ---
 
@@ -62,6 +62,7 @@ Progress: [███░░░░░░░] 29%
 | Phase 07-quality-gate-skill P01 | 2 | 2 tasks | 1 files |
 | Phase 06-session-hook P02 | 3 | 1 tasks | 2 files |
 | Phase 09-impact-skill P01 | 4 | 2 tasks | 3 files |
+| Phase 13-tests P01 | 3 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,9 @@ Recent decisions affecting current work:
 - [Phase 13-tests]: PATH-stub marker pattern chosen for invocation verification — stubs touch marker files, hermetic and reliable
 - [Phase 07-quality-gate-skill]: Makefile targets preferred via make -qp; fix subcommand hard-scoped to lint+format only (never test/typecheck); skill documents both /allclear and /allclear:quality-gate namespace forms
 - [Phase 06-session-hook]: Used isolated MOCK_PLUGIN_ROOT (mktemp -d per test) for hook script testing — complete isolation prevents test ordering issues
+- [Phase 09-impact-skill]: awk classification inline with grep pipeline rather than per-line bash classify_match to avoid subshell fork overhead
+- [Phase 09-impact-skill]: discover_siblings alias added in lib/siblings.sh for backward compat with Phase 02 callers while list_siblings becomes canonical name
+- [Phase 09-impact-skill]: SKILL.md uses live shell injection for sibling discovery so Claude sees current sibling list at invocation time
 
 ### Pending Todos
 
@@ -113,6 +117,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T10:12:07.443Z
-Stopped at: Completed 06-session-hook-02-PLAN.md
+Last session: 2026-03-15T10:12:13.604Z
+Stopped at: Completed 09-impact-skill 09-01-PLAN.md
 Resume file: None

@@ -69,13 +69,13 @@
 
 ### Cross-Repo Impact Skill
 
-- [ ] **IMPT-01**: `/allclear impact` skill scans sibling repos for references to specified search terms
-- [ ] **IMPT-02**: Skill auto-detects sibling repos by scanning parent directory for .git/ directories
-- [ ] **IMPT-03**: Skill supports `--changed` flag to auto-detect symbols from git diff HEAD~1
-- [ ] **IMPT-04**: Skill classifies matches by type: code, config, documentation, test
-- [ ] **IMPT-05**: Skill groups results by repo with match counts and file locations
-- [ ] **IMPT-06**: Skill supports config override for sibling repo paths via allclear.config.json
-- [ ] **IMPT-07**: Skill supports --exclude flag to skip specific repos
+- [x] **IMPT-01**: `/allclear impact` skill scans sibling repos for references to specified search terms
+- [x] **IMPT-02**: Skill auto-detects sibling repos by scanning parent directory for .git/ directories
+- [x] **IMPT-03**: Skill supports `--changed` flag to auto-detect symbols from git diff HEAD~1
+- [x] **IMPT-04**: Skill classifies matches by type: code, config, documentation, test
+- [x] **IMPT-05**: Skill groups results by repo with match counts and file locations
+- [x] **IMPT-06**: Skill supports config override for sibling repo paths via allclear.config.json
+- [x] **IMPT-07**: Skill supports --exclude flag to skip specific repos
 
 ### Cross-Repo Drift Skill
 
@@ -197,13 +197,13 @@
 | CONF-02 | Phase 8 | Complete |
 | CONF-03 | Phase 8 | Complete |
 | CONF-04 | Phase 8 | Complete |
-| IMPT-01 | Phase 9 | Pending |
-| IMPT-02 | Phase 9 | Pending |
-| IMPT-03 | Phase 9 | Pending |
-| IMPT-04 | Phase 9 | Pending |
-| IMPT-05 | Phase 9 | Pending |
-| IMPT-06 | Phase 9 | Pending |
-| IMPT-07 | Phase 9 | Pending |
+| IMPT-01 | Phase 9 | Complete |
+| IMPT-02 | Phase 9 | Complete |
+| IMPT-03 | Phase 9 | Complete |
+| IMPT-04 | Phase 9 | Complete |
+| IMPT-05 | Phase 9 | Complete |
+| IMPT-06 | Phase 9 | Complete |
+| IMPT-07 | Phase 9 | Complete |
 | DRFT-01 | Phase 10 | Pending |
 | DRFT-02 | Phase 10 | Pending |
 | DRFT-03 | Phase 10 | Pending |
