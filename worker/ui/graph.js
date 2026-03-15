@@ -13,17 +13,17 @@
 // ---------------------------------------------------------------------------
 
 let graphData = { nodes: [], edges: [] };
-let positions = {};            // nodeId -> { x, y }
-let selectedNodeId = null;     // clicked node (highlight direct neighbors)
-let blastNodeId = null;        // shift-clicked node (transitive blast radius)
-let blastSet = new Set();      // IDs returned by /impact for blastNodeId
-let blastCache = {};           // nodeName -> Set of affected IDs (cache /impact calls)
-let activeProtocols = new Set(['rest', 'grpc', 'events', 'internal']);
-let searchFilter = '';
+let positions = {}; // nodeId -> { x, y }
+let selectedNodeId = null; // clicked node (highlight direct neighbors)
+let blastNodeId = null; // shift-clicked node (transitive blast radius)
+let blastSet = new Set(); // IDs returned by /impact for blastNodeId
+let blastCache = {}; // nodeName -> Set of affected IDs (cache /impact calls)
+let activeProtocols = new Set(["rest", "grpc", "events", "internal"]);
+let searchFilter = "";
 let forceWorker = null;
 let isDragging = false;
 let dragNodeId = null;
-let dragStarted = false;       // distinguish click from drag
+let dragStarted = false; // distinguish click from drag
 let transform = { x: 0, y: 0, scale: 1 };
 
 // ---------------------------------------------------------------------------
@@ -35,29 +35,29 @@ const LABEL_MAX_CHARS = 12;
 
 const COLORS = {
   node: {
-    default: '#4299e1',
-    selected: '#f6ad55',
-    blast: '#fc8181',
-    dimmed: '#2d3748',
+    default: "#4299e1",
+    selected: "#f6ad55",
+    blast: "#fc8181",
+    dimmed: "#2d3748",
   },
   edge: {
-    default: '#4a5568',
-    selected: '#f6ad55',
-    blast: '#fc8181',
-    dimmed: '#1a202c',
+    default: "#4a5568",
+    selected: "#f6ad55",
+    blast: "#fc8181",
+    dimmed: "#1a202c",
   },
   label: {
-    default: '#e2e8f0',
-    dimmed: '#4a5568',
+    default: "#e2e8f0",
+    dimmed: "#4a5568",
   },
 };
 
 // Protocol edge colors for unselected state
 const PROTOCOL_COLORS = {
-  rest: '#4299e1',
-  grpc: '#68d391',
-  events: '#9f7aea',
-  internal: '#4a5568',
+  rest: "#4299e1",
+  grpc: "#68d391",
+  events: "#9f7aea",
+  internal: "#4a5568",
 };
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ const PROTOCOL_COLORS = {
 // ---------------------------------------------------------------------------
 
 function truncate(str, max) {
-  return str.length > max ? str.slice(0, max) + '…' : str;
+  return str.length > max ? str.slice(0, max) + "…" : str;
 }
 
 /**
@@ -113,15 +113,21 @@ async function fetchImpact(nodeName, nodeId) {
     return blastCache[nodeName];
   }
   try {
-    const urlProject = new URLSearchParams(window.location.search).get('project');
-    const pParam = urlProject ? `&project=${encodeURIComponent(urlProject)}` : '';
-    const resp = await fetch(`/impact?change=${encodeURIComponent(nodeName)}${pParam}`);
+    const urlProject = new URLSearchParams(window.location.search).get(
+      "project",
+    );
+    const pParam = urlProject
+      ? `&project=${encodeURIComponent(urlProject)}`
+      : "";
+    const resp = await fetch(
+      `/impact?change=${encodeURIComponent(nodeName)}${pParam}`,
+    );
     if (!resp.ok) {
       blastCache[nodeName] = new Set();
       return blastCache[nodeName];
     }
     const data = await resp.json();
-    const affected = new Set((data.affected || []).map(a => a.id));
+    const affected = new Set((data.affected || []).map((a) => a.id));
     affected.add(nodeId); // include the source node itself
     blastCache[nodeName] = affected;
     return affected;
@@ -136,15 +142,15 @@ async function fetchImpact(nodeName, nodeId) {
 // ---------------------------------------------------------------------------
 
 function render() {
-  const canvas = document.getElementById('graph-canvas');
+  const canvas = document.getElementById("graph-canvas");
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
   const W = canvas.width;
   const H = canvas.height;
 
   // Clear
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#0f1117';
+  ctx.fillStyle = "#0f1117";
   ctx.fillRect(0, 0, W, H);
 
   if (graphData.nodes.length === 0) return;
@@ -152,12 +158,14 @@ function render() {
   // Compute visible set based on search filter
   const visibleIds = new Set(
     graphData.nodes
-      .filter(n => n.name.toLowerCase().includes(searchFilter))
-      .map(n => n.id)
+      .filter((n) => n.name.toLowerCase().includes(searchFilter))
+      .map((n) => n.id),
   );
 
   // Compute neighbor set for selected node
-  const neighborIds = selectedNodeId ? getNeighborIds(selectedNodeId) : new Set();
+  const neighborIds = selectedNodeId
+    ? getNeighborIds(selectedNodeId)
+    : new Set();
 
   const hasSelection = selectedNodeId !== null;
   const hasBlast = blastNodeId !== null && blastSet.size > 0;
@@ -186,11 +194,14 @@ function render() {
 
     // Determine edge color
     let color;
-    const isSelectedEdge = hasSelection &&
+    const isSelectedEdge =
+      hasSelection &&
       (src === selectedNodeId || tgt === selectedNodeId) &&
-      (neighborIds.has(src) || neighborIds.has(tgt) || src === selectedNodeId || tgt === selectedNodeId);
-    const isBlastEdge = hasBlast &&
-      (blastSet.has(src) && blastSet.has(tgt));
+      (neighborIds.has(src) ||
+        neighborIds.has(tgt) ||
+        src === selectedNodeId ||
+        tgt === selectedNodeId);
+    const isBlastEdge = hasBlast && blastSet.has(src) && blastSet.has(tgt);
 
     if (isSelectedEdge) {
       color = COLORS.edge.selected;
@@ -204,14 +215,17 @@ function render() {
     }
 
     // Determine line width
-    const lineWidth = (isSelectedEdge || isBlastEdge) ? 2 : 1;
+    const lineWidth = isSelectedEdge || isBlastEdge ? 2 : 1;
 
     ctx.beginPath();
     ctx.moveTo(srcPos.x, srcPos.y);
     ctx.lineTo(tgtPos.x, tgtPos.y);
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth / transform.scale;
-    ctx.globalAlpha = (hasSelection || hasBlast) && !isSelectedEdge && !isBlastEdge ? 0.2 : 0.85;
+    ctx.globalAlpha =
+      (hasSelection || hasBlast) && !isSelectedEdge && !isBlastEdge
+        ? 0.2
+        : 0.85;
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
@@ -234,7 +248,7 @@ function render() {
       nodeColor = COLORS.node.selected;
     } else if (isBlastNode) {
       nodeColor = COLORS.node.blast;
-    } else if (hasSelection && (isNeighbor)) {
+    } else if (hasSelection && isNeighbor) {
       nodeColor = COLORS.node.selected; // neighbors get same highlight
     } else if ((hasSelection || hasBlast) && isVisible) {
       nodeColor = COLORS.node.dimmed;
@@ -244,8 +258,11 @@ function render() {
       nodeColor = COLORS.node.default;
     }
 
-    const alpha = !isVisible ? 0.15 :
-      (hasSelection || hasBlast) && !isSelected && !isNeighbor && !isBlastNode ? 0.3 : 1;
+    const alpha = !isVisible
+      ? 0.15
+      : (hasSelection || hasBlast) && !isSelected && !isNeighbor && !isBlastNode
+        ? 0.3
+        : 1;
 
     ctx.globalAlpha = alpha;
 
@@ -257,20 +274,22 @@ function render() {
 
     // Draw ring for selected/blast
     if (isSelected || isBlastNode) {
-      ctx.strokeStyle = '#fff';
+      ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2 / transform.scale;
       ctx.stroke();
     }
 
     // Draw label below circle
     const label = truncate(node.name, LABEL_MAX_CHARS);
-    const labelColor = !isVisible || ((hasSelection || hasBlast) && !isSelected && !isNeighbor && !isBlastNode)
-      ? COLORS.label.dimmed
-      : COLORS.label.default;
+    const labelColor =
+      !isVisible ||
+      ((hasSelection || hasBlast) && !isSelected && !isNeighbor && !isBlastNode)
+        ? COLORS.label.dimmed
+        : COLORS.label.default;
     ctx.fillStyle = labelColor;
     ctx.font = `${Math.round(11 / transform.scale)}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
     ctx.fillText(label, pos.x, pos.y + NODE_RADIUS + 3);
 
     ctx.globalAlpha = 1;
@@ -284,7 +303,7 @@ function render() {
 // ---------------------------------------------------------------------------
 
 function handleWorkerMessage({ data }) {
-  if (data.type === 'tick') {
+  if (data.type === "tick") {
     data.nodes.forEach(({ id, x, y }) => {
       positions[id] = { x, y };
     });
@@ -298,18 +317,23 @@ function handleWorkerMessage({ data }) {
 // ---------------------------------------------------------------------------
 
 function setupInteractions(canvas) {
-  const tooltip = document.getElementById('tooltip');
+  const tooltip = document.getElementById("tooltip");
   let mouseDownX = 0;
   let mouseDownY = 0;
 
   // Mousemove — hover tooltip + drag
-  canvas.addEventListener('mousemove', e => {
+  canvas.addEventListener("mousemove", (e) => {
     const px = e.offsetX;
     const py = e.offsetY;
 
     if (isDragging && dragNodeId !== null) {
       const { x: wx, y: wy } = toWorld(px, py);
-      forceWorker.postMessage({ type: 'drag', nodeId: dragNodeId, x: wx, y: wy });
+      forceWorker.postMessage({
+        type: "drag",
+        nodeId: dragNodeId,
+        x: wx,
+        y: wy,
+      });
       dragStarted = true;
       render();
       return;
@@ -317,19 +341,20 @@ function setupInteractions(canvas) {
 
     const node = hitTest(px, py);
     if (node) {
-      canvas.style.cursor = 'pointer';
-      tooltip.style.display = 'block';
-      tooltip.style.left = (px + 12) + 'px';
-      tooltip.style.top = (py - 8) + 'px';
-      tooltip.textContent = node.name + (node.language ? ` (${node.language})` : '');
+      canvas.style.cursor = "pointer";
+      tooltip.style.display = "block";
+      tooltip.style.left = px + 12 + "px";
+      tooltip.style.top = py - 8 + "px";
+      tooltip.textContent =
+        node.name + (node.language ? ` (${node.language})` : "");
     } else {
-      canvas.style.cursor = isDragging ? 'grabbing' : 'grab';
-      tooltip.style.display = 'none';
+      canvas.style.cursor = isDragging ? "grabbing" : "grab";
+      tooltip.style.display = "none";
     }
   });
 
   // Mousedown — start drag or pan
-  canvas.addEventListener('mousedown', e => {
+  canvas.addEventListener("mousedown", (e) => {
     mouseDownX = e.offsetX;
     mouseDownY = e.offsetY;
     dragStarted = false;
@@ -342,12 +367,17 @@ function setupInteractions(canvas) {
   });
 
   // Mouseup — release drag
-  canvas.addEventListener('mouseup', e => {
+  canvas.addEventListener("mouseup", (e) => {
     if (isDragging && dragNodeId !== null && dragStarted) {
       // Fix node position after drag
       const { x: wx, y: wy } = toWorld(e.offsetX, e.offsetY);
       if (forceWorker) {
-        forceWorker.postMessage({ type: 'drag', nodeId: dragNodeId, x: wx, y: wy });
+        forceWorker.postMessage({
+          type: "drag",
+          nodeId: dragNodeId,
+          x: wx,
+          y: wy,
+        });
       }
     }
     isDragging = false;
@@ -355,7 +385,7 @@ function setupInteractions(canvas) {
   });
 
   // Click — select node or clear selection
-  canvas.addEventListener('click', e => {
+  canvas.addEventListener("click", (e) => {
     if (dragStarted) {
       dragStarted = false;
       return; // was a drag, not a click
@@ -375,7 +405,7 @@ function setupInteractions(canvas) {
           selectedNodeId = null;
           const nodeName = node.name;
           const nodeId = node.id;
-          fetchImpact(nodeName, nodeId).then(ids => {
+          fetchImpact(nodeName, nodeId).then((ids) => {
             blastSet = ids;
             render();
           });
@@ -401,23 +431,27 @@ function setupInteractions(canvas) {
   });
 
   // Wheel — zoom centered on cursor
-  canvas.addEventListener('wheel', e => {
-    e.preventDefault();
-    const delta = e.deltaY < 0 ? 1.1 : 0.9;
-    const newScale = Math.min(5, Math.max(0.2, transform.scale * delta));
-    const ratio = newScale / transform.scale;
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 1.1 : 0.9;
+      const newScale = Math.min(5, Math.max(0.2, transform.scale * delta));
+      const ratio = newScale / transform.scale;
 
-    // Adjust translate so zoom centers on cursor
-    transform.x = e.offsetX - ratio * (e.offsetX - transform.x);
-    transform.y = e.offsetY - ratio * (e.offsetY - transform.y);
-    transform.scale = newScale;
+      // Adjust translate so zoom centers on cursor
+      transform.x = e.offsetX - ratio * (e.offsetX - transform.x);
+      transform.y = e.offsetY - ratio * (e.offsetY - transform.y);
+      transform.scale = newScale;
 
-    render();
-  }, { passive: false });
+      render();
+    },
+    { passive: false },
+  );
 
   // Mouse leave — hide tooltip
-  canvas.addEventListener('mouseleave', () => {
-    tooltip.style.display = 'none';
+  canvas.addEventListener("mouseleave", () => {
+    tooltip.style.display = "none";
     if (isDragging) {
       isDragging = false;
       dragNodeId = null;
@@ -431,14 +465,14 @@ function setupInteractions(canvas) {
 
 function setupControls() {
   // Search
-  document.getElementById('search').addEventListener('input', e => {
+  document.getElementById("search").addEventListener("input", (e) => {
     searchFilter = e.target.value.toLowerCase();
     render();
   });
 
   // Protocol filters
-  document.querySelectorAll('[data-protocol]').forEach(cb => {
-    cb.addEventListener('change', () => {
+  document.querySelectorAll("[data-protocol]").forEach((cb) => {
+    cb.addEventListener("change", () => {
       if (cb.checked) activeProtocols.add(cb.dataset.protocol);
       else activeProtocols.delete(cb.dataset.protocol);
       render();
@@ -447,12 +481,131 @@ function setupControls() {
 }
 
 // ---------------------------------------------------------------------------
+// Project Picker
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch projects from /projects API, enrich with service counts,
+ * and show the picker modal. Returns a promise that resolves with
+ * the selected project root path.
+ */
+async function showProjectPicker() {
+  const picker = document.getElementById("project-picker");
+  const list = document.getElementById("project-list");
+
+  let projects;
+  try {
+    const resp = await fetch("/projects");
+    if (!resp.ok) throw new Error("Failed to fetch projects");
+    projects = await resp.json();
+  } catch {
+    document.getElementById("node-info").textContent = "Cannot reach server.";
+    return null;
+  }
+
+  if (projects.length === 0) {
+    picker.style.display = "block";
+    list.innerHTML =
+      '<p class="no-projects">No projects found. Run <code>/allclear:map</code> to scan your repos first.</p>';
+    document.getElementById("node-info").textContent = "No projects";
+    return null;
+  }
+
+  // Sort by size descending (most data first)
+  projects.sort((a, b) => b.size - a.size);
+
+  // Filter to projects that have data (services > 0)
+  const withData = projects.filter((p) => p.serviceCount > 0);
+
+  // If only one project has data, auto-select it
+  if (withData.length === 1 && withData[0].projectRoot) {
+    picker.style.display = "none";
+    return withData[0].projectRoot;
+  }
+
+  // Use projects with data if any, otherwise show all
+  const enriched = withData.length > 0 ? withData : projects;
+
+  // Show picker
+  picker.style.display = "block";
+  list.innerHTML = "";
+  document.getElementById("node-info").textContent = "Select a project to view";
+
+  return new Promise((resolve) => {
+    for (const p of enriched) {
+      const btn = document.createElement("button");
+      btn.className = "project-item";
+
+      const sizeKB = Math.round(p.size / 1024);
+      const displayName = p.projectRoot
+        ? p.projectRoot.split("/").pop()
+        : p.hash;
+      const displayPath = p.projectRoot || p.dbPath;
+      btn.innerHTML = `
+        <div><strong>${displayName}</strong></div>
+        <div class="project-path">${displayPath}</div>
+        <div class="project-stats">${p.serviceCount} services, ${p.repoCount} repos — ${sizeKB} KB</div>
+      `;
+
+      btn.addEventListener("click", () => {
+        if (p.projectRoot) {
+          picker.style.display = "none";
+          resolve(p.projectRoot);
+        } else {
+          // Fallback: use hash-based query
+          picker.style.display = "none";
+          // Set hash in URL and reload
+          const newUrl = new URL(window.location);
+          newUrl.searchParams.set("hash", p.hash);
+          window.location.href = newUrl.toString();
+        }
+      });
+
+      list.appendChild(btn);
+    }
+  });
+}
+
+/**
+ * Populate the project selector dropdown in the toolbar.
+ * Allows switching between projects without reloading.
+ */
+async function populateProjectSelect(currentProject) {
+  const select = document.getElementById("project-select");
+  try {
+    const resp = await fetch("/projects");
+    if (!resp.ok) return;
+    const projects = await resp.json();
+    if (projects.length <= 1) return; // no need for dropdown with single project
+
+    select.style.display = "inline-block";
+    select.innerHTML = "";
+
+    // Add current project as first option
+    const currentOpt = document.createElement("option");
+    currentOpt.value = currentProject;
+    const currentName = currentProject.split("/").pop();
+    currentOpt.textContent = currentName;
+    currentOpt.selected = true;
+    select.appendChild(currentOpt);
+
+    select.addEventListener("change", () => {
+      const newUrl = new URL(window.location);
+      newUrl.searchParams.set("project", select.value);
+      window.location.href = newUrl.toString();
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Initialization
 // ---------------------------------------------------------------------------
 
 async function init() {
-  const canvas = document.getElementById('graph-canvas');
-  const container = document.getElementById('canvas-container');
+  const canvas = document.getElementById("graph-canvas");
+  const container = document.getElementById("canvas-container");
 
   // Resize canvas to fill container
   function resize() {
@@ -460,45 +613,46 @@ async function init() {
     canvas.height = container.clientHeight;
     render();
   }
-  window.addEventListener('resize', resize);
+  window.addEventListener("resize", resize);
   resize();
 
-  // Determine project from URL query param or pick from available projects
+  // Determine project from URL query param or show project picker
   const urlParams = new URLSearchParams(window.location.search);
-  let project = urlParams.get('project');
+  let project = urlParams.get("project");
+  let hash = urlParams.get("hash");
 
-  if (!project) {
-    // No project specified — check available projects and pick the one with data
-    try {
-      const projectsResp = await fetch('/projects');
-      if (projectsResp.ok) {
-        const projects = await projectsResp.json();
-        // Sort by size descending — largest DB likely has the most data
-        projects.sort((a, b) => b.size - a.size);
-        if (projects.length > 0) {
-          // For now, use the largest DB. TODO: project picker UI
-          // We need to reverse-lookup the project root from the hash — not possible.
-          // Instead, pass the hash directly and let the server handle it.
-          document.getElementById('node-info').textContent =
-            `${projects.length} project(s) found. Add ?project=/path/to/repo to URL to select one.`;
-        }
-      }
-    } catch { /* ignore */ }
+  if (!project && !hash) {
+    // No project specified — fetch available projects and show picker
+    project = await showProjectPicker();
+    if (!project) return; // user hasn't selected yet or no projects
   }
 
-  const projectParam = project ? `?project=${encodeURIComponent(project)}` : '';
+  // Update URL without reload so refreshes preserve selection
+  if (project && !urlParams.get("project")) {
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.set("project", project);
+    window.history.replaceState({}, "", newUrl);
+  }
+
+  // Populate project selector dropdown in toolbar
+  if (project) populateProjectSelect(project);
+
+  const projectParam = project
+    ? `?project=${encodeURIComponent(project)}`
+    : `?hash=${encodeURIComponent(hash)}`;
 
   // Load graph data
   let resp;
   try {
     resp = await fetch(`/graph${projectParam}`);
   } catch (err) {
-    document.getElementById('node-info').textContent = 'Cannot reach server.';
+    document.getElementById("node-info").textContent = "Cannot reach server.";
     return;
   }
 
   if (!resp.ok) {
-    document.getElementById('node-info').textContent = 'No map data yet. Run /allclear:map first.';
+    document.getElementById("node-info").textContent =
+      "No map data yet. Run /allclear:map first.";
     return;
   }
 
@@ -508,23 +662,28 @@ async function init() {
   // API returns { services, connections, repos }
   // UI expects { nodes: [{id, name, language}], edges: [{source_service_id, target_service_id, protocol}] }
   const serviceNameToId = {};
-  graphData.nodes = (raw.services || raw.nodes || []).map(s => {
+  graphData.nodes = (raw.services || raw.nodes || []).map((s) => {
     serviceNameToId[s.name] = s.id;
-    return { id: s.id, name: s.name, language: s.language, repo_name: s.repo_name };
+    return {
+      id: s.id,
+      name: s.name,
+      language: s.language,
+      repo_name: s.repo_name,
+    };
   });
-  graphData.edges = (raw.connections || raw.edges || []).map(c => ({
+  graphData.edges = (raw.connections || raw.edges || []).map((c) => ({
     source_service_id: c.source_service_id ?? serviceNameToId[c.source],
     target_service_id: c.target_service_id ?? serviceNameToId[c.target],
-    protocol: c.protocol || 'internal',
+    protocol: c.protocol || "internal",
     method: c.method,
     path: c.path,
   }));
 
-  document.getElementById('node-info').textContent =
+  document.getElementById("node-info").textContent =
     `${graphData.nodes.length} services, ${graphData.edges.length} connections`;
 
   // Initialize positions to random before simulation settles
-  graphData.nodes.forEach(n => {
+  graphData.nodes.forEach((n) => {
     positions[n.id] = {
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
@@ -532,12 +691,12 @@ async function init() {
   });
 
   // Start Web Worker force simulation
-  forceWorker = new Worker('./force-worker.js', { type: 'module' });
+  forceWorker = new Worker("./force-worker.js", { type: "module" });
   forceWorker.onmessage = handleWorkerMessage;
   forceWorker.postMessage({
-    type: 'init',
-    nodes: graphData.nodes.map(n => ({ id: n.id, ...positions[n.id] })),
-    links: graphData.edges.map(e => ({
+    type: "init",
+    nodes: graphData.nodes.map((n) => ({ id: n.id, ...positions[n.id] })),
+    links: graphData.edges.map((e) => ({
       source: e.source_service_id,
       target: e.target_service_id,
     })),
@@ -553,7 +712,7 @@ async function init() {
 // Entry point
 // ---------------------------------------------------------------------------
 
-init().catch(err => {
-  document.getElementById('node-info').textContent = `Error: ${err.message}`;
+init().catch((err) => {
+  document.getElementById("node-info").textContent = `Error: ${err.message}`;
   console.error(err);
 });

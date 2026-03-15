@@ -1,9 +1,9 @@
-import Fastify from 'fastify';
-import fastifyStatic from '@fastify/static';
-import fastifyCors from '@fastify/cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { listProjects } from './db-pool.js';
+import Fastify from "fastify";
+import fastifyStatic from "@fastify/static";
+import fastifyCors from "@fastify/cors";
+import path from "path";
+import { fileURLToPath } from "url";
+import { listProjects, getQueryEngineByHash } from "./db-pool.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,18 +31,24 @@ async function createHttpServer(queryEngine, options = {}) {
   function getQE(request) {
     const project = request.query?.project;
     if (project) return resolve(project);
+    const hash = request.query?.hash;
+    if (hash) return getQueryEngineByHash(hash);
     return queryEngine; // fallback for tests or when no project specified
   }
 
   // Register CORS for localhost dev
   await fastify.register(fastifyCors, {
-    origin: ['http://localhost:5173', 'http://127.0.0.1:5173', /^http:\/\/127\.0\.0\.1:\d+$/],
+    origin: [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      /^http:\/\/127\.0\.0\.1:\d+$/,
+    ],
   });
 
   // Register static file serving from worker/ui/
   await fastify.register(fastifyStatic, {
-    root: path.join(__dirname, 'ui'),
-    prefix: '/',
+    root: path.join(__dirname, "ui"),
+    prefix: "/",
     decorateReply: false,
   });
 
@@ -51,23 +57,25 @@ async function createHttpServer(queryEngine, options = {}) {
   // -----------------------------------------------------------------------
 
   // 1. GET /api/readiness — always 200
-  fastify.get('/api/readiness', async (_request, reply) => {
-    return reply.send({ status: 'ok' });
+  fastify.get("/api/readiness", async (_request, reply) => {
+    return reply.send({ status: "ok" });
   });
 
   // 1b. GET /api/version — returns running worker version (for auto-restart on update)
-  fastify.get('/api/version', async (_request, reply) => {
+  fastify.get("/api/version", async (_request, reply) => {
     try {
-      const pkgPath = path.join(__dirname, '..', 'package.json');
-      const pkg = JSON.parse((await import('fs')).default.readFileSync(pkgPath, 'utf8'));
+      const pkgPath = path.join(__dirname, "..", "package.json");
+      const pkg = JSON.parse(
+        (await import("fs")).default.readFileSync(pkgPath, "utf8"),
+      );
       return reply.send({ version: pkg.version });
     } catch {
-      return reply.send({ version: 'unknown' });
+      return reply.send({ version: "unknown" });
     }
   });
 
   // 2. GET /projects — list all projects with DBs
-  fastify.get('/projects', async (_request, reply) => {
+  fastify.get("/projects", async (_request, reply) => {
     try {
       return reply.send(listProjects());
     } catch (err) {
@@ -76,10 +84,13 @@ async function createHttpServer(queryEngine, options = {}) {
   });
 
   // 3. GET /graph?project=/path — full service dependency graph
-  fastify.get('/graph', async (request, reply) => {
+  fastify.get("/graph", async (request, reply) => {
     const qe = getQE(request);
     if (!qe) {
-      return reply.code(503).send({ error: 'No map data yet. Pass ?project=/path/to/repo or run /allclear:map first.' });
+      return reply.code(503).send({
+        error:
+          "No map data yet. Pass ?project=/path/to/repo or run /allclear:map first.",
+      });
     }
     try {
       return reply.send(qe.getGraph());
@@ -89,14 +100,14 @@ async function createHttpServer(queryEngine, options = {}) {
   });
 
   // 4. GET /impact?project=/path&change=endpoint — impacted services
-  fastify.get('/impact', async (request, reply) => {
+  fastify.get("/impact", async (request, reply) => {
     const qe = getQE(request);
     if (!qe) {
-      return reply.code(503).send({ error: 'No map data yet' });
+      return reply.code(503).send({ error: "No map data yet" });
     }
     const change = request.query.change;
     if (!change) {
-      return reply.code(400).send({ error: 'change param required' });
+      return reply.code(400).send({ error: "change param required" });
     }
     try {
       return reply.send(qe.getImpact(change));
@@ -106,15 +117,15 @@ async function createHttpServer(queryEngine, options = {}) {
   });
 
   // 5. GET /service/:name?project=/path — service details
-  fastify.get('/service/:name', async (request, reply) => {
+  fastify.get("/service/:name", async (request, reply) => {
     const qe = getQE(request);
     if (!qe) {
-      return reply.code(503).send({ error: 'No map data yet' });
+      return reply.code(503).send({ error: "No map data yet" });
     }
     try {
       const result = qe.getService(request.params.name);
       if (result === null || result === undefined) {
-        return reply.code(404).send({ error: 'Service not found' });
+        return reply.code(404).send({ error: "Service not found" });
       }
       return reply.send(result);
     } catch (err) {
@@ -123,35 +134,40 @@ async function createHttpServer(queryEngine, options = {}) {
   });
 
   // 6. POST /scan — persist scan findings for a project
-  fastify.post('/scan', async (request, reply) => {
-    const { repo_path, repo_name, repo_type, findings, commit, project } = request.body || {};
+  fastify.post("/scan", async (request, reply) => {
+    const { repo_path, repo_name, repo_type, findings, commit, project } =
+      request.body || {};
     const projectRoot = project || request.query?.project;
     const qe = projectRoot ? resolve(projectRoot) : queryEngine;
 
     if (!qe) {
-      return reply.code(503).send({ error: 'No map data yet — run /allclear:map first' });
+      return reply
+        .code(503)
+        .send({ error: "No map data yet — run /allclear:map first" });
     }
     if (!repo_path || !findings) {
-      return reply.code(400).send({ error: 'Missing repo_path or findings in request body' });
+      return reply
+        .code(400)
+        .send({ error: "Missing repo_path or findings in request body" });
     }
     try {
       const repoId = qe.upsertRepo({
         path: repo_path,
         name: repo_name || path.basename(repo_path),
-        type: repo_type || 'single',
+        type: repo_type || "single",
       });
       qe.persistFindings(repoId, findings, commit || null);
-      return reply.code(200).send({ status: 'persisted', repo_id: repoId });
+      return reply.code(200).send({ status: "persisted", repo_id: repoId });
     } catch (err) {
       return reply.code(500).send({ error: err.message });
     }
   });
 
   // 7. GET /versions?project=/path — map version history
-  fastify.get('/versions', async (request, reply) => {
+  fastify.get("/versions", async (request, reply) => {
     const qe = getQE(request);
     if (!qe) {
-      return reply.code(503).send({ error: 'No map data yet' });
+      return reply.code(503).send({ error: "No map data yet" });
     }
     try {
       return reply.send(qe.getVersions());
@@ -164,7 +180,7 @@ async function createHttpServer(queryEngine, options = {}) {
   const port = options.port !== undefined ? options.port : 37888;
 
   if (port !== 0) {
-    await fastify.listen({ port, host: '127.0.0.1' });
+    await fastify.listen({ port, host: "127.0.0.1" });
   } else {
     await fastify.ready();
   }

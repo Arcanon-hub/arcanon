@@ -1,56 +1,198 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AllClear — Service Dependency Graph</title>
-  <!-- D3 force simulation loaded via ESM CDN in force-worker.js: cdn.jsdelivr.net/npm/d3-force@3/+esm -->
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #0f1117; color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; }
-    #toolbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background: #1a1f2e; border-bottom: 1px solid #2d3748; flex-shrink: 0; flex-wrap: wrap; }
-    #toolbar h1 { font-size: 14px; font-weight: 600; color: #63b3ed; }
-    #search { background: #2d3748; border: 1px solid #4a5568; color: #e2e8f0; padding: 4px 8px; border-radius: 4px; font-size: 12px; width: 180px; }
-    #search::placeholder { color: #718096; }
-    #filters { display: flex; gap: 8px; align-items: center; font-size: 12px; }
-    .filter-label { display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
-    .filter-label input { cursor: pointer; accent-color: #63b3ed; }
-    #node-info { padding: 4px 8px; font-size: 11px; color: #a0aec0; margin-left: auto; white-space: nowrap; }
-    #canvas-container { flex: 1; position: relative; overflow: hidden; }
-    canvas { display: block; cursor: grab; }
-    canvas:active { cursor: grabbing; }
-    #tooltip {
-      position: absolute;
-      background: #1a1f2e;
-      border: 1px solid #4a5568;
-      border-radius: 4px;
-      padding: 4px 8px;
-      font-size: 11px;
-      color: #e2e8f0;
-      pointer-events: none;
-      display: none;
-      white-space: nowrap;
-      z-index: 10;
-    }
-  </style>
-</head>
-<body>
-  <div id="toolbar">
-    <h1>AllClear Service Graph</h1>
-    <input id="search" type="text" placeholder="Filter services..." autocomplete="off" />
-    <div id="filters">
-      <span>Protocol:</span>
-      <label class="filter-label"><input type="checkbox" data-protocol="rest" checked> REST</label>
-      <label class="filter-label"><input type="checkbox" data-protocol="grpc" checked> gRPC</label>
-      <label class="filter-label"><input type="checkbox" data-protocol="events" checked> Events</label>
-      <label class="filter-label"><input type="checkbox" data-protocol="internal" checked> Internal</label>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AllClear — Service Dependency Graph</title>
+    <!-- D3 force simulation loaded via ESM CDN in force-worker.js: cdn.jsdelivr.net/npm/d3-force@3/+esm -->
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: system-ui, sans-serif;
+        background: #0f1117;
+        color: #e2e8f0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      #toolbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 16px;
+        background: #1a1f2e;
+        border-bottom: 1px solid #2d3748;
+        flex-shrink: 0;
+        flex-wrap: wrap;
+      }
+      #toolbar h1 {
+        font-size: 14px;
+        font-weight: 600;
+        color: #63b3ed;
+      }
+      #search {
+        background: #2d3748;
+        border: 1px solid #4a5568;
+        color: #e2e8f0;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        width: 180px;
+      }
+      #search::placeholder {
+        color: #718096;
+      }
+      #filters {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 12px;
+      }
+      .filter-label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .filter-label input {
+        cursor: pointer;
+        accent-color: #63b3ed;
+      }
+      #node-info {
+        padding: 4px 8px;
+        font-size: 11px;
+        color: #a0aec0;
+        margin-left: auto;
+        white-space: nowrap;
+      }
+      #canvas-container {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+        cursor: grab;
+      }
+      canvas:active {
+        cursor: grabbing;
+      }
+      #tooltip {
+        position: absolute;
+        background: #1a1f2e;
+        border: 1px solid #4a5568;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-size: 11px;
+        color: #e2e8f0;
+        pointer-events: none;
+        display: none;
+        white-space: nowrap;
+        z-index: 10;
+      }
+      #project-picker {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #1a1f2e;
+        border: 1px solid #4a5568;
+        border-radius: 8px;
+        padding: 24px 32px;
+        z-index: 20;
+        min-width: 400px;
+        max-width: 600px;
+      }
+      #project-picker h2 {
+        font-size: 16px;
+        margin-bottom: 16px;
+        color: #63b3ed;
+      }
+      #project-picker .project-item {
+        display: block;
+        width: 100%;
+        padding: 10px 14px;
+        margin-bottom: 8px;
+        background: #2d3748;
+        border: 1px solid #4a5568;
+        border-radius: 6px;
+        color: #e2e8f0;
+        font-size: 13px;
+        cursor: pointer;
+        text-align: left;
+        transition: border-color 0.15s;
+      }
+      #project-picker .project-item:hover {
+        border-color: #63b3ed;
+      }
+      #project-picker .project-item .project-path {
+        font-size: 11px;
+        color: #718096;
+        margin-top: 4px;
+      }
+      #project-picker .project-item .project-stats {
+        font-size: 11px;
+        color: #a0aec0;
+        margin-top: 2px;
+      }
+      #project-picker .no-projects {
+        color: #718096;
+        font-size: 13px;
+      }
+      #project-select {
+        background: #2d3748;
+        border: 1px solid #4a5568;
+        color: #e2e8f0;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        max-width: 200px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="project-picker" style="display: none">
+      <h2>Select a Project</h2>
+      <div id="project-list"></div>
     </div>
-    <span id="node-info">Loading...</span>
-  </div>
-  <div id="canvas-container">
-    <canvas id="graph-canvas"></canvas>
-    <div id="tooltip"></div>
-  </div>
-  <script type="module" src="./graph.js"></script>
-</body>
+    <div id="toolbar">
+      <h1>AllClear Service Graph</h1>
+      <select id="project-select" style="display: none"></select>
+      <input
+        id="search"
+        type="text"
+        placeholder="Filter services..."
+        autocomplete="off"
+      />
+      <div id="filters">
+        <span>Protocol:</span>
+        <label class="filter-label"
+          ><input type="checkbox" data-protocol="rest" checked /> REST</label
+        >
+        <label class="filter-label"
+          ><input type="checkbox" data-protocol="grpc" checked /> gRPC</label
+        >
+        <label class="filter-label"
+          ><input type="checkbox" data-protocol="events" checked />
+          Events</label
+        >
+        <label class="filter-label"
+          ><input type="checkbox" data-protocol="internal" checked />
+          Internal</label
+        >
+      </div>
+      <span id="node-info">Loading...</span>
+    </div>
+    <div id="canvas-container">
+      <canvas id="graph-canvas"></canvas>
+      <div id="tooltip"></div>
+    </div>
+    <script type="module" src="./graph.js"></script>
+  </body>
 </html>
