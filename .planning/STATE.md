@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: milestone
 status: planning
 stopped_at: "Completed 01-01-PLAN.md (Task 3 checkpoint:human-verify pending)"
-last_updated: "2026-03-15T10:11:04.985Z"
+last_updated: "2026-03-15T10:11:08.006Z"
 last_activity: 2026-03-15 — Roadmap revised to parallel structure, 7 sequential phases replaced with 13 independent phases
 progress:
   total_phases: 13
@@ -77,6 +77,9 @@ Recent decisions affecting current work:
 - [Phase 01-plugin-skeleton]: Only plugin.json goes inside .claude-plugin/; skills/, hooks/, scripts/, lib/ go at plugin root
 - [Phase 01-plugin-skeleton]: All hooks.json path references use ${CLAUDE_PLUGIN_ROOT} — zero hardcoded absolute paths (PLGN-04)
 - [Phase 01-plugin-skeleton]: PascalCase event names in hooks.json: PostToolUse, PreToolUse, SessionStart
+- [Phase 03-format-hook]: Added ALLCLEAR_DISABLE_FORMAT toggle for Phase 8 CONF-02 forward compat — one-liner cost, zero rework benefit
+- [Phase 03-format-hook]: Path exclusion checks /env/ and /.tox/ beyond base patterns to cover all Python virtualenv naming conventions
+- [Phase 03-format-hook]: Redirect both stdout and stderr (>/dev/null 2>&1) to silence all formatter output; redirecting only stderr leaves stdout polluted
 
 ### Pending Todos
 

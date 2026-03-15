@@ -7,10 +7,10 @@
 
 ### Plugin Foundation
 
-- [ ] **PLGN-01**: Plugin follows Claude Code plugin format with plugin.json manifest, skills/, hooks/, and scripts/ directories at the plugin root
+- [x] **PLGN-01**: Plugin follows Claude Code plugin format with plugin.json manifest, skills/, hooks/, and scripts/ directories at the plugin root
 - [ ] **PLGN-02**: Plugin detects project type from manifest files (pyproject.toml → Python, Cargo.toml → Rust, package.json → Node/TS, go.mod → Go)
 - [ ] **PLGN-03**: Plugin supports mixed-language projects by detecting all applicable project types in a directory
-- [ ] **PLGN-04**: Plugin uses `${CLAUDE_PLUGIN_ROOT}` for all internal path references to survive cache-copy installation
+- [x] **PLGN-04**: Plugin uses `${CLAUDE_PLUGIN_ROOT}` for all internal path references to survive cache-copy installation
 - [ ] **PLGN-05**: Plugin provides shared bash library functions in lib/ for project detection and sibling repo discovery
 - [ ] **PLGN-06**: Plugin can be installed via git clone and symlink into ~/.claude/plugins/
 - [ ] **PLGN-07**: Hook scripts use jq for JSON parsing (same pattern as GSD: `printf '%s\n' "$JSON" | jq -r '.field // empty'`)
@@ -53,11 +53,11 @@
 
 ### Session Start Hook
 
-- [ ] **SSTH-01**: Session start hook fires on SessionStart event with UserPromptSubmit fallback for brand-new sessions (upstream bug #10373)
-- [ ] **SSTH-02**: Hook detects project type and displays available allclear commands
-- [ ] **SSTH-03**: Hook is lightweight — checks files only, no tool execution
-- [ ] **SSTH-04**: Hook can be disabled via ALLCLEAR_DISABLE_SESSION_START environment variable
-- [ ] **SSTH-05**: Hook deduplicates — if both SessionStart and UserPromptSubmit fire, context is injected only once
+- [x] **SSTH-01**: Session start hook fires on SessionStart event with UserPromptSubmit fallback for brand-new sessions (upstream bug #10373)
+- [x] **SSTH-02**: Hook detects project type and displays available allclear commands
+- [x] **SSTH-03**: Hook is lightweight — checks files only, no tool execution
+- [x] **SSTH-04**: Hook can be disabled via ALLCLEAR_DISABLE_SESSION_START environment variable
+- [x] **SSTH-05**: Hook deduplicates — if both SessionStart and UserPromptSubmit fire, context is injected only once
 
 ### Quality Gate Skill
 
@@ -88,19 +88,19 @@
 
 ### Service Health Skill
 
-- [ ] **PULS-01**: `/allclear pulse` skill checks health of running services via kubectl or ingress
-- [ ] **PULS-02**: Skill parses /health endpoint responses (alive, ready, status, components)
-- [ ] **PULS-03**: Skill compares running version to latest git tag
-- [ ] **PULS-04**: Skill gracefully skips if kubectl is not available with clear message
-- [ ] **PULS-05**: Skill supports targeting specific environments (dev, staging, prod)
+- [x] **PULS-01**: `/allclear pulse` skill checks health of running services via kubectl or ingress
+- [x] **PULS-02**: Skill parses /health endpoint responses (alive, ready, status, components)
+- [x] **PULS-03**: Skill compares running version to latest git tag
+- [x] **PULS-04**: Skill gracefully skips if kubectl is not available with clear message
+- [x] **PULS-05**: Skill supports targeting specific environments (dev, staging, prod)
 
 ### Deploy Verification Skill
 
-- [ ] **DPLY-01**: `/allclear deploy` skill compares expected state (kustomize/helm) to actual cluster state
-- [ ] **DPLY-02**: Skill checks image tags match between code and deployed pods
-- [ ] **DPLY-03**: Skill checks configmap values match between overlays and cluster
-- [ ] **DPLY-04**: Skill gracefully skips if kubectl is not available with clear message
-- [ ] **DPLY-05**: Skill supports --diff flag to show specific differences
+- [x] **DPLY-01**: `/allclear deploy` skill compares expected state (kustomize/helm) to actual cluster state
+- [x] **DPLY-02**: Skill checks image tags match between code and deployed pods
+- [x] **DPLY-03**: Skill checks configmap values match between overlays and cluster
+- [x] **DPLY-04**: Skill gracefully skips if kubectl is not available with clear message
+- [x] **DPLY-05**: Skill supports --diff flag to show specific differences
 
 ### Configuration
 
@@ -149,8 +149,8 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLGN-01 | Phase 1 | Pending |
-| PLGN-04 | Phase 1 | Pending |
+| PLGN-01 | Phase 1 | Complete |
+| PLGN-04 | Phase 1 | Complete |
 | PLGN-06 | Phase 1 | Pending |
 | PLGN-02 | Phase 2 | Pending |
 | PLGN-03 | Phase 2 | Pending |
@@ -183,11 +183,11 @@
 | GRDH-06 | Phase 5 | Pending |
 | GRDH-07 | Phase 5 | Pending |
 | GRDH-08 | Phase 5 | Pending |
-| SSTH-01 | Phase 6 | Pending |
-| SSTH-02 | Phase 6 | Pending |
-| SSTH-03 | Phase 6 | Pending |
-| SSTH-04 | Phase 6 | Pending |
-| SSTH-05 | Phase 6 | Pending |
+| SSTH-01 | Phase 6 | Complete |
+| SSTH-02 | Phase 6 | Complete |
+| SSTH-03 | Phase 6 | Complete |
+| SSTH-04 | Phase 6 | Complete |
+| SSTH-05 | Phase 6 | Complete |
 | GATE-01 | Phase 7 | Pending |
 | GATE-02 | Phase 7 | Pending |
 | GATE-03 | Phase 7 | Pending |
@@ -210,16 +210,16 @@
 | DRFT-04 | Phase 10 | Pending |
 | DRFT-05 | Phase 10 | Pending |
 | DRFT-06 | Phase 10 | Pending |
-| PULS-01 | Phase 11 | Pending |
-| PULS-02 | Phase 11 | Pending |
-| PULS-03 | Phase 11 | Pending |
-| PULS-04 | Phase 11 | Pending |
-| PULS-05 | Phase 11 | Pending |
-| DPLY-01 | Phase 12 | Pending |
-| DPLY-02 | Phase 12 | Pending |
-| DPLY-03 | Phase 12 | Pending |
-| DPLY-04 | Phase 12 | Pending |
-| DPLY-05 | Phase 12 | Pending |
+| PULS-01 | Phase 11 | Complete |
+| PULS-02 | Phase 11 | Complete |
+| PULS-03 | Phase 11 | Complete |
+| PULS-04 | Phase 11 | Complete |
+| PULS-05 | Phase 11 | Complete |
+| DPLY-01 | Phase 12 | Complete |
+| DPLY-02 | Phase 12 | Complete |
+| DPLY-03 | Phase 12 | Complete |
+| DPLY-04 | Phase 12 | Complete |
+| DPLY-05 | Phase 12 | Complete |
 | TEST-01 | Phase 13 | Pending |
 | TEST-02 | Phase 13 | Pending |
 | TEST-03 | Phase 13 | Pending |
