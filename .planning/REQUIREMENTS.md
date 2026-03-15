@@ -69,12 +69,12 @@
 
 ### Repo Discovery
 
-- [ ] **DISC-01**: `/allclear:map` checks `allclear.config.json` for existing `linked-repos`
-- [ ] **DISC-02**: Even with config, checks memory + parent dir for repos NOT yet in config
-- [ ] **DISC-03**: Presents combined repo list to user with newly discovered repos highlighted
-- [ ] **DISC-04**: User confirms/edits repo list before scanning
-- [ ] **DISC-05**: Confirmed list saved to `allclear.config.json`
-- [ ] **DISC-06**: `--view` flag opens graph UI without scanning or repo confirmation
+- [x] **DISC-01**: `/allclear:map` checks `allclear.config.json` for existing `linked-repos`
+- [x] **DISC-02**: Even with config, checks memory + parent dir for repos NOT yet in config
+- [x] **DISC-03**: Presents combined repo list to user with newly discovered repos highlighted
+- [x] **DISC-04**: User confirms/edits repo list before scanning
+- [x] **DISC-05**: Confirmed list saved to `allclear.config.json`
+- [x] **DISC-06**: `--view` flag opens graph UI without scanning or repo confirmation
 
 ### Command Layer
 
@@ -168,12 +168,12 @@
 | UCON-02 | Phase 19 | Complete |
 | UCON-03 | Phase 19 | Complete |
 | UCON-04 | Phase 19 | Complete |
-| DISC-01 | Phase 19 | Pending |
-| DISC-02 | Phase 19 | Pending |
-| DISC-03 | Phase 19 | Pending |
-| DISC-04 | Phase 19 | Pending |
-| DISC-05 | Phase 19 | Pending |
-| DISC-06 | Phase 19 | Pending |
+| DISC-01 | Phase 19 | Complete |
+| DISC-02 | Phase 19 | Complete |
+| DISC-03 | Phase 19 | Complete |
+| DISC-04 | Phase 19 | Complete |
+| DISC-05 | Phase 19 | Complete |
+| DISC-06 | Phase 19 | Complete |
 | CMDL-01 | Phase 20 | Pending |
 | CMDL-02 | Phase 20 | Pending |
 | CMDL-03 | Phase 20 | Pending |
