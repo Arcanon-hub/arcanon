@@ -214,6 +214,23 @@
         font-size: 10px;
         margin-top: 2px;
       }
+      #legend {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-size: 11px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+      }
       #project-select {
         background: #2d3748;
         border: 1px solid #4a5568;
@@ -255,6 +272,20 @@
         <label class="filter-label"
           ><input type="checkbox" data-protocol="internal" checked />
           Internal</label
+        >
+      </div>
+      <div id="legend">
+        <span class="legend-item"
+          ><span class="legend-dot" style="background: #4299e1"></span
+          >Service</span
+        >
+        <span class="legend-item"
+          ><span class="legend-dot" style="background: #f6ad55"></span
+          >Frontend</span
+        >
+        <span class="legend-item"
+          ><span class="legend-dot" style="background: #9f7aea"></span
+          >Library</span
         >
       </div>
       <span id="node-info">Loading...</span>

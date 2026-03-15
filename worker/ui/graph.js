@@ -38,6 +38,28 @@ let transform = { x: 0, y: 0, scale: 1 };
 const NODE_RADIUS = 18;
 const LABEL_MAX_CHARS = 12;
 
+// Node colors by service type and language
+const NODE_TYPE_COLORS = {
+  library: "#9f7aea", // purple for libraries/SDKs
+  sdk: "#9f7aea",
+  frontend: "#f6ad55", // orange for frontend
+  service: "#4299e1", // blue for services (default)
+};
+
+function getNodeColor(node) {
+  // Check type field from scan data
+  if (node.type === "library" || node.type === "sdk")
+    return NODE_TYPE_COLORS.library;
+  // Detect frontend by language or name
+  if (
+    node.language === "typescript" ||
+    node.language === "javascript" ||
+    (node.name && /ui|frontend|web|dashboard|app/i.test(node.name))
+  )
+    return NODE_TYPE_COLORS.frontend;
+  return NODE_TYPE_COLORS.service;
+}
+
 const COLORS = {
   node: {
     default: "#4299e1",
@@ -160,6 +182,41 @@ function render() {
 
   if (graphData.nodes.length === 0) return;
 
+  // -----------------------------------------------------------------------
+  // Draw repo boundary boxes (behind everything else)
+  // -----------------------------------------------------------------------
+  const repoGroups = {};
+  for (const node of graphData.nodes) {
+    const repo = node.repo_name || "unknown";
+    if (!repoGroups[repo]) repoGroups[repo] = [];
+    repoGroups[repo].push(node);
+  }
+
+  const REPO_COLORS = [
+    "rgba(66, 153, 225, 0.08)",
+    "rgba(104, 211, 145, 0.08)",
+    "rgba(159, 122, 234, 0.08)",
+    "rgba(246, 173, 85, 0.08)",
+    "rgba(252, 129, 129, 0.08)",
+    "rgba(56, 178, 172, 0.08)",
+  ];
+  const REPO_BORDER_COLORS = [
+    "rgba(66, 153, 225, 0.25)",
+    "rgba(104, 211, 145, 0.25)",
+    "rgba(159, 122, 234, 0.25)",
+    "rgba(246, 173, 85, 0.25)",
+    "rgba(252, 129, 129, 0.25)",
+    "rgba(56, 178, 172, 0.25)",
+  ];
+  const REPO_LABEL_COLORS = [
+    "rgba(66, 153, 225, 0.5)",
+    "rgba(104, 211, 145, 0.5)",
+    "rgba(159, 122, 234, 0.5)",
+    "rgba(246, 173, 85, 0.5)",
+    "rgba(252, 129, 129, 0.5)",
+    "rgba(56, 178, 172, 0.5)",
+  ];
+
   // Compute visible set based on search filter
   const visibleIds = new Set(
     graphData.nodes
@@ -247,20 +304,20 @@ function render() {
     const isNeighbor = neighborIds.has(node.id);
     const isBlastNode = hasBlast && blastSet.has(node.id);
 
-    // Node circle color
+    // Node circle color — varies by service type
     let nodeColor;
     if (isSelected) {
       nodeColor = COLORS.node.selected;
     } else if (isBlastNode) {
       nodeColor = COLORS.node.blast;
     } else if (hasSelection && isNeighbor) {
-      nodeColor = COLORS.node.selected; // neighbors get same highlight
+      nodeColor = COLORS.node.selected;
     } else if ((hasSelection || hasBlast) && isVisible) {
       nodeColor = COLORS.node.dimmed;
     } else if (!isVisible) {
       nodeColor = COLORS.node.dimmed;
     } else {
-      nodeColor = COLORS.node.default;
+      nodeColor = getNodeColor(node);
     }
 
     const alpha = !isVisible
@@ -764,6 +821,7 @@ async function init() {
       id: s.id,
       name: s.name,
       language: s.language,
+      type: s.type || "service",
       repo_name: s.repo_name,
     };
   });
