@@ -23,6 +23,11 @@ let searchFilter = "";
 let forceWorker = null;
 let isDragging = false;
 let dragNodeId = null;
+let isPanning = false;
+let panStartX = 0;
+let panStartY = 0;
+let panStartTransformX = 0;
+let panStartTransformY = 0;
 let dragStarted = false; // distinguish click from drag
 let transform = { x: 0, y: 0, scale: 1 };
 
@@ -339,6 +344,14 @@ function setupInteractions(canvas) {
       return;
     }
 
+    if (isPanning) {
+      transform.x = panStartTransformX + (px - panStartX);
+      transform.y = panStartTransformY + (py - panStartY);
+      dragStarted = true;
+      render();
+      return;
+    }
+
     const node = hitTest(px, py);
     if (node) {
       canvas.style.cursor = "pointer";
@@ -363,13 +376,19 @@ function setupInteractions(canvas) {
     if (node) {
       isDragging = true;
       dragNodeId = node.id;
+    } else {
+      // No node hit — start panning
+      isPanning = true;
+      panStartX = e.offsetX;
+      panStartY = e.offsetY;
+      panStartTransformX = transform.x;
+      panStartTransformY = transform.y;
     }
   });
 
-  // Mouseup — release drag
+  // Mouseup — release drag or pan
   canvas.addEventListener("mouseup", (e) => {
     if (isDragging && dragNodeId !== null && dragStarted) {
-      // Fix node position after drag
       const { x: wx, y: wy } = toWorld(e.offsetX, e.offsetY);
       if (forceWorker) {
         forceWorker.postMessage({
@@ -382,6 +401,7 @@ function setupInteractions(canvas) {
     }
     isDragging = false;
     dragNodeId = null;
+    isPanning = false;
   });
 
   // Click — select node or clear selection
@@ -459,6 +479,7 @@ function setupInteractions(canvas) {
       isDragging = false;
       dragNodeId = null;
     }
+    isPanning = false;
   });
 }
 
