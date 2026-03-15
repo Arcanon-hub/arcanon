@@ -20,8 +20,8 @@
 - [x] **WRKR-03**: Worker supports graceful shutdown on SIGTERM/SIGINT
 - [x] **WRKR-04**: Worker health check endpoint at `/api/readiness` confirms startup complete
 - [x] **WRKR-05**: Duplicate worker prevention via PID file check before spawn
-- [ ] **WRKR-06**: Worker reads settings from `~/.allclear/settings.json`
-- [ ] **WRKR-07**: Worker logs to `~/.allclear/logs/` with configurable log level
+- [x] **WRKR-06**: Worker reads settings from `~/.allclear/settings.json`
+- [x] **WRKR-07**: Worker logs to `~/.allclear/logs/` with configurable log level
 
 ### MCP Server
 
@@ -134,8 +134,8 @@
 | WRKR-03 | Phase 15 | Complete |
 | WRKR-04 | Phase 15 | Complete |
 | WRKR-05 | Phase 15 | Complete |
-| WRKR-06 | Phase 15 | Pending |
-| WRKR-07 | Phase 15 | Pending |
+| WRKR-06 | Phase 15 | Complete |
+| WRKR-07 | Phase 15 | Complete |
 | MCPS-01 | Phase 16 | Complete |
 | MCPS-02 | Phase 16 | Pending |
 | MCPS-03 | Phase 16 | Pending |

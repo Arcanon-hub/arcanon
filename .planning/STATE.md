@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Service Dependency Intelligence
 status: planning
-stopped_at: Completed 14-02-PLAN.md — QueryEngine with transitive traversal, cycle detection, FTS5 search
-last_updated: "2026-03-15T17:20:30.405Z"
+stopped_at: Completed 15-02-PLAN.md — worker/index.js entry point and lifecycle bats tests
+last_updated: "2026-03-15T17:20:53.847Z"
 last_activity: 2026-03-15 — Roadmap created, 8 phases defined (14-21)
 progress:
   total_phases: 8
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 14-storage-foundation P01 | 7min | 2 tasks | 4 files |
 | Phase 17-http-server-web-ui P02 | 3min | 2 tasks | 3 files |
 | Phase 14-storage-foundation P02 | 5min | 2 tasks | 3 files |
+| Phase 15-worker-lifecycle P02 | 6min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -82,6 +83,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 14-02]: classifyImpact is a pure mapping — caller provides the delta, engine applies severity rules without DB cross-check
 - [Phase 14-02]: FTS5 queries wrapped in double-quotes to handle hyphens (svc-a parses as svc NOT a without quoting)
 - [Phase 14-02]: Tests use new Database() directly instead of openDb() singleton to avoid per-test isolation failures
+- [Phase 15-02]: /api/readiness registered before DB init — probe always returns 200 regardless of DB state
+- [Phase 15-02]: Startup order: parse args → read settings → mkdir → write PID → register routes → listen → write port → log
 
 ### Pending Todos
 
@@ -95,6 +98,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T17:20:30.401Z
-Stopped at: Completed 14-02-PLAN.md — QueryEngine with transitive traversal, cycle detection, FTS5 search
+Last session: 2026-03-15T17:20:53.844Z
+Stopped at: Completed 15-02-PLAN.md — worker/index.js entry point and lifecycle bats tests
 Resume file: None
