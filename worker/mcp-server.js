@@ -1,13 +1,25 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import Database from 'better-sqlite3';
+import crypto from 'crypto';
+import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import { execSync } from 'child_process';
 import { z } from 'zod';
 
-const dbPath = process.env.ALLCLEAR_DB_PATH
-  || path.join(process.cwd(), '.allclear', 'impact-map.db');
+const dataDir = process.env.ALLCLEAR_DATA_DIR || path.join(os.homedir(), '.allclear');
+
+/**
+ * Resolve the per-project DB path: ~/.allclear/projects/<hash>/impact-map.db
+ * Uses the same hashing logic as worker/db.js projectHashDir().
+ */
+function resolveDbPath(projectRoot = process.cwd()) {
+  const hash = crypto.createHash('sha256').update(projectRoot).digest('hex').slice(0, 12);
+  return path.join(dataDir, 'projects', hash, 'impact-map.db');
+}
+
+const dbPath = process.env.ALLCLEAR_DB_PATH || resolveDbPath();
 
 /**
  * Open the SQLite database in read-only mode.
@@ -339,7 +351,7 @@ export async function querySearch(db, { query, limit = 20 }) {
  */
 export async function queryScan({ repo, full = false } = {}) {
   try {
-    const portFilePath = path.join(process.cwd(), '.allclear', 'worker.port');
+    const portFilePath = path.join(dataDir, 'worker.port');
     let port;
     try {
       port = fs.readFileSync(portFilePath, 'utf8').trim();
