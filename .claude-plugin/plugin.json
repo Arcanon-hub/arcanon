@@ -1,0 +1,11 @@
+{
+  "name": "allclear",
+  "version": "0.1.0",
+  "description": "Auto-format, auto-lint, and cross-repo quality gates for Claude Code",
+  "author": {
+    "name": "AllClear Contributors"
+  },
+  "repository": "https://github.com/AetherHQ/allclear",
+  "license": "Apache-2.0",
+  "keywords": ["quality-gates", "auto-format", "auto-lint", "cross-repo", "hooks"]
+}

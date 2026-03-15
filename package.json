@@ -1,0 +1,14 @@
+{
+  "name": "@allclear/cli",
+  "version": "0.1.0",
+  "description": "AllClear — auto-format, auto-lint, and cross-repo quality gates for Claude Code",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AetherHQ/allclear"
+  },
+  "bin": {
+    "allclear-init": "./bin/allclear-init.js"
+  },
+  "keywords": ["claude-code", "plugin", "quality-gates", "auto-format", "auto-lint"]
+}
