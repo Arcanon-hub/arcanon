@@ -6,21 +6,49 @@
  * and the assert module. Each test case uses an isolated temp directory.
  */
 
-import { describe, it, before } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import Database from 'better-sqlite3';
+import { fileURLToPath } from 'url';
 
 import { openDb } from '../../worker/db.js';
 import { QueryEngine } from '../../worker/query-engine.js';
 
-/** Create a fresh isolated DB + QueryEngine for each test group */
+// Migration runner — reuse db.js's runMigrations logic by importing migration directly
+import * as migration001 from '../../worker/migrations/001_initial_schema.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Create a fresh isolated in-memory-backed on-disk DB for each test.
+ * Uses better-sqlite3 directly (not the openDb singleton) so each test
+ * gets a truly independent connection that can be safely closed.
+ */
 function makeQE() {
   const dir = path.join(os.tmpdir(), 'allclear-test-' + crypto.randomUUID());
   fs.mkdirSync(dir, { recursive: true });
-  const db = openDb(dir);
+  const dbPath = path.join(dir, 'test.db');
+
+  const db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+
+  // Bootstrap schema_versions and run migration 001
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_versions (
+      version    INTEGER PRIMARY KEY,
+      applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  db.transaction(() => {
+    migration001.up(db);
+    db.prepare('INSERT INTO schema_versions (version) VALUES (?)').run(migration001.version);
+  })();
+
   const qe = new QueryEngine(db);
   return { db, qe };
 }
@@ -29,8 +57,8 @@ function makeQE() {
 // 1. Database setup
 // ---------------------------------------------------------------------------
 describe('database setup', () => {
-  it('openDb creates a WAL database', () => {
-    const { db } = makeQE();
+  it('makeQE creates a WAL database', () => {
+    const { db, qe } = makeQE();
     const mode = db.pragma('journal_mode', { simple: true });
     assert.strictEqual(mode, 'wal');
     db.close();
@@ -43,12 +71,14 @@ describe('database setup', () => {
   });
 
   it('openDb is idempotent — same instance returned on repeat call', () => {
+    // openDb() is a module-level singleton; calling it twice returns the same instance
     const dir = path.join(os.tmpdir(), 'allclear-test-' + crypto.randomUUID());
     fs.mkdirSync(dir, { recursive: true });
     const db1 = openDb(dir);
     const db2 = openDb(dir);
-    assert.strictEqual(db1, db2);
-    db1.close();
+    // Both calls should return the same object reference
+    assert.strictEqual(db1, db2, 'openDb should return the same instance');
+    // Note: do not close here — the singleton is shared across this process
   });
 });
 

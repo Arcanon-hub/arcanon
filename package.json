@@ -26,5 +26,8 @@
   },
   "optionalDependencies": {
     "@chroma-core/default-embed": "^1.0.0"
+  },
+  "scripts": {
+    "test:storage": "node --test tests/storage/query-engine.test.js"
   }
 }
