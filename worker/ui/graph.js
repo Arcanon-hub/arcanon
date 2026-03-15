@@ -18,7 +18,7 @@ let selectedNodeId = null; // clicked node (highlight direct neighbors)
 let blastNodeId = null; // shift-clicked node (transitive blast radius)
 let blastSet = new Set(); // IDs returned by /impact for blastNodeId
 let blastCache = {}; // nodeName -> Set of affected IDs (cache /impact calls)
-let activeProtocols = new Set(["rest", "grpc", "events", "internal"]);
+let activeProtocols = new Set(["rest", "grpc", "events", "internal", "sdk"]);
 let searchFilter = "";
 let forceWorker = null;
 let isDragging = false;
@@ -50,12 +50,11 @@ function getNodeColor(node) {
   // Check type field from scan data
   if (node.type === "library" || node.type === "sdk")
     return NODE_TYPE_COLORS.library;
+  // Infer type from name if type column is 'service' (pre-rescan data)
+  if (node.name && /sdk|lib|client|shared|common/i.test(node.name))
+    return NODE_TYPE_COLORS.library;
   // Detect frontend by language or name
-  if (
-    node.language === "typescript" ||
-    node.language === "javascript" ||
-    (node.name && /ui|frontend|web|dashboard|app/i.test(node.name))
-  )
+  if (node.name && /ui|frontend|web|dashboard|app/i.test(node.name))
     return NODE_TYPE_COLORS.frontend;
   return NODE_TYPE_COLORS.service;
 }
@@ -85,6 +84,8 @@ const PROTOCOL_COLORS = {
   grpc: "#68d391",
   events: "#9f7aea",
   internal: "#4a5568",
+  sdk: "#d69e2e",
+  import: "#d69e2e",
 };
 
 // ---------------------------------------------------------------------------
@@ -279,7 +280,14 @@ function render() {
     // Determine line width
     const lineWidth = isSelectedEdge || isBlastEdge ? 2 : 1;
 
+    // SDK/library connections get dashed lines
+    const isSdkEdge = edge.protocol === "sdk" || edge.protocol === "import";
     ctx.beginPath();
+    if (isSdkEdge) {
+      ctx.setLineDash([4 / transform.scale, 4 / transform.scale]);
+    } else {
+      ctx.setLineDash([]);
+    }
     ctx.moveTo(srcPos.x, srcPos.y);
     ctx.lineTo(tgtPos.x, tgtPos.y);
     ctx.strokeStyle = color;
@@ -289,6 +297,7 @@ function render() {
         ? 0.2
         : 0.85;
     ctx.stroke();
+    ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
     // Draw cross (✗) on mismatched edges at midpoint
