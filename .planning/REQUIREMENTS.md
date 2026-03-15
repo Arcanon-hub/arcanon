@@ -36,12 +36,12 @@
 
 ### HTTP Server & Web UI
 
-- [ ] **HTTP-01**: Fastify HTTP server on configurable localhost port serving REST API and web UI
-- [ ] **HTTP-02**: `GET /graph` returns full service dependency graph as JSON
-- [ ] **HTTP-03**: `GET /impact?change=<endpoint>` returns affected services for a change
-- [ ] **HTTP-04**: `GET /service/:name` returns service details and all connections
-- [ ] **HTTP-05**: `POST /scan` triggers repo scan via API
-- [ ] **HTTP-06**: `GET /versions` returns map version history
+- [x] **HTTP-01**: Fastify HTTP server on configurable localhost port serving REST API and web UI
+- [x] **HTTP-02**: `GET /graph` returns full service dependency graph as JSON
+- [x] **HTTP-03**: `GET /impact?change=<endpoint>` returns affected services for a change
+- [x] **HTTP-04**: `GET /service/:name` returns service details and all connections
+- [x] **HTTP-05**: `POST /scan` triggers repo scan via API
+- [x] **HTTP-06**: `GET /versions` returns map version history
 - [ ] **WEBUI-01**: Interactive D3 Canvas graph renders services as nodes and connections as edges
 - [ ] **WEBUI-02**: Clicking a node highlights all its connections (upstream and downstream)
 - [ ] **WEBUI-03**: Impact path highlighting shows transitive blast radius for a selected service
@@ -144,12 +144,12 @@
 | MCPS-06 | Phase 16 | Pending |
 | MCPS-07 | Phase 16 | Complete |
 | MCPS-08 | Phase 16 | Complete |
-| HTTP-01 | Phase 17 | Pending |
-| HTTP-02 | Phase 17 | Pending |
-| HTTP-03 | Phase 17 | Pending |
-| HTTP-04 | Phase 17 | Pending |
-| HTTP-05 | Phase 17 | Pending |
-| HTTP-06 | Phase 17 | Pending |
+| HTTP-01 | Phase 17 | Complete |
+| HTTP-02 | Phase 17 | Complete |
+| HTTP-03 | Phase 17 | Complete |
+| HTTP-04 | Phase 17 | Complete |
+| HTTP-05 | Phase 17 | Complete |
+| HTTP-06 | Phase 17 | Complete |
 | WEBUI-01 | Phase 17 | Pending |
 | WEBUI-02 | Phase 17 | Pending |
 | WEBUI-03 | Phase 17 | Pending |

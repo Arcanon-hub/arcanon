@@ -175,7 +175,7 @@ Plans:
 | 14. Storage Foundation | v2.0 | 0/2 | In progress | - |
 | 15. Worker Lifecycle | 1/2 | In Progress|  | - |
 | 16. MCP Server | 1/3 | In Progress|  | - |
-| 17. HTTP Server & Web UI | v2.0 | 0/2 | Planned | - |
+| 17. HTTP Server & Web UI | 1/2 | In Progress|  | - |
 | 18. Agent Scanning | v2.0 | 0/2 | Not started | - |
 | 19. Repo Discovery & User Confirmation | v2.0 | 0/2 | Not started | - |
 | 20. Command Layer | v2.0 | 0/2 | Planned | - |
