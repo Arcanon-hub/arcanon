@@ -56,12 +56,17 @@ Example evidence strings:
 
 ## What IS a Service
 
-A service is a **deployable unit** that runs as a process and communicates over a network or message bus. Examples:
+A service is a **deployable unit** that runs as a process and communicates over a network, message bus, or system interface. Examples:
 - An HTTP/REST API server (Express, FastAPI, Gin, Actix, Spring Boot)
 - A gRPC server
 - A message queue consumer/producer (Kafka, RabbitMQ, SQS)
 - A WebSocket server
 - A background worker that processes jobs from a queue
+- A systemd/init.d service or daemon
+- A cron job or scheduled task that calls other services
+- A Docker container that runs as a long-lived process
+- A serverless function (Lambda, Cloud Function) that handles requests
+- A database migration runner that modifies shared state
 
 **NOT services:**
 - Shared libraries (`lib/`, `utils/`, `helpers/`, `common/`)
