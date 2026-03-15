@@ -165,7 +165,7 @@ Plans:
   2. `/allclear drift types` reports type definition inconsistencies for shared models across repos
   3. `/allclear drift openapi` reports OpenAPI spec inconsistencies for shared endpoints
   4. Output defaults to actionable differences only (not a wall of text) with severity levels indicating which drifts are breaking vs. informational
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 10-01-PLAN.md — SKILL.md prompt playbook, shared helpers, and version drift checker
 - [ ] 10-02-PLAN.md — Type definition and OpenAPI spec drift checkers
@@ -229,7 +229,7 @@ All phases are independent and can execute in parallel. No ordering constraints.
 | 7. Quality Gate Skill | 0/1 | Planning complete | - |
 | 8. Config Layer | 1/1 | Complete   | 2026-03-15 |
 | 9. Impact Skill | 0/1 | Planning complete | - |
-| 10. Drift Skill | 0/2 | Planning complete | - |
+| 10. Drift Skill | 1/2 | In Progress|  |
 | 11. Pulse Skill | 1/1 | Complete   | 2026-03-15 |
 | 12. Deploy Skill | 1/1 | Complete   | 2026-03-15 |
 | 13. Tests | 2/3 | In Progress|  |

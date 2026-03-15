@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 10-drift-skill 10-02-PLAN.md
-last_updated: "2026-03-15T10:13:03.006Z"
+stopped_at: Completed 01-plugin-skeleton/01-01-PLAN.md
+last_updated: "2026-03-15T10:13:23.529Z"
 last_activity: 2026-03-15 — Roadmap revised to parallel structure, 7 sequential phases replaced with 13 independent phases
 progress:
   total_phases: 13
@@ -65,6 +65,7 @@ Progress: [███░░░░░░░] 29%
 | Phase 13-tests P01 | 3 | 2 tasks | 2 files |
 | Phase 05-guard-hook P01 | 3 | 2 tasks | 2 files |
 | Phase 10-drift-skill P02 | 3 | 2 tasks | 2 files |
+| Phase 01-plugin-skeleton P01 | 15 | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,9 @@ Recent decisions affecting current work:
 - [Phase 05-guard-hook]: ALLCLEAR_EXTRA_BLOCKED checked before built-in patterns so user overrides can pre-empt soft-warn paths
 - [Phase 10-drift-skill]: Type checking scoped to same-language repos by default to prevent cross-language false positives
 - [Phase 10-drift-skill]: OpenAPI comparison uses oasdiff for $ref resolution; falls back to yq structural diff labeled as degraded
+- [Phase 01-plugin-skeleton]: Only plugin.json goes inside .claude-plugin/; all other content (skills/, hooks/, scripts/, lib/) goes at plugin root
+- [Phase 01-plugin-skeleton]: All path references in hooks.json use ${CLAUDE_PLUGIN_ROOT} — zero hardcoded absolute paths (PLGN-04)
+- [Phase 01-plugin-skeleton]: PascalCase event names in hooks.json: PostToolUse, PreToolUse, SessionStart
 
 ### Pending Todos
 
@@ -125,6 +129,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T10:13:03.002Z
-Stopped at: Completed 10-drift-skill 10-02-PLAN.md
+Last session: 2026-03-15T10:13:23.524Z
+Stopped at: Completed 01-plugin-skeleton/01-01-PLAN.md
 Resume file: None
