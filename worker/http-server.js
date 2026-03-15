@@ -55,6 +55,17 @@ async function createHttpServer(queryEngine, options = {}) {
     return reply.send({ status: 'ok' });
   });
 
+  // 1b. GET /api/version — returns running worker version (for auto-restart on update)
+  fastify.get('/api/version', async (_request, reply) => {
+    try {
+      const pkgPath = path.join(__dirname, '..', 'package.json');
+      const pkg = JSON.parse((await import('fs')).default.readFileSync(pkgPath, 'utf8'));
+      return reply.send({ version: pkg.version });
+    } catch {
+      return reply.send({ version: 'unknown' });
+    }
+  });
+
   // 2. GET /projects — list all projects with DBs
   fastify.get('/projects', async (_request, reply) => {
     try {

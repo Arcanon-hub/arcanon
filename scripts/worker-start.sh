@@ -22,12 +22,32 @@ mkdir -p "$DATA_DIR"
 PID_FILE="${DATA_DIR}/worker.pid"
 PORT_FILE="${DATA_DIR}/worker.port"
 
-# Stale-PID detection
+# Stale-PID detection + version mismatch auto-restart
 if [[ -f "$PID_FILE" ]]; then
   PID=$(cat "$PID_FILE")
   if kill -0 "$PID" 2>/dev/null; then
-    echo "worker already running (PID $PID)"
-    exit 0
+    # Worker is running — check version match
+    INSTALLED_VERSION=""
+    if [[ -f "${PLUGIN_ROOT}/package.json" ]] && command -v jq >/dev/null 2>&1; then
+      INSTALLED_VERSION=$(jq -r '.version // empty' "${PLUGIN_ROOT}/package.json" 2>/dev/null || true)
+    fi
+
+    RUNNING_VERSION=""
+    if [[ -f "$PORT_FILE" ]]; then
+      _port=$(cat "$PORT_FILE")
+      RUNNING_VERSION=$(curl -s "http://127.0.0.1:${_port}/api/version" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true)
+    fi
+
+    if [[ -n "$INSTALLED_VERSION" && -n "$RUNNING_VERSION" && "$INSTALLED_VERSION" != "$RUNNING_VERSION" ]]; then
+      echo "version mismatch (installed=$INSTALLED_VERSION, running=$RUNNING_VERSION) — restarting" >&2
+      kill "$PID" 2>/dev/null || true
+      sleep 1
+      kill -0 "$PID" 2>/dev/null && kill -9 "$PID" 2>/dev/null || true
+      rm -f "$PID_FILE" "$PORT_FILE"
+    else
+      echo "worker already running (PID $PID)"
+      exit 0
+    fi
   else
     echo "removing stale PID file (PID $PID no longer exists)" >&2
     rm -f "$PID_FILE"
