@@ -70,7 +70,7 @@ Plans:
   5. A formatter crash or non-zero exit never blocks the edit — the hook exits 0 in all cases
 **Plans:** 1 plan
 Plans:
-- [ ] 02-01-PLAN.md — Create lib/detect.sh and lib/siblings.sh shared libraries
+- [ ] 03-01-PLAN.md — hooks.json wiring + format.sh auto-format dispatch script
 
 ### Phase 4: Lint Hook
 **Goal**: Every Claude file edit automatically triggers linting for the appropriate language and surfaces any issues to the conversation without blocking the edit
@@ -165,9 +165,10 @@ Plans:
   2. `/allclear drift types` reports type definition inconsistencies for shared models across repos
   3. `/allclear drift openapi` reports OpenAPI spec inconsistencies for shared endpoints
   4. Output defaults to actionable differences only (not a wall of text) with severity levels indicating which drifts are breaking vs. informational
-**Plans:** 1 plan
+**Plans:** 2 plans
 Plans:
-- [ ] 02-01-PLAN.md — Create lib/detect.sh and lib/siblings.sh shared libraries
+- [ ] 10-01-PLAN.md — SKILL.md prompt playbook, shared helpers, and version drift checker
+- [ ] 10-02-PLAN.md — Type definition and OpenAPI spec drift checkers
 
 ### Phase 11: Pulse Skill
 **Goal**: Developers with kubectl access can check live service health and compare running image versions to the latest git tag with one command; developers without kubectl get a clean skip message
@@ -221,14 +222,14 @@ All phases are independent and can execute in parallel. No ordering constraints.
 |-------|----------------|--------|-----------|
 | 1. Plugin Skeleton | 0/TBD | Not started | - |
 | 2. Shared Libraries | 0/1 | Planned | - |
-| 3. Format Hook | 0/TBD | Not started | - |
+| 3. Format Hook | 0/1 | Planned | - |
 | 4. Lint Hook | 0/1 | Planned | - |
 | 5. Guard Hook | 0/1 | Planned | - |
 | 6. Session Hook | 0/2 | Planning complete | - |
 | 7. Quality Gate Skill | 0/1 | Planning complete | - |
 | 8. Config Layer | 0/1 | Planned | - |
 | 9. Impact Skill | 0/1 | Planning complete | - |
-| 10. Drift Skill | 0/TBD | Not started | - |
+| 10. Drift Skill | 0/2 | Planning complete | - |
 | 11. Pulse Skill | 0/1 | Planning complete | - |
 | 12. Deploy Skill | 0/1 | Planning complete | - |
 | 13. Tests | 0/3 | Planning complete | - |
