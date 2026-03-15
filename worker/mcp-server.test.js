@@ -18,7 +18,6 @@ import {
   queryImpact,
   queryChanged,
   queryGraph,
-  querySearch,
 } from './mcp-server.js';
 
 // ─────────────────────────────────────────────────────────────
