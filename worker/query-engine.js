@@ -586,7 +586,15 @@ export class QueryEngine {
    * @returns {Array<{connection_id: number, source: string, target: string, type: string, detail: string}>}
    */
   detectMismatches() {
-    // Find connections where target_file is null — endpoint not verified in target repo
+    // Only flag as mismatch when:
+    // 1. target_file is null (handler not found)
+    // 2. The target service's repo WAS scanned (has repo_state)
+    // 3. Other connections TO the same target DO have target_file set
+    //    (proving the target repo was scanned and handlers are detectable)
+    //
+    // Cross-repo connections where the target repo wasn't scanned or
+    // where no connections to that target have handlers are NOT mismatches —
+    // they're just incomplete data.
     const unverified = this._db
       .prepare(
         `
@@ -595,7 +603,15 @@ export class QueryEngine {
       FROM connections c
       JOIN services s_src ON c.source_service_id = s_src.id
       JOIN services s_tgt ON c.target_service_id = s_tgt.id
-      WHERE c.target_file IS NULL AND c.protocol != 'internal'
+      JOIN repos r ON s_tgt.repo_id = r.id
+      JOIN repo_state rs ON rs.repo_id = r.id
+      WHERE c.target_file IS NULL
+        AND c.protocol NOT IN ('internal', 'sdk', 'import')
+        AND EXISTS (
+          SELECT 1 FROM connections c2
+          WHERE c2.target_service_id = c.target_service_id
+            AND c2.target_file IS NOT NULL
+        )
     `,
       )
       .all();
