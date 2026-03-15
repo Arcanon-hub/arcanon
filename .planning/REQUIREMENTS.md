@@ -124,74 +124,76 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STOR-01 | TBD | Pending |
-| STOR-02 | TBD | Pending |
-| STOR-03 | TBD | Pending |
-| STOR-04 | TBD | Pending |
-| STOR-05 | TBD | Pending |
-| WRKR-01 | TBD | Pending |
-| WRKR-02 | TBD | Pending |
-| WRKR-03 | TBD | Pending |
-| WRKR-04 | TBD | Pending |
-| WRKR-05 | TBD | Pending |
-| WRKR-06 | TBD | Pending |
-| WRKR-07 | TBD | Pending |
-| MCPS-01 | TBD | Pending |
-| MCPS-02 | TBD | Pending |
-| MCPS-03 | TBD | Pending |
-| MCPS-04 | TBD | Pending |
-| MCPS-05 | TBD | Pending |
-| MCPS-06 | TBD | Pending |
-| MCPS-07 | TBD | Pending |
-| MCPS-08 | TBD | Pending |
-| HTTP-01 | TBD | Pending |
-| HTTP-02 | TBD | Pending |
-| HTTP-03 | TBD | Pending |
-| HTTP-04 | TBD | Pending |
-| HTTP-05 | TBD | Pending |
-| HTTP-06 | TBD | Pending |
-| WEBUI-01 | TBD | Pending |
-| WEBUI-02 | TBD | Pending |
-| WEBUI-03 | TBD | Pending |
-| WEBUI-04 | TBD | Pending |
-| WEBUI-05 | TBD | Pending |
-| WEBUI-06 | TBD | Pending |
-| SCAN-01 | TBD | Pending |
-| SCAN-02 | TBD | Pending |
-| SCAN-03 | TBD | Pending |
-| SCAN-04 | TBD | Pending |
-| SCAN-05 | TBD | Pending |
-| SCAN-06 | TBD | Pending |
-| SCAN-07 | TBD | Pending |
-| SCAN-08 | TBD | Pending |
-| UCON-01 | TBD | Pending |
-| UCON-02 | TBD | Pending |
-| UCON-03 | TBD | Pending |
-| UCON-04 | TBD | Pending |
-| DISC-01 | TBD | Pending |
-| DISC-02 | TBD | Pending |
-| DISC-03 | TBD | Pending |
-| DISC-04 | TBD | Pending |
-| DISC-05 | TBD | Pending |
-| DISC-06 | TBD | Pending |
-| CMDL-01 | TBD | Pending |
-| CMDL-02 | TBD | Pending |
-| CMDL-03 | TBD | Pending |
-| CMDL-04 | TBD | Pending |
-| CMDL-05 | TBD | Pending |
-| CMDL-06 | TBD | Pending |
-| INTG-01 | TBD | Pending |
-| INTG-02 | TBD | Pending |
-| INTG-03 | TBD | Pending |
-| INTG-04 | TBD | Pending |
-| INTG-05 | TBD | Pending |
-| INTG-06 | TBD | Pending |
+| STOR-01 | Phase 14 | Pending |
+| STOR-02 | Phase 14 | Pending |
+| STOR-03 | Phase 14 | Pending |
+| STOR-04 | Phase 14 | Pending |
+| STOR-05 | Phase 14 | Pending |
+| WRKR-01 | Phase 15 | Pending |
+| WRKR-02 | Phase 15 | Pending |
+| WRKR-03 | Phase 15 | Pending |
+| WRKR-04 | Phase 15 | Pending |
+| WRKR-05 | Phase 15 | Pending |
+| WRKR-06 | Phase 15 | Pending |
+| WRKR-07 | Phase 15 | Pending |
+| MCPS-01 | Phase 16 | Pending |
+| MCPS-02 | Phase 16 | Pending |
+| MCPS-03 | Phase 16 | Pending |
+| MCPS-04 | Phase 16 | Pending |
+| MCPS-05 | Phase 16 | Pending |
+| MCPS-06 | Phase 16 | Pending |
+| MCPS-07 | Phase 16 | Pending |
+| MCPS-08 | Phase 16 | Pending |
+| HTTP-01 | Phase 17 | Pending |
+| HTTP-02 | Phase 17 | Pending |
+| HTTP-03 | Phase 17 | Pending |
+| HTTP-04 | Phase 17 | Pending |
+| HTTP-05 | Phase 17 | Pending |
+| HTTP-06 | Phase 17 | Pending |
+| WEBUI-01 | Phase 17 | Pending |
+| WEBUI-02 | Phase 17 | Pending |
+| WEBUI-03 | Phase 17 | Pending |
+| WEBUI-04 | Phase 17 | Pending |
+| WEBUI-05 | Phase 17 | Pending |
+| WEBUI-06 | Phase 17 | Pending |
+| SCAN-01 | Phase 18 | Pending |
+| SCAN-02 | Phase 18 | Pending |
+| SCAN-03 | Phase 18 | Pending |
+| SCAN-04 | Phase 18 | Pending |
+| SCAN-05 | Phase 18 | Pending |
+| SCAN-06 | Phase 18 | Pending |
+| SCAN-07 | Phase 18 | Pending |
+| SCAN-08 | Phase 18 | Pending |
+| UCON-01 | Phase 19 | Pending |
+| UCON-02 | Phase 19 | Pending |
+| UCON-03 | Phase 19 | Pending |
+| UCON-04 | Phase 19 | Pending |
+| DISC-01 | Phase 19 | Pending |
+| DISC-02 | Phase 19 | Pending |
+| DISC-03 | Phase 19 | Pending |
+| DISC-04 | Phase 19 | Pending |
+| DISC-05 | Phase 19 | Pending |
+| DISC-06 | Phase 19 | Pending |
+| CMDL-01 | Phase 20 | Pending |
+| CMDL-02 | Phase 20 | Pending |
+| CMDL-03 | Phase 20 | Pending |
+| CMDL-04 | Phase 20 | Pending |
+| CMDL-05 | Phase 20 | Pending |
+| CMDL-06 | Phase 20 | Pending |
+| INTG-01 | Phase 21 | Pending |
+| INTG-02 | Phase 21 | Pending |
+| INTG-03 | Phase 21 | Pending |
+| INTG-04 | Phase 21 | Pending |
+| INTG-05 | Phase 21 | Pending |
+| INTG-06 | Phase 21 | Pending |
 
 **Coverage:**
-- v2.0 requirements: 58 total
-- Mapped to phases: 0
-- Unmapped: 58 ⚠️
+- v2.0 requirements: 62 total (STOR: 5, WRKR: 7, MCPS: 8, HTTP: 6, WEBUI: 6, SCAN: 8, UCON: 4, DISC: 6, CMDL: 6, INTG: 6)
+- Mapped to phases: 62
+- Unmapped: 0
+
+Note: The original header stated 58 requirements; actual count from requirement IDs is 62. All 62 are mapped.
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 after milestone v2.0 definition*
+*Last updated: 2026-03-15 after roadmap creation — all requirements mapped to phases 14-21*

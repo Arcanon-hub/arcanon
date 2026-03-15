@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Service Dependency Intelligence
-status: defining_requirements
+status: ready_to_plan
 stopped_at: null
 last_updated: "2026-03-15T16:00:00Z"
-last_activity: 2026-03-15 — Milestone v2.0 started
+last_activity: 2026-03-15 — Roadmap created, 8 phases defined (14-21)
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,16 +21,31 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** v2.0 Service Dependency Intelligence — defining requirements
+**Current focus:** v2.0 Service Dependency Intelligence — Phase 14: Storage Foundation (ready to plan)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-15 — Milestone v2.0 started
+Phase: 14 of 21 (Storage Foundation)
+Plan: — of — (not started)
+Status: Ready to plan
+Last activity: 2026-03-15 — Roadmap created, 8 phases defined (14-21)
 
 Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 0
+- Average duration: —
+- Total execution time: —
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
@@ -39,11 +54,12 @@ Progress: [░░░░░░░░░░] 0%
 - [v2.0]: Cross-impact redesigned from symbol grep to service dependency graph
 - [v2.0]: SQLite primary, ChromaDB optional (follows claude-mem pattern)
 - [v2.0]: Agent-based scanning — no external tools (tree-sitter, stack-graphs)
-- [v2.0]: User confirms all findings before persisting
+- [v2.0]: User confirms all findings before persisting (hard gate, not toggle)
 - [v2.0]: Worker auto-starts when impact-map section present in config
 - [v2.0]: Service is the unit, not repo — works for mono-repo and multi-repo
 - [v2.0]: Incremental scans by default, full re-scan on demand
-- [v2.0]: Own ChromaDB process, config supports external ChromaDB
+- [v2.0]: MCP server reads SQLite directly — no worker dependency for queries
+- [v2.0]: Background subagents cannot access MCP tools (issue #13254) — agent scan runs foreground only
 
 ### Pending Todos
 
@@ -51,10 +67,12 @@ None yet.
 
 ### Blockers/Concerns
 
-None yet.
+- [Phase 18]: Agent hallucination rate unknown until tested on real repos — plan for prompt iteration loop
+- [Phase 16]: MCP tool description length limits and .mcp.json registration convention should be re-verified at implementation time (MCP spec evolves)
+- [Phase 17]: D3 Canvas hit detection for node click/hover requires custom point-in-circle math — spike before full UI implementation
 
 ## Session Continuity
 
 Last session: 2026-03-15
-Stopped at: null
+Stopped at: Roadmap created and written — ready to plan Phase 14
 Resume file: None
