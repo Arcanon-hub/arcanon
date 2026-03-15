@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Service Dependency Intelligence
 status: planning
-stopped_at: Completed 17-02-PLAN.md — Canvas web UI with force-directed graph, interactions, blast radius
-last_updated: "2026-03-15T17:18:18.381Z"
+stopped_at: Completed 14-02-PLAN.md — QueryEngine with transitive traversal, cycle detection, FTS5 search
+last_updated: "2026-03-15T17:20:30.405Z"
 last_activity: 2026-03-15 — Roadmap created, 8 phases defined (14-21)
 progress:
   total_phases: 8
-  completed_phases: 1
+  completed_phases: 3
   total_plans: 19
-  completed_plans: 5
+  completed_plans: 7
   percent: 0
 ---
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 17-http-server-web-ui P01 | 10 | 2 tasks | 4 files |
 | Phase 14-storage-foundation P01 | 7min | 2 tasks | 4 files |
 | Phase 17-http-server-web-ui P02 | 3min | 2 tasks | 3 files |
+| Phase 14-storage-foundation P02 | 5min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 14-01]: FTS5 content tables with trigger-based sync (ai/ad/au per table) chosen for incremental index updates
 - [Phase 17-http-server-web-ui]: Canvas not SVG for graph UI — SVG degrades at 30+ nodes, Canvas scales to 100+
 - [Phase 17-http-server-web-ui]: Web Worker for D3 force simulation — keeps main thread free for smooth 60fps interaction
+- [Phase 14-02]: classifyImpact is a pure mapping — caller provides the delta, engine applies severity rules without DB cross-check
+- [Phase 14-02]: FTS5 queries wrapped in double-quotes to handle hyphens (svc-a parses as svc NOT a without quoting)
+- [Phase 14-02]: Tests use new Database() directly instead of openDb() singleton to avoid per-test isolation failures
 
 ### Pending Todos
 
@@ -91,6 +95,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T17:18:18.378Z
-Stopped at: Completed 17-02-PLAN.md — Canvas web UI with force-directed graph, interactions, blast radius
+Last session: 2026-03-15T17:20:30.401Z
+Stopped at: Completed 14-02-PLAN.md — QueryEngine with transitive traversal, cycle detection, FTS5 search
 Resume file: None

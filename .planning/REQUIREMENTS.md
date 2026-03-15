@@ -9,7 +9,7 @@
 
 - [x] **STOR-01**: SQLite database created at `~/.allclear/projects/<hash>/impact-map.db` with WAL mode and FTS5 indexes
 - [x] **STOR-02**: Schema supports repos, services, connections, schemas, fields, map_versions, repo_state tables
-- [ ] **STOR-03**: Query engine supports transitive impact queries via recursive CTEs with cycle detection and depth limit
+- [x] **STOR-03**: Query engine supports transitive impact queries via recursive CTEs with cycle detection and depth limit
 - [x] **STOR-04**: FTS5 indexes on service names, endpoint paths, and field names for keyword search
 - [x] **STOR-05**: Database migrations system for schema evolution across versions
 
@@ -126,7 +126,7 @@
 |-------------|-------|--------|
 | STOR-01 | Phase 14 | Complete |
 | STOR-02 | Phase 14 | Complete |
-| STOR-03 | Phase 14 | Pending |
+| STOR-03 | Phase 14 | Complete |
 | STOR-04 | Phase 14 | Complete |
 | STOR-05 | Phase 14 | Complete |
 | WRKR-01 | Phase 15 | Complete |

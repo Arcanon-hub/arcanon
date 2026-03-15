@@ -30,7 +30,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 ### v2.0 Service Dependency Intelligence
 
-- [ ] **Phase 14: Storage Foundation** — SQLite schema, WAL mode, FTS5 indexes, query engine with transitive CTE traversal
+- [x] **Phase 14: Storage Foundation** — SQLite schema, WAL mode, FTS5 indexes, query engine with transitive CTE traversal (completed 2026-03-15)
 - [ ] **Phase 15: Worker Lifecycle** — Node.js daemon, PID file management, readiness probe, worker shell client
 - [ ] **Phase 16: MCP Server** — stdio MCP server with impact tools, .mcp.json registration, stderr-only logging
 - [x] **Phase 17: HTTP Server & Web UI** — Fastify REST API, D3 Canvas force-directed graph, single-file UI (completed 2026-03-15)
@@ -172,7 +172,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1-13 | v1.0 | 17/17 | Complete | 2026-03-15 |
-| 14. Storage Foundation | 1/2 | In Progress|  | - |
+| 14. Storage Foundation | 2/2 | Complete   | 2026-03-15 | - |
 | 15. Worker Lifecycle | 1/2 | In Progress|  | - |
 | 16. MCP Server | 1/3 | In Progress|  | - |
 | 17. HTTP Server & Web UI | 2/2 | Complete   | 2026-03-15 | - |
