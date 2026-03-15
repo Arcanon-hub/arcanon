@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Service Dependency Intelligence
 status: planning
-stopped_at: Completed 16-03-PLAN.md — lint guard and bats tests for MCP server
-last_updated: "2026-03-15T17:37:23.280Z"
+stopped_at: Completed 19-01-PLAN.md — repo discovery module with unit tests
+last_updated: "2026-03-15T19:18:01.980Z"
 last_activity: 2026-03-15 — Roadmap created, 8 phases defined (14-21)
 progress:
   total_phases: 8
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 19
-  completed_plans: 9
+  completed_plans: 11
   percent: 0
 ---
 
@@ -55,6 +55,8 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 15-worker-lifecycle P02 | 6min | 2 tasks | 3 files |
 | Phase 16-mcp-server P02 | 16min | 2 tasks | 3 files |
 | Phase 16-mcp-server P03 | 10min | 1 tasks | 2 files |
+| Phase 19-repo-discovery-user-confirmation P02 | 110s | 2 tasks | 2 files |
+| Phase 19-repo-discovery-user-confirmation P01 | 2min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -91,6 +93,10 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 16-mcp-server]: FTS5 fallback catches 'no such table: connections_fts' specifically — avoids masking real query errors
 - [Phase 16-mcp-server]: MCP console.log guard placed before step-4 file check in lint.sh so CI invocations without file args still run the check
 - [Phase 16-mcp-server]: Bats assert for DB-absent test uses unquoted 'results' substring since MCP SDK JSON-encodes tool response text
+- [Phase 19-02]: ESM used in confirmation-flow.js instead of CommonJS — project type:module requires ESM imports for consistency
+- [Phase 19-02]: confirmation-flow.js is a pure module — no I/O, no SQLite writes; Phase 20 command layer is the sole persistence gate after calling this module
+- [Phase 19-repo-discovery-user-confirmation]: ESM used instead of CommonJS in repo-discovery.js — package.json type:module, all worker files use ESM
+- [Phase 19-repo-discovery-user-confirmation]: discoverNew scans 5 manifest types: package.json, pyproject.toml, go.mod, Cargo.toml, pom.xml
 
 ### Pending Todos
 
@@ -104,6 +110,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T17:37:23.275Z
-Stopped at: Completed 16-03-PLAN.md — lint guard and bats tests for MCP server
+Last session: 2026-03-15T19:18:01.977Z
+Stopped at: Completed 19-01-PLAN.md — repo discovery module with unit tests
 Resume file: None

@@ -62,10 +62,10 @@
 
 ### User Confirmation
 
-- [ ] **UCON-01**: All findings require user confirmation before persistence, regardless of confidence level
-- [ ] **UCON-02**: High-confidence findings presented as a batch summary for single confirm/edit
-- [ ] **UCON-03**: Low-confidence findings prompt specific clarification questions (service boundaries, ambiguous targets, protocol)
-- [ ] **UCON-04**: User can edit findings before confirmation (add, remove, modify services/connections)
+- [x] **UCON-01**: All findings require user confirmation before persistence, regardless of confidence level
+- [x] **UCON-02**: High-confidence findings presented as a batch summary for single confirm/edit
+- [x] **UCON-03**: Low-confidence findings prompt specific clarification questions (service boundaries, ambiguous targets, protocol)
+- [x] **UCON-04**: User can edit findings before confirmation (add, remove, modify services/connections)
 
 ### Repo Discovery
 
@@ -164,10 +164,10 @@
 | SCAN-06 | Phase 18 | Pending |
 | SCAN-07 | Phase 18 | Pending |
 | SCAN-08 | Phase 18 | Pending |
-| UCON-01 | Phase 19 | Pending |
-| UCON-02 | Phase 19 | Pending |
-| UCON-03 | Phase 19 | Pending |
-| UCON-04 | Phase 19 | Pending |
+| UCON-01 | Phase 19 | Complete |
+| UCON-02 | Phase 19 | Complete |
+| UCON-03 | Phase 19 | Complete |
+| UCON-04 | Phase 19 | Complete |
 | DISC-01 | Phase 19 | Pending |
 | DISC-02 | Phase 19 | Pending |
 | DISC-03 | Phase 19 | Pending |
