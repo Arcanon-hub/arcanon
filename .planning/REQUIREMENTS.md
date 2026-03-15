@@ -149,13 +149,91 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (Populated during roadmap creation) | | |
+| PLGN-01 | Phase 1 | Pending |
+| PLGN-04 | Phase 1 | Pending |
+| PLGN-06 | Phase 1 | Pending |
+| PLGN-02 | Phase 2 | Pending |
+| PLGN-03 | Phase 2 | Pending |
+| PLGN-05 | Phase 2 | Pending |
+| PLGN-07 | Phase 2 | Pending |
+| PLGN-08 | Phase 2 | Pending |
+| FMTH-01 | Phase 3 | Pending |
+| FMTH-02 | Phase 3 | Pending |
+| FMTH-03 | Phase 3 | Pending |
+| FMTH-04 | Phase 3 | Pending |
+| FMTH-05 | Phase 3 | Pending |
+| FMTH-06 | Phase 3 | Pending |
+| FMTH-07 | Phase 3 | Pending |
+| FMTH-08 | Phase 3 | Pending |
+| FMTH-09 | Phase 3 | Pending |
+| FMTH-10 | Phase 3 | Pending |
+| LNTH-01 | Phase 4 | Pending |
+| LNTH-02 | Phase 4 | Pending |
+| LNTH-03 | Phase 4 | Pending |
+| LNTH-04 | Phase 4 | Pending |
+| LNTH-05 | Phase 4 | Pending |
+| LNTH-06 | Phase 4 | Pending |
+| LNTH-07 | Phase 4 | Pending |
+| LNTH-08 | Phase 4 | Pending |
+| GRDH-01 | Phase 5 | Pending |
+| GRDH-02 | Phase 5 | Pending |
+| GRDH-03 | Phase 5 | Pending |
+| GRDH-04 | Phase 5 | Pending |
+| GRDH-05 | Phase 5 | Pending |
+| GRDH-06 | Phase 5 | Pending |
+| GRDH-07 | Phase 5 | Pending |
+| GRDH-08 | Phase 5 | Pending |
+| SSTH-01 | Phase 6 | Pending |
+| SSTH-02 | Phase 6 | Pending |
+| SSTH-03 | Phase 6 | Pending |
+| SSTH-04 | Phase 6 | Pending |
+| SSTH-05 | Phase 6 | Pending |
+| GATE-01 | Phase 7 | Pending |
+| GATE-02 | Phase 7 | Pending |
+| GATE-03 | Phase 7 | Pending |
+| GATE-04 | Phase 7 | Pending |
+| GATE-05 | Phase 7 | Pending |
+| CONF-01 | Phase 8 | Pending |
+| CONF-02 | Phase 8 | Pending |
+| CONF-03 | Phase 8 | Pending |
+| CONF-04 | Phase 8 | Pending |
+| IMPT-01 | Phase 9 | Pending |
+| IMPT-02 | Phase 9 | Pending |
+| IMPT-03 | Phase 9 | Pending |
+| IMPT-04 | Phase 9 | Pending |
+| IMPT-05 | Phase 9 | Pending |
+| IMPT-06 | Phase 9 | Pending |
+| IMPT-07 | Phase 9 | Pending |
+| DRFT-01 | Phase 10 | Pending |
+| DRFT-02 | Phase 10 | Pending |
+| DRFT-03 | Phase 10 | Pending |
+| DRFT-04 | Phase 10 | Pending |
+| DRFT-05 | Phase 10 | Pending |
+| DRFT-06 | Phase 10 | Pending |
+| PULS-01 | Phase 11 | Pending |
+| PULS-02 | Phase 11 | Pending |
+| PULS-03 | Phase 11 | Pending |
+| PULS-04 | Phase 11 | Pending |
+| PULS-05 | Phase 11 | Pending |
+| DPLY-01 | Phase 12 | Pending |
+| DPLY-02 | Phase 12 | Pending |
+| DPLY-03 | Phase 12 | Pending |
+| DPLY-04 | Phase 12 | Pending |
+| DPLY-05 | Phase 12 | Pending |
+| TEST-01 | Phase 13 | Pending |
+| TEST-02 | Phase 13 | Pending |
+| TEST-03 | Phase 13 | Pending |
+| TEST-04 | Phase 13 | Pending |
+| TEST-05 | Phase 13 | Pending |
+| TEST-06 | Phase 13 | Pending |
+| TEST-07 | Phase 13 | Pending |
+| TEST-08 | Phase 13 | Pending |
 
 **Coverage:**
-- v1 requirements: 70 total
-- Mapped to phases: 0
-- Unmapped: 70
+- v1 requirements: 79 total
+- Mapped to phases: 79
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 after initial definition*
+*Last updated: 2026-03-15 after roadmap revision to parallel structure*
