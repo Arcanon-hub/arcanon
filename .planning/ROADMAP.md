@@ -173,8 +173,8 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 1-13 | v1.0 | 17/17 | Complete | 2026-03-15 |
 | 14. Storage Foundation | v2.0 | 0/2 | In progress | - |
-| 15. Worker Lifecycle | v2.0 | 0/2 | Planned | - |
-| 16. MCP Server | v2.0 | 0/3 | Planned | - |
+| 15. Worker Lifecycle | 1/2 | In Progress|  | - |
+| 16. MCP Server | 1/3 | In Progress|  | - |
 | 17. HTTP Server & Web UI | v2.0 | 0/2 | Planned | - |
 | 18. Agent Scanning | v2.0 | 0/2 | Not started | - |
 | 19. Repo Discovery & User Confirmation | v2.0 | 0/2 | Not started | - |

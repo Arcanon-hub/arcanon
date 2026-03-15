@@ -15,24 +15,24 @@
 
 ### Worker Process
 
-- [ ] **WRKR-01**: Node.js worker runs as background daemon with PID file at `~/.allclear/worker.pid`
-- [ ] **WRKR-02**: Worker writes actual bound port to `~/.allclear/worker.port` for shell command discovery
-- [ ] **WRKR-03**: Worker supports graceful shutdown on SIGTERM/SIGINT
-- [ ] **WRKR-04**: Worker health check endpoint at `/api/readiness` confirms startup complete
-- [ ] **WRKR-05**: Duplicate worker prevention via PID file check before spawn
+- [x] **WRKR-01**: Node.js worker runs as background daemon with PID file at `~/.allclear/worker.pid`
+- [x] **WRKR-02**: Worker writes actual bound port to `~/.allclear/worker.port` for shell command discovery
+- [x] **WRKR-03**: Worker supports graceful shutdown on SIGTERM/SIGINT
+- [x] **WRKR-04**: Worker health check endpoint at `/api/readiness` confirms startup complete
+- [x] **WRKR-05**: Duplicate worker prevention via PID file check before spawn
 - [ ] **WRKR-06**: Worker reads settings from `~/.allclear/settings.json`
 - [ ] **WRKR-07**: Worker logs to `~/.allclear/logs/` with configurable log level
 
 ### MCP Server
 
-- [ ] **MCPS-01**: stdio MCP server registered via `.mcp.json` at plugin root, auto-discovered by Claude Code
+- [x] **MCPS-01**: stdio MCP server registered via `.mcp.json` at plugin root, auto-discovered by Claude Code
 - [ ] **MCPS-02**: `impact_query` tool finds consumers/producers of an endpoint or service with transitive option
 - [ ] **MCPS-03**: `impact_scan` tool triggers repo scan (incremental or full)
 - [ ] **MCPS-04**: `impact_changed` tool reports what's affected by current git diff
 - [ ] **MCPS-05**: `impact_graph` tool returns dependency subgraph for a service with configurable depth and direction
 - [ ] **MCPS-06**: `impact_search` tool provides semantic search across the map (ChromaDB) or keyword search (FTS5 fallback)
-- [ ] **MCPS-07**: MCP server is a separate Node.js stdio process (spawned by Claude Code via `.mcp.json`), reads SQLite directly — no dependency on worker being running for queries
-- [ ] **MCPS-08**: MCP server implemented with @modelcontextprotocol/sdk using `McpServer` + `StdioServerTransport`
+- [x] **MCPS-07**: MCP server is a separate Node.js stdio process (spawned by Claude Code via `.mcp.json`), reads SQLite directly — no dependency on worker being running for queries
+- [x] **MCPS-08**: MCP server implemented with @modelcontextprotocol/sdk using `McpServer` + `StdioServerTransport`
 
 ### HTTP Server & Web UI
 
@@ -129,21 +129,21 @@
 | STOR-03 | Phase 14 | Pending |
 | STOR-04 | Phase 14 | Pending |
 | STOR-05 | Phase 14 | Pending |
-| WRKR-01 | Phase 15 | Pending |
-| WRKR-02 | Phase 15 | Pending |
-| WRKR-03 | Phase 15 | Pending |
-| WRKR-04 | Phase 15 | Pending |
-| WRKR-05 | Phase 15 | Pending |
+| WRKR-01 | Phase 15 | Complete |
+| WRKR-02 | Phase 15 | Complete |
+| WRKR-03 | Phase 15 | Complete |
+| WRKR-04 | Phase 15 | Complete |
+| WRKR-05 | Phase 15 | Complete |
 | WRKR-06 | Phase 15 | Pending |
 | WRKR-07 | Phase 15 | Pending |
-| MCPS-01 | Phase 16 | Pending |
+| MCPS-01 | Phase 16 | Complete |
 | MCPS-02 | Phase 16 | Pending |
 | MCPS-03 | Phase 16 | Pending |
 | MCPS-04 | Phase 16 | Pending |
 | MCPS-05 | Phase 16 | Pending |
 | MCPS-06 | Phase 16 | Pending |
-| MCPS-07 | Phase 16 | Pending |
-| MCPS-08 | Phase 16 | Pending |
+| MCPS-07 | Phase 16 | Complete |
+| MCPS-08 | Phase 16 | Complete |
 | HTTP-01 | Phase 17 | Pending |
 | HTTP-02 | Phase 17 | Pending |
 | HTTP-03 | Phase 17 | Pending |

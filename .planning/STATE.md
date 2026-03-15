@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Service Dependency Intelligence
-status: ready_to_plan
-stopped_at: null
-last_updated: "2026-03-15T16:00:00Z"
+status: planning
+stopped_at: Completed 16-mcp-server/16-01-PLAN.md
+last_updated: "2026-03-15T17:08:25.849Z"
 last_activity: 2026-03-15 — Roadmap created, 8 phases defined (14-21)
 progress:
   total_phases: 8
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 19
+  completed_plans: 2
   percent: 0
 ---
 
@@ -46,6 +46,8 @@ Progress: [░░░░░░░░░░] 0%
 | - | - | - | - |
 
 *Updated after each plan completion*
+| Phase 16-mcp-server P01 | 2 | 2 tasks | 5 files |
+| Phase 15-worker-lifecycle P01 | 84s | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -60,6 +62,12 @@ Progress: [░░░░░░░░░░] 0%
 - [v2.0]: Incremental scans by default, full re-scan on demand
 - [v2.0]: MCP server reads SQLite directly — no worker dependency for queries
 - [v2.0]: Background subagents cannot access MCP tools (issue #13254) — agent scan runs foreground only
+- [Phase 16-mcp-server]: type:module added to package.json — all worker files use ESM import syntax
+- [Phase 16-mcp-server]: openDb() exported as named export so Plan 02 tools can import without re-opening DB
+- [Phase 16-mcp-server]: Fastify and HTTP deps added in 16-01 to avoid second npm install in Phase 17
+- [Phase 15-01]: DATA_DIR for PID/port files is ~/.allclear (machine-wide), overridable via ALLCLEAR_DATA_DIR
+- [Phase 15-01]: Port resolution order: ALLCLEAR_WORKER_PORT env -> settings.json -> allclear.config.json -> 37888
+- [Phase 15-01]: PORT_FILE written before spawning so callers can read port immediately after worker-start.sh exits
 
 ### Pending Todos
 
@@ -73,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15
-Stopped at: Roadmap created and written — ready to plan Phase 14
+Last session: 2026-03-15T17:08:25.846Z
+Stopped at: Completed 16-mcp-server/16-01-PLAN.md
 Resume file: None
