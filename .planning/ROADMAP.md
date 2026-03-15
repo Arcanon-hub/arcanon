@@ -176,7 +176,7 @@ Plans:
 | 15. Worker Lifecycle | 2/2 | Complete   | 2026-03-15 | - |
 | 16. MCP Server | 3/3 | Complete   | 2026-03-15 | - |
 | 17. HTTP Server & Web UI | 2/2 | Complete   | 2026-03-15 | - |
-| 18. Agent Scanning | v2.0 | 0/2 | Not started | - |
+| 18. Agent Scanning | 1/2 | In Progress|  | - |
 | 19. Repo Discovery & User Confirmation | 2/2 | Complete   | 2026-03-15 | - |
 | 20. Command Layer | v2.0 | 0/2 | Planned | - |
 | 21. Integration & Config | v2.0 | 0/4 | Planned | - |

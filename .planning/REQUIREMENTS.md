@@ -52,13 +52,13 @@
 ### Agent Scanning
 
 - [ ] **SCAN-01**: `/allclear:map` spawns Claude agents into each confirmed repo path
-- [ ] **SCAN-02**: Agents extract services, endpoints exposed/consumed, events produced/consumed, internal calls
-- [ ] **SCAN-03**: Agents extract schemas with field-level detail (name, type, required)
-- [ ] **SCAN-04**: Agents return findings with confidence levels (high/low)
+- [x] **SCAN-02**: Agents extract services, endpoints exposed/consumed, events produced/consumed, internal calls
+- [x] **SCAN-03**: Agents extract schemas with field-level detail (name, type, required)
+- [x] **SCAN-04**: Agents return findings with confidence levels (high/low)
 - [ ] **SCAN-05**: Incremental scan detects changed files via git diff since last scanned commit
 - [ ] **SCAN-06**: First scan forces full repo scan automatically
 - [ ] **SCAN-07**: `--full` flag forces full scan on subsequent runs
-- [ ] **SCAN-08**: Agents work on any language/framework with no external parser dependencies
+- [x] **SCAN-08**: Agents work on any language/framework with no external parser dependencies
 
 ### User Confirmation
 
@@ -157,13 +157,13 @@
 | WEBUI-05 | Phase 17 | Complete |
 | WEBUI-06 | Phase 17 | Complete |
 | SCAN-01 | Phase 18 | Pending |
-| SCAN-02 | Phase 18 | Pending |
-| SCAN-03 | Phase 18 | Pending |
-| SCAN-04 | Phase 18 | Pending |
+| SCAN-02 | Phase 18 | Complete |
+| SCAN-03 | Phase 18 | Complete |
+| SCAN-04 | Phase 18 | Complete |
 | SCAN-05 | Phase 18 | Pending |
 | SCAN-06 | Phase 18 | Pending |
 | SCAN-07 | Phase 18 | Pending |
-| SCAN-08 | Phase 18 | Pending |
+| SCAN-08 | Phase 18 | Complete |
 | UCON-01 | Phase 19 | Complete |
 | UCON-02 | Phase 19 | Complete |
 | UCON-03 | Phase 19 | Complete |

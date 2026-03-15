@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Service Dependency Intelligence
 status: planning
-stopped_at: Completed 19-01-PLAN.md — repo discovery module with unit tests
-last_updated: "2026-03-15T19:18:01.980Z"
+stopped_at: Completed 18-01-PLAN.md — agent prompt template and findings schema validator
+last_updated: "2026-03-15T19:19:43.372Z"
 last_activity: 2026-03-15 — Roadmap created, 8 phases defined (14-21)
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 19
-  completed_plans: 11
+  completed_plans: 12
   percent: 0
 ---
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 16-mcp-server P03 | 10min | 1 tasks | 2 files |
 | Phase 19-repo-discovery-user-confirmation P02 | 110s | 2 tasks | 2 files |
 | Phase 19-repo-discovery-user-confirmation P01 | 2min | 2 tasks | 2 files |
+| Phase 18-agent-scanning P01 | 3min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 19-02]: confirmation-flow.js is a pure module — no I/O, no SQLite writes; Phase 20 command layer is the sole persistence gate after calling this module
 - [Phase 19-repo-discovery-user-confirmation]: ESM used instead of CommonJS in repo-discovery.js — package.json type:module, all worker files use ESM
 - [Phase 19-repo-discovery-user-confirmation]: discoverNew scans 5 manifest types: package.json, pyproject.toml, go.mod, Cargo.toml, pom.xml
+- [Phase 18-agent-scanning]: Validation order: connections checked first so validateFindings({}) yields 'missing required field: connections' per spec
+- [Phase 18-agent-scanning]: agent-prompt.md prohibits inference: literal string required for every reported connection
 
 ### Pending Todos
 
@@ -110,6 +113,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T19:18:01.977Z
-Stopped at: Completed 19-01-PLAN.md — repo discovery module with unit tests
+Last session: 2026-03-15T19:19:43.369Z
+Stopped at: Completed 18-01-PLAN.md — agent prompt template and findings schema validator
 Resume file: None
