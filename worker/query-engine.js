@@ -496,6 +496,36 @@ export class QueryEngine {
   }
 
   /**
+   * Returns the full service dependency graph (all nodes and edges).
+   * Used by GET /graph and the D3 web UI.
+   * @returns {{ services: Array, connections: Array, repos: Array }}
+   */
+  getGraph() {
+    const services = this._db.prepare(`
+      SELECT s.id, s.name, s.root_path, s.language, s.repo_id, r.name as repo_name, r.path as repo_path
+      FROM services s
+      JOIN repos r ON r.id = s.repo_id
+    `).all();
+
+    const connections = this._db.prepare(`
+      SELECT c.id, c.protocol, c.method, c.path, c.source_file, c.target_file,
+             s_src.name as source, s_tgt.name as target
+      FROM connections c
+      JOIN services s_src ON c.source_service_id = s_src.id
+      JOIN services s_tgt ON c.target_service_id = s_tgt.id
+    `).all();
+
+    const repos = this._db.prepare(`
+      SELECT r.id, r.name, r.path, r.type,
+             rs.last_scanned_commit, rs.last_scanned_at
+      FROM repos r
+      LEFT JOIN repo_state rs ON rs.repo_id = r.id
+    `).all();
+
+    return { services, connections, repos };
+  }
+
+  /**
    * Returns all map version entries, ordered by creation date descending.
    * @returns {Array<{id: number, created_at: string, label: string, snapshot_path: string}>}
    */
