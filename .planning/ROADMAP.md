@@ -174,7 +174,7 @@ Plans:
 | 1-13 | v1.0 | 17/17 | Complete | 2026-03-15 |
 | 14. Storage Foundation | 2/2 | Complete   | 2026-03-15 | - |
 | 15. Worker Lifecycle | 2/2 | Complete   | 2026-03-15 | - |
-| 16. MCP Server | 1/3 | In Progress|  | - |
+| 16. MCP Server | 2/3 | In Progress|  | - |
 | 17. HTTP Server & Web UI | 2/2 | Complete   | 2026-03-15 | - |
 | 18. Agent Scanning | v2.0 | 0/2 | Not started | - |
 | 19. Repo Discovery & User Confirmation | v2.0 | 0/2 | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Service Dependency Intelligence
 status: planning
-stopped_at: Completed 15-02-PLAN.md — worker/index.js entry point and lifecycle bats tests
-last_updated: "2026-03-15T17:20:53.847Z"
+stopped_at: Completed 16-02-PLAN.md — all 5 MCP tools implemented
+last_updated: "2026-03-15T17:32:45.632Z"
 last_activity: 2026-03-15 — Roadmap created, 8 phases defined (14-21)
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 19
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 17-http-server-web-ui P02 | 3min | 2 tasks | 3 files |
 | Phase 14-storage-foundation P02 | 5min | 2 tasks | 3 files |
 | Phase 15-worker-lifecycle P02 | 6min | 2 tasks | 3 files |
+| Phase 16-mcp-server P02 | 16min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 14-02]: Tests use new Database() directly instead of openDb() singleton to avoid per-test isolation failures
 - [Phase 15-02]: /api/readiness registered before DB init — probe always returns 200 regardless of DB state
 - [Phase 15-02]: Startup order: parse args → read settings → mkdir → write PID → register routes → listen → write port → log
+- [Phase 16-mcp-server]: Pure query functions exported as named exports (queryImpact etc.) to decouple from MCP SDK — enables unit testing with in-memory SQLite
+- [Phase 16-mcp-server]: FTS5 fallback catches 'no such table: connections_fts' specifically — avoids masking real query errors
 
 ### Pending Todos
 
@@ -98,6 +101,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-15T17:20:53.844Z
-Stopped at: Completed 15-02-PLAN.md — worker/index.js entry point and lifecycle bats tests
+Last session: 2026-03-15T17:32:42.053Z
+Stopped at: Completed 16-02-PLAN.md — all 5 MCP tools implemented
 Resume file: None

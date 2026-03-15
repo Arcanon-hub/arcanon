@@ -26,11 +26,11 @@
 ### MCP Server
 
 - [x] **MCPS-01**: stdio MCP server registered via `.mcp.json` at plugin root, auto-discovered by Claude Code
-- [ ] **MCPS-02**: `impact_query` tool finds consumers/producers of an endpoint or service with transitive option
-- [ ] **MCPS-03**: `impact_scan` tool triggers repo scan (incremental or full)
-- [ ] **MCPS-04**: `impact_changed` tool reports what's affected by current git diff
-- [ ] **MCPS-05**: `impact_graph` tool returns dependency subgraph for a service with configurable depth and direction
-- [ ] **MCPS-06**: `impact_search` tool provides semantic search across the map (ChromaDB) or keyword search (FTS5 fallback)
+- [x] **MCPS-02**: `impact_query` tool finds consumers/producers of an endpoint or service with transitive option
+- [x] **MCPS-03**: `impact_scan` tool triggers repo scan (incremental or full)
+- [x] **MCPS-04**: `impact_changed` tool reports what's affected by current git diff
+- [x] **MCPS-05**: `impact_graph` tool returns dependency subgraph for a service with configurable depth and direction
+- [x] **MCPS-06**: `impact_search` tool provides semantic search across the map (ChromaDB) or keyword search (FTS5 fallback)
 - [x] **MCPS-07**: MCP server is a separate Node.js stdio process (spawned by Claude Code via `.mcp.json`), reads SQLite directly — no dependency on worker being running for queries
 - [x] **MCPS-08**: MCP server implemented with @modelcontextprotocol/sdk using `McpServer` + `StdioServerTransport`
 
@@ -137,11 +137,11 @@
 | WRKR-06 | Phase 15 | Complete |
 | WRKR-07 | Phase 15 | Complete |
 | MCPS-01 | Phase 16 | Complete |
-| MCPS-02 | Phase 16 | Pending |
-| MCPS-03 | Phase 16 | Pending |
-| MCPS-04 | Phase 16 | Pending |
-| MCPS-05 | Phase 16 | Pending |
-| MCPS-06 | Phase 16 | Pending |
+| MCPS-02 | Phase 16 | Complete |
+| MCPS-03 | Phase 16 | Complete |
+| MCPS-04 | Phase 16 | Complete |
+| MCPS-05 | Phase 16 | Complete |
+| MCPS-06 | Phase 16 | Complete |
 | MCPS-07 | Phase 16 | Complete |
 | MCPS-08 | Phase 16 | Complete |
 | HTTP-01 | Phase 17 | Complete |
