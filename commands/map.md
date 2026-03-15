@@ -304,6 +304,8 @@ Print: "Dependency map saved. N services, M connections across K repos."
 
 If any persist call fails, print the error for that repo but continue with remaining repos.
 
+**IMPORTANT:** The data is immediately available — no worker restart needed. The worker's query engine reads from the same SQLite file. `GET /graph` will return the new data right away.
+
 ---
 
 ## Step 9: Handle First-Time Build
