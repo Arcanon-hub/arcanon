@@ -93,7 +93,7 @@ export function listProjects() {
       let repoCount = 0;
       try {
         const db = new Database(dbPath, { readonly: true });
-        db.pragma("journal_mode = WAL");
+        // Note: do NOT set journal_mode on a readonly connection — it requires write access
         const repo = db
           .prepare("SELECT path FROM repos ORDER BY id LIMIT 1")
           .get();
@@ -174,7 +174,10 @@ export function getQueryEngineByHash(hash) {
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
     db.pragma("busy_timeout = 5000");
-    // Run migrations if schema_versions table exists
+    // TODO Phase 27+28: remove this inline migration block — migrations/004 and 005 now exist.
+    // This block handles DBs opened by hash where openDb() (which runs all migrations) cannot
+    // be used because we don't have the project root. Safe to remove once all DBs in the wild
+    // have been opened through the standard openDb() path and are at schema version >= 5.
     try {
       const currentVer =
         db.prepare("SELECT MAX(version) FROM schema_versions").pluck().get() ??
@@ -210,4 +213,85 @@ export function getQueryEngineByHash(hash) {
     );
     return null;
   }
+}
+
+/**
+ * Find a QueryEngine by repo name, searching across all project DBs.
+ *
+ * 1. First checks the pool cache — if any cached QE has a repos row matching
+ *    the given name (case-insensitive), returns it without re-opening.
+ * 2. Falls back to scanning all project DBs via listProjects(), queries each
+ *    for a repos row with a matching name, and calls getQueryEngine() on the
+ *    project root so migrations run and the result is properly pool-cached.
+ *
+ * @param {string} repoName - Repo name to search for (case-insensitive).
+ * @returns {QueryEngine|null}
+ */
+export function getQueryEngineByRepo(repoName) {
+  if (!repoName) return null;
+
+  const nameLower = repoName.toLowerCase();
+
+  // 1. Check pool cache first
+  for (const [, qe] of pool) {
+    if (qe._db) {
+      try {
+        const row = qe._db
+          .prepare("SELECT id FROM repos WHERE lower(name) = ?")
+          .get(nameLower);
+        if (row) return qe;
+      } catch {
+        /* repos table may not exist in this DB */
+      }
+    }
+  }
+
+  // 2. Scan all project DBs
+  const projectsDir = path.join(dataDir, "projects");
+  if (!fs.existsSync(projectsDir)) return null;
+
+  const hashes = fs
+    .readdirSync(projectsDir)
+    .filter((h) =>
+      fs.existsSync(path.join(projectsDir, h, "impact-map.db")),
+    );
+
+  for (const hash of hashes) {
+    const dbPath = path.join(projectsDir, hash, "impact-map.db");
+    let matched = false;
+    let matchedProjectRoot = null;
+    try {
+      const db = new Database(dbPath, { readonly: true });
+      // Note: do NOT set journal_mode on a readonly connection — it requires write access
+      try {
+        // Check if this DB has a repos row matching the name
+        const nameRow = db
+          .prepare("SELECT path FROM repos WHERE lower(name) = ?")
+          .get(nameLower);
+        if (nameRow) {
+          matched = true;
+          // Determine projectRoot as common parent of all repo paths
+          const allPaths = db.prepare("SELECT path FROM repos").pluck().all();
+          matchedProjectRoot = commonParent(allPaths);
+        }
+      } finally {
+        db.close();
+      }
+    } catch {
+      /* DB locked, corrupted, or missing repos table — skip */
+    }
+
+    if (matched) {
+      // Prefer pool-managed instance via getQueryEngine (runs migrations, uses dataDir).
+      // This works when the projectRoot hash resolves back to the same dbPath under dataDir.
+      if (matchedProjectRoot) {
+        const qe = getQueryEngine(matchedProjectRoot);
+        if (qe) return qe;
+      }
+      // Fallback: open by hash key (same path as getQueryEngineByHash — runs inline migrations)
+      return getQueryEngineByHash(hash);
+    }
+  }
+
+  return null;
 }
