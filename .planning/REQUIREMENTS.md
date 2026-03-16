@@ -24,8 +24,8 @@ Requirements for UI polish and observability release. Each maps to roadmap phase
 
 ### Logging Instrumentation
 
-- [ ] **LOG-INFRA-01**: All worker components use a shared structured logger instead of console.log/console.error
-- [ ] **LOG-INFRA-02**: Every log line includes a `component` field (worker, http, mcp, scan)
+- [x] **LOG-INFRA-01**: All worker components use a shared structured logger instead of console.log/console.error
+- [x] **LOG-INFRA-02**: Every log line includes a `component` field (worker, http, mcp, scan)
 - [ ] **LOG-INFRA-03**: No console.log/console.error calls remain in production worker code
 
 ### Log Terminal
@@ -64,8 +64,8 @@ Requirements for UI polish and observability release. Each maps to roadmap phase
 | ZOOM-01 | Phase 22 | Complete |
 | ZOOM-02 | Phase 22 | Complete |
 | ZOOM-03 | Phase 22 | Pending |
-| LOG-INFRA-01 | Phase 23 | Pending |
-| LOG-INFRA-02 | Phase 23 | Pending |
+| LOG-INFRA-01 | Phase 23 | Complete |
+| LOG-INFRA-02 | Phase 23 | Complete |
 | LOG-INFRA-03 | Phase 23 | Pending |
 | LOG-01 | Phase 25 | Pending |
 | LOG-02 | Phase 25 | Pending |

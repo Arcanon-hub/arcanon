@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: UI Polish & Observability
 status: planning
-stopped_at: Completed 22-02-PLAN.md — smooth wheel zoom with ctrlKey pan/zoom split
-last_updated: "2026-03-16T12:45:09.501Z"
+stopped_at: Completed 23-01-PLAN.md
+last_updated: "2026-03-16T12:45:42.422Z"
 last_activity: 2026-03-16 — v2.1 roadmap created; phases 22-25 defined
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 11
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -46,6 +46,7 @@ Progress: [░░░░░░░░░░] 0% (v2.1)
 - [v2.1 Roadmap]: Phase 26 gated on named-handler refactor of setupInteractions() — prerequisite, not optional polish
 - [Phase 22-canvas-zoom]: ctrlKey=false pans (not zooms) — mouse users use Ctrl+scroll (standard shortcut); trackpad two-finger scroll pans naturally
 - [Phase 22-canvas-zoom]: Wheel zoom uses Math.pow(2, delta) exponential formula with SENSITIVITY=0.001 (D3-style, half of D3 default for gentler feel)
+- [Phase 23-logging-instrumentation]: createLogger factory in worker/lib/logger.js — plain object, component-tagged JSON logging, port field omitted when undefined/null
 
 ### Pending Todos
 
@@ -58,6 +59,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-16T12:45:09.498Z
-Stopped at: Completed 22-02-PLAN.md — smooth wheel zoom with ctrlKey pan/zoom split
+Last session: 2026-03-16T12:45:42.419Z
+Stopped at: Completed 23-01-PLAN.md
 Resume file: None
