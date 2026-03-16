@@ -67,7 +67,11 @@ Full details: `.planning/milestones/v2.1-ROADMAP.md`
   3. FTS5 search returns correct results after a re-scan — no stale rowid references
   4. Agent scanning output uses lowercase-hyphenated service names derived from the package manifest name field
   5. The `MAX(id) GROUP BY name` workaround is removed from `getGraph()` — graph renders directly from clean data
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 27-01-PLAN.md — Migration 004: UNIQUE constraint, dedup, FTS5 rebuild + upsert rewrite
+- [ ] 27-02-PLAN.md — Agent prompt: service naming convention (lowercase-hyphenated, manifest-derived)
 
 ### Phase 28: Scan Version Bracket
 **Goal**: Each re-scan atomically replaces prior scan data so deleted services and connections are removed from the graph
@@ -98,6 +102,6 @@ Plans:
 | 1-13 | v1.0 | 17/17 | Complete | 2026-03-15 |
 | 14-21 | v2.0 | 19/19 | Complete | 2026-03-15 |
 | 22-26 | v2.1 | 11/11 | Complete | 2026-03-16 |
-| 27. Schema Foundation + Upsert Repair | v2.2 | 0/TBD | Not started | - |
+| 27. Schema Foundation + Upsert Repair | v2.2 | 0/2 | Not started | - |
 | 28. Scan Version Bracket | v2.2 | 0/TBD | Not started | - |
 | 29. Cross-Project MCP Queries | v2.2 | 0/1 | Not started | - |
