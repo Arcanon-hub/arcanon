@@ -75,6 +75,7 @@ const app = await createHttpServer(null, {
   port,
   resolveQueryEngine: getQueryEngine,
   logger,
+  dataDir,
 });
 fs.writeFileSync(PORT_FILE, String(port));
 logger.log("INFO", "worker started", { port });

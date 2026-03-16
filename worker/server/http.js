@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyCors from "@fastify/cors";
 import path from "path";
+import fs from "node:fs";
 import { fileURLToPath } from "url";
 import { listProjects, getQueryEngineByHash } from "../db/pool.js";
 
@@ -184,6 +185,53 @@ async function createHttpServer(queryEngine, options = {}) {
       httpLog('ERROR', err.message, { route: '/versions' });
       return reply.code(500).send({ error: err.message });
     }
+  });
+
+  // 8. GET /api/logs — return filtered log lines for UI polling
+  fastify.get("/api/logs", async (request, reply) => {
+    const logDir = options.dataDir;
+    if (!logDir) {
+      return reply.send({ lines: [] });
+    }
+    const logPath = path.join(logDir, "logs", "worker.log");
+    let raw;
+    try {
+      raw = fs.readFileSync(logPath, "utf8");
+    } catch {
+      // File does not exist yet — return empty
+      return reply.send({ lines: [] });
+    }
+
+    // Tail: take only the last 500 non-empty lines
+    const MAX = 500;
+    const allLines = raw.split("\n").filter((l) => l.trim().length > 0);
+    const tail = allLines.length > MAX ? allLines.slice(-MAX) : allLines;
+
+    // Parse each line; skip corrupt entries silently
+    const parsed = [];
+    for (const line of tail) {
+      try {
+        parsed.push(JSON.parse(line));
+      } catch {
+        // Skip non-JSON lines
+      }
+    }
+
+    // Apply ?component= filter
+    const component = request.query.component;
+    const since = request.query.since;
+    let results = parsed;
+
+    if (component) {
+      results = results.filter((l) => l.component === component);
+    }
+
+    // Apply ?since= filter (ISO 8601 timestamp string comparison is safe for ISO dates)
+    if (since) {
+      results = results.filter((l) => l.ts > since);
+    }
+
+    return reply.send({ lines: results });
   });
 
   // Start listening on 127.0.0.1 only
