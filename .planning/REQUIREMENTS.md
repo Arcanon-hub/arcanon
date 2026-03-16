@@ -14,8 +14,8 @@ Requirements for UI polish and observability release. Each maps to roadmap phase
 
 ### Zoom & Pan
 
-- [ ] **ZOOM-01**: Zoom sensitivity is reduced for smooth, controllable zoom on mouse wheel and trackpad
-- [ ] **ZOOM-02**: Pinch gesture zooms while two-finger scroll pans (ctrlKey detection)
+- [x] **ZOOM-01**: Zoom sensitivity is reduced for smooth, controllable zoom on mouse wheel and trackpad
+- [x] **ZOOM-02**: Pinch gesture zooms while two-finger scroll pans (ctrlKey detection)
 - [ ] **ZOOM-03**: User can click a fit-to-screen button to reset view to show all nodes centered
 
 ### Project Switcher
@@ -61,8 +61,8 @@ Requirements for UI polish and observability release. Each maps to roadmap phase
 |-------------|-------|--------|
 | CANVAS-01 | Phase 22 | Pending |
 | CANVAS-02 | Phase 22 | Pending |
-| ZOOM-01 | Phase 22 | Pending |
-| ZOOM-02 | Phase 22 | Pending |
+| ZOOM-01 | Phase 22 | Complete |
+| ZOOM-02 | Phase 22 | Complete |
 | ZOOM-03 | Phase 22 | Pending |
 | LOG-INFRA-01 | Phase 23 | Pending |
 | LOG-INFRA-02 | Phase 23 | Pending |

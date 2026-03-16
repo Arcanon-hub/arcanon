@@ -124,7 +124,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 1-13 | v1.0 | 17/17 | Complete | 2026-03-15 |
 | 14-21 | v2.0 | 19/19 | Complete | 2026-03-15 |
-| 22. Canvas & Zoom | v2.1 | 0/TBD | Not started | - |
+| 22. Canvas & Zoom | 1/3 | In Progress|  | - |
 | 23. Logging Instrumentation | v2.1 | 0/3 | Not started | - |
 | 24. Log Terminal API | v2.1 | 0/1 | Not started | - |
 | 25. Log Terminal UI | v2.1 | 0/TBD | Not started | - |
