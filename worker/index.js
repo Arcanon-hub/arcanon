@@ -5,6 +5,7 @@ import { createHttpServer } from "./server/http.js";
 import { getQueryEngine } from "./db/pool.js";
 import { initChromaSync } from "./server/chroma.js";
 import { createLogger } from "./lib/logger.js";
+import { setScanLogger } from "./scan/manager.js";
 
 // ---------------------------------------------------------------------------
 // 1. Parse CLI args
@@ -51,6 +52,7 @@ fs.writeFileSync(PID_FILE, String(process.pid));
 // 5. Structured logger
 // ---------------------------------------------------------------------------
 const logger = createLogger({ dataDir, port, logLevel, component: 'worker' });
+setScanLogger(logger);
 
 // ---------------------------------------------------------------------------
 // 6. Initialize ChromaDB (optional — non-blocking)

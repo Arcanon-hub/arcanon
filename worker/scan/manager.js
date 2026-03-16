@@ -19,6 +19,23 @@ import { fileURLToPath } from "node:url";
 
 import { parseAgentOutput } from "./findings.js";
 
+// ---------------------------------------------------------------------------
+// Logger injection
+// ---------------------------------------------------------------------------
+
+/** @type {{ log: Function, info: Function, warn: Function, error: Function, debug: Function } | null} */
+let _logger = null;
+
+/**
+ * Inject the structured logger. Call from worker/index.js or tests.
+ * When not set, scan lifecycle events are silently dropped (safe for tests without logging setup).
+ *
+ * @param {{ log: Function, info: Function, warn: Function, error: Function, debug: Function } | null} logger
+ */
+export function setScanLogger(logger) {
+  _logger = logger;
+}
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
@@ -181,6 +198,11 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     throw new Error("agentRunner not initialized — call setAgentRunner first");
   }
 
+  // Scan-local log helper — no-ops silently when logger not injected
+  function slog(level, msg, extra = {}) {
+    if (_logger) _logger.log(level, msg, extra);
+  }
+
   // Load the agent prompt template once
   const promptTemplatePath = join(__dirname, "agent-prompt-deep.md");
   const promptTemplate = readFileSync(promptTemplatePath, "utf8");
@@ -202,6 +224,7 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
 
     // 3. Skip — no scan needed
     if (ctx.mode === "skip") {
+      slog('DEBUG', 'scan skipped — no changes', { repoPath });
       results.push({ repoPath, mode: "skip", findings: null });
       continue;
     }
@@ -213,12 +236,14 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       .replaceAll("{{SERVICE_HINT}}", serviceHint);
 
     // 5. Invoke agent (foreground — agentRunner injected by MCP server or test)
+    slog('INFO', 'scan started', { repoPath, mode: ctx.mode });
     const rawResponse = await agentRunner(interpolatedPrompt, repoPath);
 
     // 6. Parse and validate agent output
     const result = parseAgentOutput(rawResponse);
 
     if (result.valid === false) {
+      slog('ERROR', 'agent output invalid', { repoPath, error: result.error });
       // Error per repo — one bad agent result does not stop other repos
       results.push({
         repoPath,
@@ -233,6 +258,7 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     const currentHead = getCurrentHead(repoPath);
     queryEngine.setRepoState(repo.id, currentHead);
 
+    slog('INFO', 'scan complete', { repoPath, mode: ctx.mode });
     results.push({ repoPath, mode: ctx.mode, findings: result.findings });
   }
 
