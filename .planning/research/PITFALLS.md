@@ -1,380 +1,326 @@
 # Pitfalls Research
 
-**Domain:** Service dependency intelligence — adding Node.js worker, SQLite + ChromaDB storage, MCP server, D3 graph UI, and agent-based scanning to an existing shell-based Claude Code plugin
-**Researched:** 2026-03-15
-**Confidence:** HIGH (SQLite official docs + better-sqlite3 confirmed; MCP spec official; ChromaDB GitHub issues; D3 performance research 2025; Claude Code GitHub issues confirmed)
+**Domain:** Canvas-based developer tool UI — adding HiDPI rendering, zoom/pan controls, real-time log terminal, and project switcher to existing v2.0 D3 Canvas graph
+**Researched:** 2026-03-16
+**Confidence:** HIGH (MDN official docs confirmed; codebase inspected; community issues cross-referenced)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Worker Process Orphaning After Shell Script Exit
+### Pitfall 1: HiDPI Canvas — Setting Physical Dimensions Without Scaling the Context
 
 **What goes wrong:**
-The shell-based `/allclear:map` command starts the Node.js worker process, then the command exits. If the worker was started as a fire-and-forget subprocess without proper PID tracking, it becomes an orphan — running but invisible to the user. Re-running `/allclear:map` starts a second worker on the same port, causing an EADDRINUSE error or silent split-brain where two processes share one SQLite file.
+The canvas element's `width` and `height` attributes control the drawing buffer resolution. CSS `width`/`height` control display size. When they are equal (the current state in `graph.js`: `canvas.width = container.clientWidth`), the canvas draws at 1:1 logical pixels. On a Retina/HiDPI display where `window.devicePixelRatio` is 2 or 3, the browser stretches those logical pixels to fill the physical pixel grid, producing blurry rendering for nodes, labels, and edges.
 
 **Why it happens:**
-Shell scripts spawn background processes with `&` without persisting the PID. The plugin command exits and the PID is lost. On the next invocation, there is no way to know whether a worker is already running on the configured port.
+The distinction between CSS pixels and physical pixels is not obvious when building on standard displays. The current `resize()` function in `graph.js` sets `canvas.width = container.clientWidth` and `canvas.height = container.clientHeight` — CSS pixel values — making the drawing buffer the same resolution as the CSS size. This is the correct size for the display surface but half (or one-third) the resolution needed for crisp rendering on HiDPI screens.
 
 **How to avoid:**
-Write the worker PID to `.allclear/worker.pid` immediately after spawn. Before starting a new worker, check if the PID in `worker.pid` is still alive (`kill -0 $PID 2>/dev/null`). If alive, skip spawn. If dead, remove the stale PID file and start fresh. The HTTP server should also register a `SIGTERM`/`SIGINT` handler that removes `worker.pid` on clean shutdown.
+Multiply the drawing buffer by `devicePixelRatio`, set CSS size to the logical dimensions, and scale the 2D context once at the start of every `render()` call (or once after resize):
 
-```bash
-# In /allclear:map command script
-PIDFILE=".allclear/worker.pid"
-if [ -f "$PIDFILE" ] && kill -0 "$(cat $PIDFILE)" 2>/dev/null; then
-  echo "Worker already running (PID $(cat $PIDFILE))" >&2
-else
-  node worker/server.js &
-  echo $! > "$PIDFILE"
-fi
+```javascript
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = container.clientWidth;
+  const cssH = container.clientHeight;
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  render();
+}
+```
+
+Inside `render()`, apply the DPR scale before the transform translate/scale:
+
+```javascript
+const dpr = window.devicePixelRatio || 1;
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+ctx.save();
+ctx.scale(dpr, dpr);           // DPR scale first
+ctx.translate(state.transform.x, state.transform.y);
+ctx.scale(state.transform.scale, state.transform.scale);
+// ... draw ...
+ctx.restore();
 ```
 
 **Warning signs:**
-- `Error: listen EADDRINUSE :::37888` on second invocation of `/allclear:map`
-- Two `node worker/server.js` processes visible in `ps aux`
-- SQLite `SQLITE_BUSY` errors immediately after starting `/allclear:map`
+- Node labels appear slightly blurry or antialiased on macOS Retina displays
+- Taking a screenshot of the canvas reveals fuzzy circles and text compared to surrounding DOM elements
+- Text in the detail panel is crisp but canvas labels are noticeably lower quality
 
 **Phase to address:**
-Worker foundation phase. PID file management must be implemented before any other worker functionality.
+HiDPI rendering phase. Must be the first change to `renderer.js` and the `resize()` function. Getting DPR scaling right before adding new drawing code avoids having to re-audit every `ctx` call later.
 
 ---
 
-### Pitfall 2: SQLite WAL File Growing Without Bound
+### Pitfall 2: HiDPI Canvas — Mouse Coordinates Are CSS Pixels, Canvas Buffer Is Physical Pixels
 
 **What goes wrong:**
-The worker uses SQLite in WAL mode for concurrency. If any reader holds a long-lived transaction — even a simple read that stays open while agent scanning runs — the WAL checkpoint cannot complete. The WAL file grows unboundedly. With large service maps and frequent scans, the `.allclear/impact-map.db-wal` file can reach hundreds of megabytes and slow all queries.
+After applying `devicePixelRatio` scaling, the drawing buffer is 2x or 3x larger in each dimension. But `e.offsetX` and `e.offsetY` from mouse events are still delivered in CSS pixels. If `hitTest()` and `toWorld()` in `utils.js` use raw `e.offsetX`/`e.offsetY` against the now-larger canvas, hit detection is off by a factor of `devicePixelRatio` — clicks register on the wrong node or in empty space.
 
 **Why it happens:**
-WAL mode checkpointing requires that no readers hold open snapshots. When agent scans run over many repos simultaneously while the HTTP server is also serving read queries, there are always concurrent readers. The default auto-checkpoint at 1000 pages is blocked by these long-lived reads, so the WAL never resets.
+The browser always reports mouse coordinates in CSS pixels, regardless of `devicePixelRatio` or canvas internal scaling. The current `hitTest()` and `toWorld()` functions use `offsetX`/`offsetY` directly, which is correct today (no DPR scaling applied), but breaks the moment DPR scaling is introduced.
 
 **How to avoid:**
-- Set `PRAGMA journal_size_limit = 67108864` (64 MB cap even if checkpoint fails)
-- Use `better-sqlite3`'s synchronous API — it never holds connections open across the event loop tick
-- Run explicit `db.checkpoint('TRUNCATE')` after every scan completes (scans are write-heavy, readers will be idle momentarily)
-- Set `busyTimeout: 5000` on the connection so reads don't fail on transient locks
-- Never open a prepared SELECT statement and leave it un-finalized across an async boundary
+Do NOT multiply mouse coordinates by DPR. The DPR scaling is applied to the canvas context inside `render()`, but the mouse coordinates and the `state.transform` object must remain in CSS pixel space throughout. The `toWorld()` function is already correct — it divides by `state.transform.scale` and subtracts the pan offset — as long as `state.transform` is maintained in CSS pixel units and the DPR scale is applied only inside the render context stack (not to the transform state).
+
+The key rule: `state.transform.x`, `state.transform.y`, `state.transform.scale`, and all positions in `state.positions` must stay in CSS pixel units. DPR scaling is a render-time detail only.
+
+**Warning signs:**
+- After adding DPR fix, clicking a node no longer selects it — click registers in empty space
+- Hit test works at scale=1 but breaks when zoomed
+- Tooltip position matches the cursor but the node highlight appears offset
+
+**Phase to address:**
+HiDPI rendering phase. Write a manual test: at 2x DPR, click on a visible node and verify it selects. Verify pan and zoom still work correctly. This is the most common integration failure when applying the DPR fix.
+
+---
+
+### Pitfall 3: Canvas Width/Height Assignment During Resize Resets the Drawing Context
+
+**What goes wrong:**
+Setting `canvas.width` or `canvas.height` — even to the same value — resets the entire 2D rendering context to default state: clears the canvas, resets all style properties (`fillStyle`, `strokeStyle`, `lineWidth`), and discards all saved context states (`ctx.save()` stack). The current `resize()` function in `graph.js` sets `canvas.width` and then calls `render()` which rebuilds everything correctly. But if anyone adds `ctx.save()` calls that span a resize event (e.g., during an animation loop), those saved states are silently lost.
+
+**Why it happens:**
+This is specified HTML Canvas behavior (MDN: "Setting the width or height property resets the rendering context to its default state"). Developers expect property assignment to be non-destructive. In a continuous render loop with Web Workers posting messages, a resize mid-frame can corrupt in-flight state.
+
+**How to avoid:**
+The current pattern of calling `render()` immediately after `canvas.width = ...` is correct — the full redraw re-establishes all state. The risk is in the Web Worker message handler: `state.forceWorker.onmessage` calls `render()` on every tick. If a resize fires during a tick, `render()` is called with a valid context. This is safe because `render()` always starts with `ctx.clearRect()` and `ctx.save()`. Preserve this invariant: never hold persistent state in the 2D context between frames.
+
+**Warning signs:**
+- Canvas goes black intermittently after window resize
+- Styles appear different after resize (wrong colors, wrong line widths)
+- `ctx.restore()` throws "IndexSizeError" in console (mismatched save/restore stack after resize)
+
+**Phase to address:**
+HiDPI rendering phase (same phase as Pitfall 1 and 2). Handled by maintaining the existing render-from-scratch pattern.
+
+---
+
+### Pitfall 4: Wheel Event Passive Flag Conflict — Zoom Fails Silently in Chrome
+
+**What goes wrong:**
+The current `interactions.js` correctly adds `{ passive: false }` to the wheel event listener, allowing `e.preventDefault()` to block page scroll during zoom. This works today. The risk arises when refactoring or when someone adds a second wheel listener elsewhere (e.g., inside the log terminal container) without the `{ passive: false }` flag. Chrome/Safari treat document-level wheel/touch events as passive by default. Calling `e.preventDefault()` inside a passive listener generates a warning in the console and the default scroll behavior is NOT suppressed — the page scrolls instead of zooming.
+
+**Why it happens:**
+Browsers introduced passive listeners to improve scroll performance on touch devices. Any wheel listener attached without `{ passive: false }` on a Canvas element will silently fail to prevent default scroll. The error message ("Unable to preventDefault inside passive event listener") appears in the console but does not throw — the developer may not notice until testing on a touchpad-heavy device.
+
+**How to avoid:**
+The existing canvas wheel listener is correct. When adding the log terminal panel, if the terminal container also needs scroll-independent behavior, each scroll-intercepting listener needs explicit `{ passive: false }`. Document this constraint in a comment on both listeners so it is not accidentally removed during refactoring:
 
 ```javascript
-const db = new Database('.allclear/impact-map.db');
-db.pragma('journal_mode = WAL');
-db.pragma('journal_size_limit = 67108864');
-db.pragma('busy_timeout = 5000');
+// { passive: false } is required — without it, e.preventDefault() is silently ignored
+// and the browser scrolls the page instead of zooming the canvas.
+canvas.addEventListener('wheel', handler, { passive: false });
 ```
 
 **Warning signs:**
-- `.allclear/impact-map.db-wal` file larger than 50 MB between scans
-- Query latency increasing over time without schema growth
-- `SQLITE_BUSY` errors in worker logs despite WAL mode being enabled
+- Console warning: "Unable to preventDefault inside passive event listener due to target being treated as passive"
+- Zoom works on some browsers/versions but not others
+- Canvas scrolls vertically when user intends to zoom via trackpad
 
 **Phase to address:**
-SQLite/storage phase. WAL pragma configuration must be in the initial database setup, not added later.
+Zoom/pan tuning phase. Add a comment to the existing wheel listener now to prevent regression. When adding the terminal panel, apply the same flag to any scroll interceptor in the terminal.
 
 ---
 
-### Pitfall 3: ChromaDB Assumed Present — Hard Failure Instead of Graceful Skip
+### Pitfall 5: Trackpad Two-Finger Scroll vs. Pinch-to-Zoom — Both Fire as `wheel` Events
 
 **What goes wrong:**
-ChromaDB is optional, but code that calls the ChromaDB client without checking availability first will throw on connection refused. If ChromaDB sync is inline with the scan persist path, a ChromaDB outage silently prevents all findings from being written to SQLite — or crashes the worker entirely.
+On macOS with a trackpad, two-finger scroll and pinch-to-zoom both arrive as `wheel` events. The current implementation uses `e.deltaY` with a fixed multiplier (`delta = e.deltaY < 0 ? 1.1 : 0.9`) — this treats ALL wheel input as zoom. On a trackpad, a two-finger scroll to read the page becomes an unintended zoom gesture. The user gets unexpected zoom when they want to pan vertically.
 
 **Why it happens:**
-Developers wire ChromaDB into the save flow early. It works during development where ChromaDB is running. In production, ChromaDB may not be configured, may fail to start, or may crash mid-session. The design document's fallback chain (ChromaDB → FTS5 → direct SQL) is easy to spec but easy to skip in implementation.
+Trackpad pinch events have `e.ctrlKey === true` (this is a browser convention, not a real Ctrl press). Regular two-finger scroll has `e.ctrlKey === false`. Developers miss this distinction and use a single `deltaY` handler for all wheel input.
 
 **How to avoid:**
-ChromaDB sync must be on a completely separate async path from SQLite writes. The sequence must always be: write to SQLite first, confirm success, then attempt ChromaDB sync asynchronously. Any ChromaDB error must be caught, logged to stderr, and not bubble up to the caller. On startup, probe ChromaDB with a health check and set a `chromaAvailable` flag — don't probe on every query.
+Check `e.ctrlKey` to distinguish pinch from scroll. If `ctrlKey` is true, the event is a pinch — apply zoom. If `ctrlKey` is false, the event is a two-finger scroll — apply pan:
 
 ```javascript
-async function persistFindings(findings) {
-  // Always succeeds or throws for real errors
-  await db.writeScan(findings);
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (e.ctrlKey) {
+    // Pinch-to-zoom (trackpad) or Ctrl+scroll (mouse)
+    const delta = e.deltaY < 0 ? 1.1 : 0.9;
+    // ... apply zoom ...
+  } else {
+    // Two-finger scroll (trackpad) — pan instead
+    state.transform.x -= e.deltaX;
+    state.transform.y -= e.deltaY;
+    render();
+  }
+}, { passive: false });
+```
 
-  // Fire-and-forget — ChromaDB is optional acceleration
-  if (chromaAvailable) {
-    syncToChroma(findings).catch(err => {
-      console.error('[chroma] sync failed, continuing without vectors:', err.message);
-    });
+**Warning signs:**
+- User reports "zooms too aggressively when scrolling" on a MacBook
+- Two-finger scroll on a trackpad zooms instead of panning
+- Mouse wheel zoom works correctly but trackpad feels wrong
+
+**Phase to address:**
+Zoom/pan sensitivity tuning phase. This is a targeted change to `interactions.js` wheel handler.
+
+---
+
+### Pitfall 6: Project Switcher — No State Teardown Before Loading New Graph Data
+
+**What goes wrong:**
+The current `graph.js` `init()` is a one-shot function: load project, initialize force worker, attach interaction listeners, render. When the persistent project switcher dropdown is added (switch project without full page reload), calling `init()` again or partially re-running it without tearing down the previous state causes:
+
+1. Two `state.forceWorker` Web Workers running simultaneously — both posting position updates, causing visual flicker and unpredictable node positions.
+2. Duplicate event listeners on the canvas — every `addEventListener` from `setupInteractions()` called again adds a second listener. Clicks now fire twice. Pan fires twice.
+3. `state.positions` from the previous project leaking into the new render if not cleared — ghost positions from project A appear briefly when switching to project B.
+4. The `state.blastCache` from project A persisting into project B — impact queries return wrong results until cache is invalidated.
+
+**Why it happens:**
+`init()` was designed as a one-shot startup, not as a re-entrant function. Adding a project switcher is the first time the UI needs to re-initialize. None of the existing teardown steps exist because they were never needed.
+
+**How to avoid:**
+Before re-initializing for a new project, execute a full teardown:
+
+```javascript
+function teardown() {
+  // 1. Terminate the force worker
+  if (state.forceWorker) {
+    state.forceWorker.terminate();
+    state.forceWorker = null;
+  }
+  // 2. Remove all canvas event listeners (use named functions, not anonymous)
+  canvas.removeEventListener('mousemove', onMouseMove);
+  canvas.removeEventListener('mousedown', onMouseDown);
+  // etc.
+  // 3. Reset all state
+  state.graphData = { nodes: [], edges: [], mismatches: [] };
+  state.positions = {};
+  state.selectedNodeId = null;
+  state.blastNodeId = null;
+  state.blastSet = new Set();
+  state.blastCache = {};
+  state.transform = { x: 0, y: 0, scale: 1 };
+}
+```
+
+This requires that all event handler functions in `setupInteractions()` be named (not anonymous) so they can be removed. Currently they are anonymous arrow functions — this must change before adding the project switcher.
+
+**Warning signs:**
+- Clicking a node selects it twice (detail panel opens and immediately closes)
+- Console shows two Web Workers consuming CPU after first project switch
+- Positions from the previous project flash on-screen for one frame when switching
+- Impact query (Shift+click) returns results from the wrong project
+
+**Phase to address:**
+Project switcher phase. Refactor `setupInteractions()` to use named functions before implementing the dropdown. Implement and test teardown before any data loading.
+
+---
+
+### Pitfall 7: SSE Log Stream — Server Memory Leak from Zombie Connections
+
+**What goes wrong:**
+The log terminal streams worker logs to the browser via Server-Sent Events (SSE). When the browser tab is closed or refreshed, the SSE connection closes. If the Fastify HTTP server's `request.raw.on('close', ...)` handler is not registered, the server-side `res` object remains in the active connections list indefinitely. Over hours of development use (multiple tab closes, log panel opens/closes), zombie SSE connections accumulate, and the Node.js worker process leaks memory progressively.
+
+**Why it happens:**
+SSE endpoints keep the HTTP response open — they never call `res.end()` until the stream terminates. When the client disconnects unexpectedly (tab close, network drop), the server is notified via the `request.raw.on('close')` event, not via an explicit close call. Developers who implement SSE for the first time often miss this event and never clean up the connection from their active clients set.
+
+**How to avoid:**
+Every SSE endpoint handler in the Fastify server must register a cleanup callback on the raw request close event:
+
+```javascript
+const clients = new Set();
+
+fastify.get('/logs/stream', (request, reply) => {
+  reply.raw.setHeader('Content-Type', 'text/event-stream');
+  reply.raw.setHeader('Cache-Control', 'no-cache');
+  reply.raw.setHeader('Connection', 'keep-alive');
+  reply.raw.flushHeaders();
+
+  const send = (data) => reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+  clients.add(send);
+
+  // Critical: clean up on client disconnect
+  request.raw.on('close', () => {
+    clients.delete(send);
+  });
+});
+```
+
+**Warning signs:**
+- Worker process memory increases monotonically across development sessions
+- `clients` Set grows without bound (add a `console.error` log for Set size on each connection)
+- Worker crashes with out-of-memory error after several hours of use
+
+**Phase to address:**
+Log terminal phase. The close event handler must be present in the first SSE endpoint implementation — not added after observing the leak.
+
+---
+
+### Pitfall 8: SSE Log Stream — Unbounded Log Buffer Causing DOM Memory Growth
+
+**What goes wrong:**
+If the log terminal appends every SSE event as a new DOM element (e.g., `div` per log line) without any upper bound, and the worker emits logs at high frequency during a scan (hundreds of log lines per second), the log panel DOM grows without limit. After a long scan session, the browser tab consumes hundreds of MB of memory, the log panel becomes unresponsive, and scrolling is janky.
+
+**Why it happens:**
+Naive log terminal implementations: `const line = document.createElement('div'); line.textContent = data.message; logContainer.appendChild(line)`. There is no cap on `logContainer.children.length`.
+
+**How to avoid:**
+Maintain a ring buffer: cap the DOM at N lines (e.g., 500). When the buffer is full, remove the oldest line before appending the new one:
+
+```javascript
+const MAX_LOG_LINES = 500;
+
+function appendLog(message) {
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.textContent = message;
+  logContainer.appendChild(line);
+
+  while (logContainer.children.length > MAX_LOG_LINES) {
+    logContainer.removeChild(logContainer.firstChild);
+  }
+
+  // Auto-scroll only if user is already at the bottom
+  if (isAtBottom(logContainer)) {
+    logContainer.scrollTop = logContainer.scrollHeight;
   }
 }
 ```
 
 **Warning signs:**
-- Worker crashes with `ECONNREFUSED localhost:8000` when ChromaDB is not running
-- Scan results disappear when ChromaDB goes offline mid-scan
-- Cross-impact queries fail instead of falling back to FTS5
+- After a full repo scan, the browser tab memory in DevTools shows > 100 MB
+- Scrolling the log panel becomes sluggish after 1000+ log lines
+- `logContainer.children.length` in console grows without stopping
 
 **Phase to address:**
-ChromaDB integration phase. The fallback chain must be tested explicitly: disable ChromaDB and verify all queries still return results via FTS5.
+Log terminal phase. Implement the ring buffer in the first version of the log terminal — not as an optimization added later.
 
 ---
 
-### Pitfall 4: MCP Server stdout Pollution Breaks the Protocol
+### Pitfall 9: SSE Auto-Reconnect Flooding the Server on Worker Restart
 
 **What goes wrong:**
-The MCP server uses stdio transport. Any `console.log()` or debug output that goes to stdout instead of stderr breaks the JSON-RPC framing. Claude Code receives malformed messages and either ignores all MCP tool calls or crashes the MCP connection entirely. This is silent — no visible error to the user.
+`EventSource` automatically reconnects when the connection drops. When the worker restarts (e.g., after a version mismatch, or during development with nodemon), all browser tabs with the log terminal open immediately attempt to reconnect. If several browser tabs are open simultaneously, they all reconnect at the same instant and flood the just-starting worker with SSE connections before it has finished initializing.
 
 **Why it happens:**
-Node.js developers default to `console.log()` for debugging. In an HTTP server context this is fine. In an MCP stdio transport, stdout is a structured protocol channel — every byte must be a valid JSON-RPC message. Adding a single `console.log('Server started')` line breaks the entire MCP session.
+The default SSE reconnect delay is 3 seconds, but all clients retry at the same time (they all got disconnected simultaneously). There is no jitter. With 3 open tabs, the worker receives 3 simultaneous SSE connections 3 seconds after startup — typically before the database connection pool is initialized.
 
 **How to avoid:**
-Redirect all logging to stderr from the very first line of the MCP server. Wrap `console.log` to write to stderr in the MCP server module:
+Add a `retry:` field to the SSE stream with per-client jitter:
 
 ```javascript
-// At top of mcp-server.js — before any other code
-const log = (...args) => process.stderr.write(args.join(' ') + '\n');
-// Never use console.log in MCP server code
+// Send initial retry with jitter (2000-5000ms)
+const jitter = 2000 + Math.random() * 3000;
+reply.raw.write(`retry: ${Math.round(jitter)}\n\n`);
 ```
 
-Add a CI lint rule: `grep -rn "console\.log" mcp-server.js && exit 1 || exit 0`.
+Also, ensure the SSE endpoint is registered after all critical initialization (DB, scan state) completes in the worker startup sequence. The health check endpoint (`/health`) should gate SSE connections if the worker is not yet ready.
 
 **Warning signs:**
-- MCP tools registered but never return results
-- Claude Code logs show JSON parse errors in MCP communication
-- Adding debug statements to MCP server causes all tools to stop working
-- `impact_query` tool appears in tool list but calling it hangs
+- Worker logs show a burst of SSE connections immediately after restart
+- Worker crashes on restart due to DB initialization race (SSE handler fires before DB is open)
+- Multiple browser tabs all reconnect at t+3s exactly (no jitter visible in logs)
 
 **Phase to address:**
-MCP server phase. Establish the stderr-only logging convention before writing any tool handlers. Add a bats/jest test that runs the MCP server and verifies stdout contains only valid newline-delimited JSON.
-
----
-
-### Pitfall 5: Background Subagents Cannot Access MCP Tools
-
-**What goes wrong:**
-The scan manager spawns Claude agents to scan repos. If those agents are spawned as background subagents (using `run_in_background: true`), they cannot access MCP tools — including the `impact_scan` and `impact_query` tools exposed by the AllClear MCP server. Scan results either never arrive or fall back to a degraded mode silently.
-
-**Why it happens:**
-This is a confirmed Claude Code bug/limitation: background subagents do not inherit MCP tool access from the parent session. Issue #13254 on the claude-code GitHub repo documents this behavior. Agents spawned in the foreground have MCP access; background agents do not.
-
-**How to avoid:**
-Do not use `run_in_background: true` for agents that need to call MCP tools. Instead, run agents sequentially in the foreground within the scan manager, or use a queue approach where the main process dispatches work and collects results. If parallel scanning is needed, implement it within the Node.js worker using the Claude SDK directly (not via Claude Code's agent spawning), where MCP tool access is explicit.
-
-**Warning signs:**
-- Agent scans complete but return no results
-- Worker logs show agents were spawned but no findings were written to SQLite
-- Switching from foreground to background agent spawn causes silent scan failures
-
-**Phase to address:**
-Agent scanning phase. Validate agent MCP tool access in the first agent scan prototype before building the full scan pipeline.
-
----
-
-### Pitfall 6: Agent Scanning Hallucinating Endpoints That Don't Exist
-
-**What goes wrong:**
-Claude agents scanning codebases for service connections are prone to hallucination — particularly when code uses indirect patterns like dynamic routing, string interpolation for endpoint paths, or convention-over-configuration frameworks. Agents invent endpoint paths, infer connections that don't exist, or miss connections hidden in configuration files. The result: the dependency graph contains false edges that cause false-positive impact alerts.
-
-**Why it happens:**
-LLMs fill gaps in context with plausible-sounding completions. When an HTTP client call looks like `client.get('/users/' + id)`, the agent may invent a canonical endpoint path. Framework-specific patterns (e.g., FastAPI decorators, Express router chaining, Spring Boot annotations) require framework knowledge to parse correctly, and agents may misinterpret them.
-
-**How to avoid:**
-- Require agents to report confidence levels per finding (HIGH/MEDIUM/LOW) based on evidence quality
-- LOW confidence findings must be surfaced separately with the evidence that produced them
-- Never persist LOW confidence findings without explicit user confirmation
-- Include specific prompting in agent instructions: "Only report endpoints you found literal string definitions for. Do not infer from usage patterns. If you see a dynamic path, report the template, not a specific instance."
-- Validate reported connections with a secondary check: does the claimed file/function actually exist? (simple file-existence check in the worker before persisting)
-
-**Warning signs:**
-- Impact reports flagging services that have no code relationship
-- Agent reports endpoint paths containing template variables like `{id}` mixed with specific paths
-- Re-scanning the same repo produces different sets of connections each time
-
-**Phase to address:**
-Agent scanning phase. Build confidence-level requirements and secondary validation into the agent prompt template and persistence layer from the start.
-
----
-
-### Pitfall 7: Incremental Scan Missing Renamed or Deleted Files
-
-**What goes wrong:**
-The incremental scan uses `git diff` to find changed files since the last scan commit. When a service file is renamed (`git mv`), `git diff` shows a deletion + addition. The scan processes the new file but does not clean up connections that referenced the old file path. Over time, the dependency graph accumulates ghost connections pointing to file paths that no longer exist.
-
-**Why it happens:**
-`git diff` reports rename as two separate events (delete + add) unless `--find-renames` is specified. Even with rename detection, the incremental scan logic typically processes "changed files" without a cleanup pass for "deleted source files."
-
-**How to avoid:**
-After every incremental scan, run a cleanup pass: for each connection whose `source_file` or `target_file` no longer exists on disk, mark it stale (do not delete — show as `status: stale` in the UI). On full re-scan, purge all stale connections. Parse `git diff --name-status` (not just `--name-only`) to detect `D` (deleted) and `R` (renamed) entries and trigger targeted cleanup for those file paths.
-
-```bash
-# Get file status changes since last scan
-git diff --name-status $LAST_COMMIT HEAD
-# R100  old/path/service.py  new/path/service.py
-# D     removed/endpoint.ts
-```
-
-**Warning signs:**
-- Impact graph showing connections to files that no longer exist
-- `source_file` entries in connections table pointing to git-deleted paths
-- Graph UI showing phantom nodes after a service directory restructuring
-
-**Phase to address:**
-Incremental scan phase. Build stale-connection detection into the first incremental scan implementation, not as a follow-up cleanup task.
-
----
-
-### Pitfall 8: Transitive Graph Walk Hitting Cycles and Infinite Recursion
-
-**What goes wrong:**
-The cross-impact query walks the dependency graph transitively (A calls B calls C). If any cycle exists in the graph — even an indirect one (A → B → C → A) — a naive recursive CTE or application-level traversal will loop forever, exhausting memory or hitting SQLite's default 1000-recursion limit with an opaque error.
-
-**Why it happens:**
-Service graphs can legitimately contain cycles (mutual authentication, callback patterns, event loops). The design calls for transitive traversal but cycle detection is easy to forget in the initial recursive CTE implementation.
-
-**How to avoid:**
-Use SQLite's recursive CTE with an explicit visited-set pattern to detect cycles:
-
-```sql
-WITH RECURSIVE transitive(service_id, path, depth) AS (
-  SELECT target_service_id, ',' || target_service_id || ',', 1
-  FROM connections WHERE source_service_id = :start
-  UNION ALL
-  SELECT c.target_service_id,
-         t.path || c.target_service_id || ',',
-         t.depth + 1
-  FROM connections c
-  JOIN transitive t ON c.source_service_id = t.service_id
-  WHERE t.path NOT LIKE '%,' || c.target_service_id || ',%'  -- cycle detection
-    AND t.depth < 10  -- safety depth limit
-)
-SELECT DISTINCT service_id FROM transitive;
-```
-
-Cap traversal depth at a configurable limit (default: 5, configurable up to 10) to prevent runaway queries on deeply connected graphs.
-
-**Warning signs:**
-- `cross-impact` queries hanging on graphs with more than 10 services
-- SQLite error: `SQLITE_ERROR: too many levels of trigger recursion`
-- Memory usage spiking during transitive graph walk
-
-**Phase to address:**
-Query engine phase. Cycle detection and depth limits must be in the first recursive CTE implementation. Test with a deliberately cyclic graph.
-
----
-
-### Pitfall 9: User Confirmation Fatigue Causing Rubber-Stamping
-
-**What goes wrong:**
-The design requires user confirmation for ALL agent findings before persistence. If the confirmation flow presents 50+ individual findings across 6 repos, users will approve everything without reading — rubber-stamping inaccurate results into the database. This defeats the entire validation purpose and populates the graph with LLM-hallucinated connections.
-
-**Why it happens:**
-The design principle "user confirms everything" is correct for safety, but the UX implementation matters. Presenting every finding individually in a long sequential confirmation dialog causes decision fatigue. Users click confirm on everything to get through it.
-
-**How to avoid:**
-Group findings by confidence and type. Present HIGH confidence findings as a collapsible summary with a single "Confirm all high-confidence" action. Present LOW confidence findings individually with specific evidence and a require-action flag. Give users an "Edit" action that opens a text representation of the findings they can modify. Never present more than 5-7 individual confirmation decisions in a single flow.
-
-Structure the confirmation UI:
-1. Summary: "Found N connections across X repos — N HIGH confidence, N MEDIUM, N LOW"
-2. HIGH confidence batch: show grouped by repo, single confirm
-3. MEDIUM confidence: show with evidence, allow per-repo confirm
-4. LOW confidence: show each with specific question ("Did you intend service A to call service B?")
-
-**Warning signs:**
-- Users report scan takes too long and they "just hit confirm"
-- Impact graph contains connections that don't match actual code
-- Users disable the map feature because confirmation is too tedious
-
-**Phase to address:**
-Confirmation flow / map command phase. Design the grouped confirmation UX before implementing it — do not build sequential confirmation and refactor later.
-
----
-
-### Pitfall 10: D3 Force Graph Rendering Freezing on Large Service Maps
-
-**What goes wrong:**
-The D3.js force-directed graph uses SVG rendering. With 50+ services and 200+ connections, the force simulation runs on the main thread and locks the browser tab during layout calculation. The user sees an unresponsive UI for 3-10 seconds on every graph load or re-layout. At 100+ nodes, the tab becomes completely unresponsive.
-
-**Why it happens:**
-D3 force simulations are CPU-intensive. SVG rendering is significantly slower than Canvas for large node counts. The default force simulation runs synchronously on the main browser thread with no virtualization. Research shows performance degrades sharply beyond 2,000 SVG nodes, but even at 50-100 nodes with heavy link force calculations, the UI blocks noticeably.
-
-**How to avoid:**
-- Use Canvas rendering (not SVG) for nodes and edges when node count > 30
-- Run force simulation in a Web Worker so the main thread stays responsive
-- Cap the simulation to 100 alpha decay iterations with `simulation.stop()` after reaching a stable layout, then resume only on user interaction
-- Implement zoom-based level-of-detail: only render node labels when zoomed in past a threshold
-- For graphs > 100 services, cluster by repo and show a collapsed cluster node with expand-on-click
-
-```javascript
-// Use canvas renderer for performance
-const canvas = document.getElementById('graph-canvas');
-const ctx = canvas.getContext('2d');
-
-// Run simulation in Web Worker
-const worker = new Worker('force-worker.js');
-worker.onmessage = ({ data: positions }) => renderFrame(ctx, positions);
-```
-
-**Warning signs:**
-- Browser tab becomes unresponsive for 2+ seconds after loading the graph page
-- Chrome DevTools shows force simulation consuming 100% CPU for multiple seconds
-- User reports graph "freezes" when switching between services in the graph UI
-- requestAnimationFrame callbacks are dropping below 10 fps
-
-**Phase to address:**
-Graph UI phase. Choose Canvas vs SVG rendering and Web Worker simulation before writing any graph rendering code — retrofitting Canvas rendering onto an SVG implementation requires a rewrite.
-
----
-
-### Pitfall 11: Shell-to-Node.js Handoff Race Condition
-
-**What goes wrong:**
-The shell command `/allclear:map` starts the Node.js worker with `node worker/server.js &` and immediately sends an HTTP request to start scanning. The HTTP server hasn't finished binding to its port yet. The request fails with `ECONNREFUSED`, the shell script reports an error, and the user sees a failure even though the worker started successfully.
-
-**Why it happens:**
-Node.js servers take 100-500ms to start and bind. Shell scripts have no async/await — they can't `await server.ready()`. Simple `sleep 1` workarounds are fragile and slow.
-
-**How to avoid:**
-Implement a readiness probe in the shell script: poll the worker's `GET /health` endpoint with retries until it responds 200 or a timeout (5 seconds) is exceeded.
-
-```bash
-wait_for_worker() {
-  local port=$1
-  local retries=20
-  for i in $(seq 1 $retries); do
-    if curl -sf "http://localhost:$port/health" > /dev/null 2>&1; then
-      return 0
-    fi
-    sleep 0.25
-  done
-  echo "Worker failed to start within 5s" >&2
-  return 1
-}
-
-node worker/server.js &
-wait_for_worker 37888 || exit 1
-```
-
-The worker's `/health` endpoint must be the very first route registered, before any DB initialization.
-
-**Warning signs:**
-- `/allclear:map` fails with `Connection refused` on first invocation but succeeds if run again immediately after
-- Scan start command fails but `ps aux | grep node` shows worker is running
-- Tests pass when run sequentially but fail when run quickly in CI
-
-**Phase to address:**
-Worker foundation phase. Readiness probe must be part of the initial worker startup flow, not added after observing the race condition.
-
----
-
-### Pitfall 12: SQLite Snapshot Copies Bloating Disk with No Cleanup
-
-**What goes wrong:**
-The versioning system copies the entire SQLite database file to `.allclear/snapshots/` on every scan. For a project with 10 repos and 3 months of weekly scans, this generates 12+ snapshot files. If each snapshot is 50 MB, that is 600 MB of snapshot history in the working directory — committed to git by accident or just filling disk.
-
-**Why it happens:**
-Snapshots are full file copies. The design doesn't specify a retention policy. Developers add snapshots without adding cleanup. `.allclear/` may not be gitignored.
-
-**How to avoid:**
-- Add `.allclear/` to `.gitignore` automatically during first `/allclear:map` run
-- Default snapshot retention policy: keep last 10 snapshots (configurable via `history-limit` in config)
-- After writing each snapshot, run cleanup: `ls -t .allclear/snapshots/*.db | tail -n +11 | xargs rm -f`
-- Display snapshot disk usage in the `/allclear:map --view` output so users are aware
-
-**Warning signs:**
-- `.allclear/snapshots/` directory growing unboundedly
-- `git status` shows `.allclear/` as untracked (not gitignored)
-- Disk usage alerts from machines running automated map updates
-
-**Phase to address:**
-Versioning / storage phase. Gitignore and retention policy must be part of the initial snapshot implementation.
+Log terminal phase. Add the retry jitter to the first SSE implementation. Cross-reference worker startup ordering.
 
 ---
 
@@ -382,13 +328,13 @@ Versioning / storage phase. Gitignore and retention policy must be part of the i
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Skip Web Worker for D3 force simulation | Simpler graph UI implementation | Browser tab freezes on graphs > 30 nodes; requires Canvas rewrite later | Never — choose Canvas + Web Worker from the start |
-| ChromaDB sync inline with SQLite persist | Simpler code path | ChromaDB outage blocks all scan persistence; hard to separate later | Never — always async/separate |
-| PID tracking without readiness probe | Faster first implementation | Race conditions on every cold start; intermittent CI failures | Never — readiness probe is a 10-line fix |
-| Single recursive CTE without cycle detection | Simpler initial query | Infinite loop on any cyclic graph; emergency hotfix required | Never — add depth limit and visited-set from day one |
-| Sequential agent scanning (one repo at a time) | Simpler orchestration | Scan of 10 repos takes 10x longer; users abandon the feature | Acceptable for MVP; parallelize in a follow-up phase |
-| Store snapshot path as relative in `map_versions` table | Works in dev | Breaks when `.allclear/` is moved or repo is cloned to a different path | Never — use paths relative to DB file location |
-| Skip `status: stale` for deleted file connections | Simpler data model | Ghost connections accumulate; no way to distinguish fresh vs orphaned data | Never — stale flag is required for correctness |
+| Skip DPR scaling, use `canvas.width = container.clientWidth` | Simpler resize logic | Blurry rendering on all Retina/HiDPI displays; labels unreadable at scale | Never — DPR fix is 5 lines |
+| Anonymous arrow functions in `setupInteractions()` | Slightly less code | Cannot remove listeners; project switch causes duplicate handlers; must rewrite before adding switcher | Never — name all handlers from the start |
+| Hard-code `devicePixelRatio = 2` | Works for most Macs today | Wrong on 3x displays, wrong on 1x screens (wastes GPU memory), will break on new hardware | Never — always use `window.devicePixelRatio || 1` |
+| Append unlimited log lines to DOM | Simplest implementation | Tab memory bloat after long scans; log panel janks at 1000+ lines | Never — ring buffer is trivial |
+| Skip SSE `request.raw.on('close')` cleanup | Saves 3 lines | Worker memory leaks monotonically across dev sessions; eventually crashes | Never — close handler is mandatory for SSE correctness |
+| Full page reload for project switch | Zero teardown code needed | Loses zoom/pan position; loses selection state; visible flash | Acceptable for MVP; replace with soft switch in follow-up |
+| Merge DPR scale into `state.transform` | Fewer ctx.scale() calls | Confuses CSS-pixel coordinates with physical-pixel coordinates; breaks hit testing | Never — DPR scale is a render-time detail, not a logical transform |
 
 ---
 
@@ -396,13 +342,12 @@ Versioning / storage phase. Gitignore and retention policy must be part of the i
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| better-sqlite3 + WAL | Opening multiple `Database()` instances in the same process | Use a single shared Database instance as a module singleton; WAL still allows concurrent reads |
-| ChromaDB HTTP client | Assuming the client constructor validates connectivity | ChromaDB client constructor never throws; connection errors surface only on the first query. Always run an explicit ping before marking `chromaAvailable = true` |
-| MCP stdio transport | Using `process.stdout.write()` for any non-JSON-RPC output | All logging must go to `process.stderr`; stdout is exclusively for MCP protocol messages |
-| Claude Code MCP config | Expecting MCP server to auto-register after editing `settings.json` | Claude Code must be fully restarted (not just refreshed) after MCP server config changes |
-| D3 force simulation + Canvas | Using SVG element selectors for node click/hover in Canvas mode | Canvas has no DOM elements; hit detection requires manual point-in-circle math on `mousemove` |
-| Git diff for incremental scan | Using `--name-only` instead of `--name-status` | `--name-only` misses deleted/renamed files; `--name-status` provides D/R/M/A status codes needed for correct cleanup |
-| SQLite snapshot copy | Using `cp` to copy a live database | WAL mode databases have a `-wal` and `-shm` sidecar file; snapshot must use SQLite's `VACUUM INTO` or the Online Backup API to get a consistent snapshot |
+| Canvas 2D + HiDPI | Applying DPR scale to `e.offsetX`/`e.offsetY` (mouse coordinates) | Mouse coordinates are always CSS pixels — only the context drawing scale is DPR-adjusted, never the input coordinates |
+| Canvas resize + force worker | Sending old `canvas.width`/`canvas.height` to force worker after resize | After DPR fix, `canvas.width` is `cssW * dpr`; send CSS dimensions (divide by DPR) to the force worker for layout bounds |
+| SSE + Fastify | Using `reply.send()` instead of writing to `reply.raw` | `reply.send()` ends the HTTP response; SSE requires writing to `reply.raw` with the connection held open |
+| Wheel event + log terminal | Adding a scroll listener to the terminal container without `{ passive: false }` | Both the canvas zoom handler and any terminal scroll interception need `{ passive: false }` to call `e.preventDefault()` |
+| Project switcher + Web Worker | Calling `worker.terminate()` and then immediately starting a new worker | `terminate()` is asynchronous internally; new worker postMessage may fire before old worker has exited if positions overlap in the state object — always null-check `state.forceWorker` |
+| ES modules + no bundler | Using bare specifier imports (`import { x } from 'lodash'`) | Without import maps or a bundler, bare specifiers throw in browser. All imports must use relative paths (`./modules/state.js`) or CDN URLs with full path |
 
 ---
 
@@ -410,12 +355,11 @@ Versioning / storage phase. Gitignore and retention policy must be part of the i
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| D3 SVG rendering at scale | Tab unresponsive for 2-10 seconds on graph load | Use Canvas renderer for node count > 30; Web Worker for simulation | > 30 nodes with default SVG |
-| Recursive CTE without depth cap | Query hangs indefinitely on cyclic graphs | Add `depth < 10` termination condition and visited-set cycle detection | First time a graph contains any cycle |
-| WAL file growth from long-lived reads | Queries slow as WAL grows to 100+ MB | Set `journal_size_limit`, run `checkpoint(TRUNCATE)` after every scan | After 50+ scans without restart |
-| Agent spawning without backpressure | Worker spawns 10 agents simultaneously; API rate limits hit | Use a concurrency queue — max 2-3 agents in parallel | On first multi-repo scan in a rate-limited environment |
-| Snapshot copy using `cp` on live DB | Corrupt snapshot (WAL not checkpointed) | Use `VACUUM INTO 'snapshot.db'` for atomic consistent copy | On any active write transaction |
-| MCP tool context window bloat | Claude's context window consumed before conversation starts | Limit MCP tool descriptions to essential fields; do not include examples in tool schemas | With > 5 tools each having verbose descriptions |
+| DPR × scale multiplied without CSS size fix | Canvas renders at 4x resolution (2x DPR × 2x CSS upscale) — wasted GPU work | Set `canvas.style.width = cssW + 'px'` as well as `canvas.width = cssW * dpr` | Immediately on any HiDPI display where CSS size is not constrained |
+| DOM log terminal without ring buffer | Browser tab memory > 100 MB after scan; log scroll jank | Cap DOM at 500 lines; remove oldest on append | After 500+ log events (one medium scan) |
+| Continuous `render()` from force worker while SSE also triggers renders | Main thread renders at 60 fps from Web Worker ticks AND additionally re-renders on every log event | Separate render loop (rAF-gated) from log appends; log terminal is DOM-only, does not trigger canvas redraw | Immediately when log events arrive at > 10 hz during scan |
+| Project switch without worker termination | Two Web Workers posting positions → 120 `render()` calls/second → visible flicker | Terminate old worker before starting new one | On first project switch if teardown is skipped |
+| SSE zombie connections | Worker memory grows 1-5 MB per abandoned connection | Register `request.raw.on('close', cleanup)` on every SSE endpoint | After 10+ tab-open/close cycles in a development session |
 
 ---
 
@@ -423,11 +367,9 @@ Versioning / storage phase. Gitignore and retention policy must be part of the i
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Worker HTTP server listening on `0.0.0.0` instead of `127.0.0.1` | Remote machines on the local network can query or trigger scans on the user's codebase | Always bind to `127.0.0.1` (localhost only). The design specifies "localhost:PORT" — enforce this in code, not just docs |
-| Agent instructions containing repo path passed without sanitization | If config file is compromised, arbitrary shell commands can be injected into agent prompts | Sanitize all config-derived values before interpolating into agent instructions; reject paths containing shell metacharacters |
-| `.allclear/impact-map.db` committed to git | Service topology, endpoint paths, and internal architecture are exposed in the public repo | Write `.allclear/` to `.gitignore` automatically on first run; display a prominent warning if `.allclear/` appears in `git status` |
-| ChromaDB API key stored in `allclear.config.json` in plaintext | Config files are often committed to git, exposing credentials | Support `ALLCLEAR_CHROMA_API_KEY` env var override; warn in docs that the `api-key` config field should not be committed |
-| MCP server accepting requests without any auth | Any process on the local machine can call `impact_scan` to trigger agent execution | While full auth is heavy for localhost, add a shared secret token set on startup that callers must pass in the `Authorization` header |
+| SSE log endpoint with no filtering | Internal file paths, env vars, secrets appearing in worker logs stream to browser | Filter log messages server-side; redact lines matching `/(key|secret|token|password)/i` before streaming to SSE |
+| SSE endpoint accessible without project isolation | Log events from project A visible to a browser tab viewing project B | Scope SSE streams by project identifier; reject connections that don't specify a valid project parameter |
+| `reply.raw.write()` with unsanitized log text | Log injection: a crafted log message containing `\n\ndata:` could inject fake SSE events | Sanitize log text: strip newlines and SSE control characters before writing |
 
 ---
 
@@ -435,27 +377,26 @@ Versioning / storage phase. Gitignore and retention policy must be part of the i
 
 | Pitfall | User Impact | Better Approach |
 |---------|-------------|-----------------|
-| Presenting all scan findings as a flat list for confirmation | Users rubber-stamp without reading; hallucinated connections enter the graph | Group by confidence level; HIGH confidence as single batch confirm; LOW confidence as individual questions |
-| Map UI opening in background tab without focus | User doesn't know the graph is ready; dismisses browser notification | Print the URL in the terminal and indicate it has been opened: "Graph ready at http://localhost:37888 — opening in browser" |
-| Re-scan prompt after every cross-impact query | Developer workflow interrupted by repeated "re-scan?" questions | Only suggest re-scan when git diff shows significant changes since last scan; suppress after clean-state checks |
-| Snapshot history not visible by default | Users don't know they can compare graph versions; feature is discoverable only in docs | Show "N snapshots available — run /allclear:map --history to compare" in the scan summary output |
-| Worker running silently in background with no status | Users don't know if the worker has crashed or is healthy | SessionStart hook should check worker health and print a one-line status: "AllClear worker: running (port 37888, last scan: 2h ago)" |
-| Confirmation dialog for 50+ low-confidence findings | Users abandon the scan midway; partial data entered | Cap max LOW confidence findings presented per scan at 10; batch the rest as "N additional uncertain connections found — confirm to review later" |
+| Auto-scroll overrides user scroll position in log terminal | Developer scrolls up to read an old log line; terminal snaps back to bottom on next event | Only auto-scroll when the user's scroll position is already at the bottom (within 20px) |
+| Project switch resets zoom/pan to origin | After switching projects, the graph always starts at scale=1, pan=(0,0) — annoying if the user had a useful view | Persist last zoom/pan per project in `sessionStorage`; restore on project load |
+| Log terminal open by default takes vertical space from graph | On small screens (13" laptop), the graph area is cut in half | Log terminal starts collapsed; user must explicitly open it; remember state in `sessionStorage` |
+| Project switcher dropdown shows hash strings instead of names | `__hash__abc123` is not a useful project name for a dropdown | Show folder name from `projectRoot` path; fall back to first 8 chars of hash only if path is missing |
+| Zoom sensitivity same for mouse wheel and trackpad | Mouse wheel (large deltaY increments) and trackpad two-finger scroll (tiny deltaY increments) need different multipliers | Detect input type via `e.deltaMode` and presence of `ctrlKey`; apply different sensitivity scaling |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Worker PID management:** Verify second invocation of `/allclear:map` does NOT start a second worker — test with `ps aux | grep node` count before and after
-- [ ] **WAL mode setup:** Verify `journal_mode = WAL` and `journal_size_limit` are set on every database open, not just on creation — check with `PRAGMA journal_mode;` after reopening existing DB
-- [ ] **ChromaDB fallback:** Verify cross-impact queries return results when ChromaDB is not running — test by stopping ChromaDB while worker is running
-- [ ] **MCP stdout cleanliness:** Verify MCP server stdout contains only newline-delimited JSON — run `node mcp-server.js | grep -v '^\{' | head -5` and expect no output
-- [ ] **Incremental scan deleted files:** Verify connections to deleted files are marked stale after a scan that includes a `git rm` — check `connections` table for `status = stale`
-- [ ] **Transitive traversal cycles:** Verify `impact_query` returns without hanging on a manually-created cyclic graph (A→B→C→A in the connections table)
-- [ ] **D3 graph at scale:** Verify graph UI remains responsive with a synthetic dataset of 100 nodes and 300 edges — measure time to first interactive frame
-- [ ] **Snapshot integrity:** Verify snapshot copy is readable as a valid SQLite database using `sqlite3 snapshot.db .schema` after a copy during an active scan
-- [ ] **Gitignore for .allclear/:** Verify that running `/allclear:map` for the first time writes `.allclear/` to `.gitignore` — check with `git status` after first map run
-- [ ] **Worker localhost binding:** Verify worker cannot be accessed from another machine on the local network — test from a second machine: `curl http://[dev-machine-ip]:37888/graph` must fail
+- [ ] **HiDPI rendering:** Verify canvas nodes are pixel-crisp on a Retina display — capture a screenshot and inspect at 1:1 pixel zoom; labels should have no antialiasing blur
+- [ ] **HiDPI hit testing:** After applying DPR fix, click exactly on a node on a 2x display and verify it selects (not the empty space beside it)
+- [ ] **Wheel event on scroll overlay:** Open the log terminal panel positioned over the canvas; scroll inside the terminal; verify the canvas does NOT zoom simultaneously
+- [ ] **Project switch teardown:** Switch projects 3 times rapidly; verify `ps` shows exactly one Web Worker process, and no duplicate event listeners fire (instrument with a counter)
+- [ ] **SSE cleanup:** Open the log terminal, close the browser tab, reopen — verify the server's active connections count returns to 0 (add a `/debug/connections` endpoint to check)
+- [ ] **Log ring buffer:** Trigger a full scan and let it run; verify `logContainer.children.length` never exceeds the cap (500) in DevTools
+- [ ] **SSE reconnect jitter:** Restart the worker while 3 browser tabs are open; verify reconnect times are spread out (not all at exactly t+3s)
+- [ ] **Trackpad vs mouse wheel:** Test on a trackpad — two-finger scroll should pan, not zoom; pinch should zoom, not pan
+- [ ] **Canvas resize with DPR:** Resize the browser window; verify graph is not blurry at the new size (DPR scaling must reapply in the resize handler)
+- [ ] **Force worker dimensions after resize:** After a window resize, verify the force simulation layout respects the new canvas CSS dimensions (not the physical pixel dimensions)
 
 ---
 
@@ -463,14 +404,12 @@ Versioning / storage phase. Gitignore and retention policy must be part of the i
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Orphaned worker processes | LOW | Kill all `node worker/server.js` processes; delete `.allclear/worker.pid`; restart with `/allclear:map` |
-| Corrupted SQLite WAL file | MEDIUM | Stop worker; run `sqlite3 impact-map.db 'PRAGMA wal_checkpoint(TRUNCATE);'`; restart; if corrupt, restore from latest snapshot |
-| Ghost connections from deleted files | LOW | Run `/allclear:map --full` to perform a complete re-scan; this purges all stale connections and rebuilds from current file state |
-| ChromaDB desync from SQLite | LOW | Disable ChromaDB in config, restart worker (queries continue via FTS5); re-enable and run `/allclear:map --full` to resync vectors |
-| Cyclic graph causing query hang | LOW | Worker has query timeout; query will fail after timeout; fix the cycle by running `/allclear:map --full` to regenerate connections from fresh scans |
-| Bloated snapshot directory | LOW | `rm .allclear/snapshots/*.db`; snapshot history is cosmetic, not required for current operation |
-| MCP server not responding | MEDIUM | Restart worker; verify MCP config in Claude Code `settings.json`; fully restart Claude Code after config change |
-| Agent hallucinated connections in graph | MEDIUM | Delete specific connections via `DELETE FROM connections WHERE id IN (...)` using the worker's REST API; run targeted partial re-scan for affected repos |
+| Blurry canvas after HiDPI fix (incorrect implementation) | LOW | Verify `canvas.style.width`/`height` CSS properties are set to CSS pixel values; verify DPR scale is applied inside `ctx.save()`/`ctx.restore()` block, not to `state.transform` |
+| Duplicate event listeners after project switch | MEDIUM | Audit `setupInteractions()` to replace all anonymous arrow functions with named functions; add `AbortController` as alternative to named-function removal |
+| SSE memory leak already in production | MEDIUM | Add `request.raw.on('close', cleanup)` to all existing SSE endpoints; restart worker to reset current connections |
+| Log DOM bloat causing tab slowdown | LOW | Add ring buffer cap; call `logContainer.innerHTML = ''` to clear existing DOM immediately |
+| Wrong zoom behavior on trackpad | LOW | Add `e.ctrlKey` check to wheel handler; 2-line change to `interactions.js` |
+| Force worker receiving physical pixel canvas dimensions | LOW | Audit all places `canvas.width` and `canvas.height` are passed to force worker; divide by `devicePixelRatio` before passing |
 
 ---
 
@@ -478,41 +417,34 @@ Versioning / storage phase. Gitignore and retention policy must be part of the i
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Worker process orphaning | Worker foundation | `ps aux` shows exactly one worker after multiple `/allclear:map` invocations |
-| WAL file unbounded growth | SQLite/storage setup | WAL file size after 100 writes is < 64 MB |
-| ChromaDB hard failure | ChromaDB integration | Worker stays healthy when ChromaDB process is killed |
-| MCP stdout pollution | MCP server setup | `node mcp-server.js \| grep -v JSON-RPC` produces no output |
-| Background subagents without MCP access | Agent scanning | Agent scan returns results when run both sequentially and via scan manager |
-| Agent hallucination | Agent scanning + confirmation flow | Manual review of 3 scan results confirms no invented endpoints |
-| Incremental scan missing deletions | Incremental scan | After `git rm` a file and re-scanning, the connection is marked stale |
-| Transitive traversal cycles | Query engine | Cyclic test graph returns in < 100ms without hanging |
-| Confirmation fatigue | Map command UX | User study / walkthrough confirms high-confidence batch confirm works correctly |
-| D3 performance at scale | Graph UI | 100-node synthetic graph renders first interactive frame in < 500ms |
-| Shell-to-Node.js race condition | Worker foundation | Cold-start test: 10 consecutive first-starts show 0 ECONNREFUSED errors |
-| Snapshot bloat | Versioning/storage | Snapshot count never exceeds configured retention limit after 20 scans |
+| HiDPI blurry rendering | HiDPI canvas rendering phase | Screenshot at 2x DPR shows crisp nodes and labels |
+| Mouse coordinate mismatch after DPR fix | HiDPI canvas rendering phase | Click test on 2x display selects node under cursor |
+| Canvas resize clears context state | HiDPI canvas rendering phase (same) | Resize window 5 times; no visual corruption, no console errors |
+| Passive wheel event conflict | Zoom/pan tuning phase | No console warning about passive listeners; zoom works in Chrome, Firefox, Safari |
+| Trackpad vs mouse wheel sensitivity | Zoom/pan tuning phase | Trackpad two-finger scroll pans; pinch zooms; mouse wheel zooms |
+| Project switch state teardown | Project switcher phase | 3 rapid project switches show 1 worker, 0 duplicate handlers |
+| SSE zombie connection leak | Log terminal phase | Server connection count returns to 0 after all browser tabs closed |
+| DOM log buffer unbounded growth | Log terminal phase | After full scan, log DOM node count stays <= 500 |
+| SSE reconnect flood after worker restart | Log terminal phase | 3 tabs reconnect with spread-out retry timing visible in logs |
 
 ---
 
 ## Sources
 
-- [SQLite Write-Ahead Logging — official docs](https://sqlite.org/wal.html) — Checkpoint starvation, WAL growth, reader snapshot behavior
-- [SQLite User Forum: WAL File Grows Past Auto Checkpoint Limit](https://sqlite.org/forum/info/a188951b80292831794256a5c29f20f64f718d98ed0218bf44b51dd5907f1c39) — Real-world unbounded growth scenarios
-- [better-sqlite3 Performance docs](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/performance.md) — WAL mode setup, checkpoint API
-- [PhotoStructure: How to VACUUM SQLite in WAL Mode](https://photostructure.com/coding/how-to-vacuum-sqlite/) — Checkpoint and snapshot best practices
-- [ChromaDB Library Mode Stale Data — Medium](https://medium.com/@okekechimaobi/chromadb-library-mode-stale-rag-data-never-use-it-in-production-heres-why-b6881bd63067) — Stale data in ChromaDB library vs server mode
-- [ChromaDB Issue #346: Remote end closed connection](https://github.com/chroma-core/chroma/issues/346) — Connection reliability failure modes
-- [MCP Transports — official spec](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports) — stdio stdout/stderr protocol requirements
-- [MCPcat: Error Handling in MCP Servers](https://mcpcat.io/guides/error-handling-custom-mcp-servers/) — isError flag, structured error responses
-- [MCP Python SDK Issue #396: Inconsistent exception handling](https://github.com/modelcontextprotocol/python-sdk/issues/396) — Client undetected server termination behavior
-- [Claude Code Issue #13254: Background subagents cannot access MCP tools](https://github.com/anthropics/claude-code/issues/13254) — Confirmed limitation on background agent MCP access
-- [Claude Code Issue #19097: Process lifecycle management for spawned background tasks](https://github.com/anthropics/claude-code/issues/19097) — Orphaned process behavior
-- [D3 Force Graph Performance — Medium: Best Libraries for Large Graphs](https://weber-stephen.medium.com/the-best-libraries-and-methods-to-render-large-network-graphs-on-the-web-d122ece2f4dc) — SVG vs Canvas vs WebGL performance thresholds
-- [PMC: Graph visualization efficiency 2025](https://pmc.ncbi.nlm.nih.gov/articles/PMC12061801/) — 2025 study on D3/ECharts/G6 with SVG/Canvas/WebGL at scale
-- [GitHub Dependency Graph Accuracy Study — ScienceDirect](https://www.sciencedirect.com/article/pii/S0950584925001934) — 27%+ inaccuracy in automated dependency extraction
-- [Nielsen Norman Group: Confirmation Dialogs](https://www.nngroup.com/articles/confirmation-dialog/) — Confirmation fatigue and overuse consequences
-- [Datadog: Using LLMs to filter out false positives from static code analysis](https://www.datadoghq.com/blog/using-llms-to-filter-out-false-positives/) — LLM hallucination in code analysis context
-- [Node.js Child Processes — DEV Community](https://dev.to/satyam_gupta_0d1ff2152dcc/mastering-child-processes-in-nodejs-a-complete-guide-32g3) — Zombie process prevention, process cleanup patterns
+- [MDN: HTMLCanvasElement.width — context reset on assignment](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width) — Documents the context reset behavior on width/height assignment
+- [MDN: Window.devicePixelRatio](https://developer.mozilla.org/en-US/docs/Web/API/Window/devicePixelRatio) — DPR definition, ResizeObserver `devicePixelContentBoxSize` usage
+- [web.dev: High DPI Canvas](https://web.dev/articles/canvas-hidipi) — Official Google guidance on DPR scaling pattern
+- [kirupa.com: Canvas High-DPI Retina rendering](https://www.kirupa.com/canvas/canvas_high_dpi_retina.htm) — Practical three-step pattern (buffer size, context scale, CSS size)
+- [MDN: Element.wheel event](https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event) — deltaMode, passive listener behavior
+- [tigerabrodi.blog: Trackpad pinch-to-zoom vs scroll in Canvas](https://tigerabrodi.blog/how-to-handle-trackpad-pinch-to-zoom-vs-two-finger-scroll-in-javascript-canvas-apps) — ctrlKey convention for trackpad pinch detection
+- [Excalibur.js Issue #1195: wheel passive event listener](https://github.com/excaliburjs/Excalibur/issues/1195) — Real-world example of passive wheel event breaking canvas zoom
+- [expressjs/express Issue #2248: EventSource memory leak](https://github.com/expressjs/express/issues/2248) — Server-side SSE connection accumulation without close handler
+- [MDN: EventSource.close()](https://developer.mozilla.org/en-US/docs/Web/API/EventSource/close) — Client-side cleanup requirement
+- [nestjs/nest Issue #11601: SSE memory leak](https://github.com/nestjs/nest/issues/11601) — Server-side SSE cleanup patterns
+- [ben-botto/Medium: Zooming at Mouse Coordinates with Affine Transforms](https://medium.com/@benjamin.botto/zooming-at-the-mouse-coordinates-with-affine-transformations-86e7312fd50b) — Correct zoom-to-cursor formula (matches current implementation)
+- Codebase inspection: `worker/ui/modules/renderer.js`, `interactions.js`, `state.js`, `utils.js`, `graph.js`, `project-picker.js` — Confirmed specific anti-patterns (anonymous handlers, no DPR scaling, no teardown)
 
 ---
-*Pitfalls research for: AllClear v2.0 — service dependency intelligence (Node.js worker, SQLite + ChromaDB, MCP server, D3 graph UI, agent scanning)*
-*Researched: 2026-03-15*
+
+*Pitfalls research for: AllClear v2.1 — UI Polish & Observability (HiDPI canvas, zoom/pan, log terminal, project switcher)*
+*Researched: 2026-03-16*

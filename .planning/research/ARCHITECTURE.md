@@ -1,566 +1,466 @@
 # Architecture Research
 
-**Domain:** Claude Code plugin — v2.0 Service Dependency Intelligence integration
-**Researched:** 2026-03-15
-**Confidence:** HIGH — based on official Claude Code plugin documentation, existing v1.0 codebase inspection, and verified MCP server patterns
+**Domain:** AllClear v2.1 — UI Polish & Observability integration with existing modular UI
+**Researched:** 2026-03-16
+**Confidence:** HIGH — based on direct codebase inspection of all UI modules, server, and worker
 
 ---
 
 ## Standard Architecture
 
-### System Overview
+### System Overview (v2.1 additions in context)
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────┐
-│                          AllClear Plugin Root                              │
+│                        Browser (localhost:37888)                           │
 ├───────────────────────────────────────────────────────────────────────────┤
-│  User Layer (invoked by user or auto-triggered by Claude)                  │
-│                                                                            │
-│  ┌──────────────────┐  ┌────────────────────────────┐                     │
-│  │ commands/        │  │ commands/                   │                     │
-│  │ cross-impact.md  │  │ map.md  (NEW)               │                     │
-│  │ (MODIFIED)       │  │                             │                     │
-│  └──────────────────┘  └────────────────────────────┘                     │
-│                                                                            │
+│  Toolbar Row (existing)                                                    │
+│  ┌──────────────┐ ┌──────────────┐ ┌───────────────┐ ┌────────────────┐  │
+│  │   h1 title   │ │project-select│ │  search input │ │ protocol filters│  │
+│  │  (existing)  │ │ (NEW: wired) │ │  (existing)   │ │   (existing)   │  │
+│  └──────────────┘ └──────────────┘ └───────────────┘ └────────────────┘  │
 ├───────────────────────────────────────────────────────────────────────────┤
-│  MCP Layer (auto-started by Claude Code, available to ALL agents)          │
+│  Main Area (flex column, existing)                                         │
 │                                                                            │
-│  ┌──────────────────────────────────────────────────────────────────┐     │
-│  │  .mcp.json  (NEW)                                                 │     │
-│  │                                                                   │     │
-│  │  allclear-impact → worker/mcp-server.js  (stdio transport)       │     │
-│  │                                                                   │     │
-│  │  Tools: impact_query | impact_scan | impact_changed              │     │
-│  │         impact_graph | impact_search                             │     │
-│  └──────────────────────────────────────────────────────────────────┘     │
+│  ┌───────────────────────────────────────────────────────────────────┐    │
+│  │  #canvas-container (flex: 1, existing)                            │    │
+│  │                                                                   │    │
+│  │  <canvas id="graph-canvas"> — HiDPI fix applied HERE             │    │
+│  │  #tooltip (existing)                                              │    │
+│  │  #detail-panel (existing, right overlay)                          │    │
+│  └───────────────────────────────────────────────────────────────────┘    │
 │                                                                            │
+│  ┌───────────────────────────────────────────────────────────────────┐    │
+│  │  #log-panel (NEW — collapsible, fixed height ~200px)              │    │
+│  │                                                                   │    │
+│  │  [header: "Worker Logs" | filter input | component select | X]   │    │
+│  │  [log-lines container — scrollable, monospace]                    │    │
+│  └───────────────────────────────────────────────────────────────────┘    │
 ├───────────────────────────────────────────────────────────────────────────┤
-│  Event Layer (lifecycle hooks — unchanged from v1.0)                       │
+│                     JS Module Layer (worker/ui/modules/)                   │
 │                                                                            │
-│  ┌──────────────────────────────────────────────────────────────────┐     │
-│  │  hooks/hooks.json                                                 │     │
-│  │                                                                   │     │
-│  │  PreToolUse  → file-guard.sh                                     │     │
-│  │  PostToolUse → format.sh, lint.sh                                │     │
-│  │  SessionStart→ session-start.sh  (MODIFIED: checks worker state) │     │
-│  └──────────────────────────────────────────────────────────────────┘     │
+│  ┌────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐   │
+│  │  state.js  │ │ renderer.js  │ │interactions.js│ │  detail-panel.js │   │
+│  │ (MODIFIED) │ │ (MODIFIED)   │ │  (MODIFIED)   │ │   (existing)     │   │
+│  └────────────┘ └──────────────┘ └──────────────┘ └──────────────────┘   │
 │                                                                            │
+│  ┌─────────────────────┐ ┌──────────────────┐ ┌──────────────────────┐   │
+│  │  project-picker.js  │ │  log-terminal.js │ │  project-switcher.js │   │
+│  │    (existing)       │ │     (NEW)        │ │       (NEW)          │   │
+│  └─────────────────────┘ └──────────────────┘ └──────────────────────┘   │
 ├───────────────────────────────────────────────────────────────────────────┤
-│  Worker Layer (Node.js process, localhost, project-scoped)                 │
+│                     Server Layer (worker/server/http.js)                   │
 │                                                                            │
-│  ┌──────────────────────────────────────────────────────────────────┐     │
-│  │  worker/  (NEW)                                                   │     │
-│  │                                                                   │     │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐   │     │
-│  │  │ http-server  │  │ mcp-server   │  │ scan-manager         │   │     │
-│  │  │ (D3 UI +     │  │ (stdio, MCP  │  │ (spawns agents per   │   │     │
-│  │  │  REST API)   │  │  protocol)   │  │  linked repo)        │   │     │
-│  │  └──────────────┘  └──────────────┘  └──────────────────────┘   │     │
-│  │  ┌──────────────┐  ┌──────────────┐                             │     │
-│  │  │ query-engine │  │ chroma-sync  │                             │     │
-│  │  │ (SQLite +    │  │ (optional,   │                             │     │
-│  │  │  FTS5)       │  │  async)      │                             │     │
-│  │  └──────────────┘  └──────────────┘                             │     │
-│  └──────────────────────────────────────────────────────────────────┘     │
-│                                                                            │
+│  existing routes: /graph, /impact, /service/:name, /scan, /projects       │
+│  NEW route:       GET /api/logs?since=<ts>&component=<name>&limit=<n>     │
 ├───────────────────────────────────────────────────────────────────────────┤
-│  Support Layer (shared shell libraries — v1.0, unchanged)                  │
+│                     Node.js Worker (worker/index.js)                       │
 │                                                                            │
-│  ┌───────────────┐  ┌───────────────┐  ┌──────────────────────────┐      │
-│  │ lib/config.sh │  │ lib/detect.sh │  │ lib/linked-repos.sh      │      │
-│  └───────────────┘  └───────────────┘  └──────────────────────────┘      │
-│                                                                            │
-├───────────────────────────────────────────────────────────────────────────┤
-│  Storage Layer (project-local, inside consuming repo)                      │
-│                                                                            │
-│  ┌──────────────────────────────────────────────────────────────────┐     │
-│  │  .allclear/  (lives in the repo where /allclear:map was run)     │     │
-│  │                                                                   │     │
-│  │  impact-map.db        (SQLite + WAL mode + FTS5)                 │     │
-│  │  worker.pid           (PID file for worker lifecycle)            │     │
-│  │  worker.port          (port file: actual bound port)             │     │
-│  │  snapshots/           (SQLite snapshots for map versioning)      │     │
-│  └──────────────────────────────────────────────────────────────────┘     │
+│  existing: structured JSON logs → ~/.allclear/logs/worker.log              │
+│  log format already set: { ts, level, msg, pid, port, ...extra }           │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Responsibilities
 
-| Component | Responsibility | New or Modified |
-|-----------|----------------|-----------------|
-| `commands/map.md` | New command: orchestrates repo discovery, agent scanning, user confirmation, and persistence | NEW |
-| `commands/cross-impact.md` | Modified: checks for worker + map data first; falls back to legacy grep scan if absent | MODIFIED |
-| `.mcp.json` | Registers the AllClear MCP server (`worker/mcp-server.js`) so all Claude Code agents get impact tools automatically | NEW |
-| `worker/mcp-server.js` | Standalone Node.js stdio MCP server; reads from SQLite via query engine; surfaces 5 MCP tools | NEW |
-| `worker/http-server.js` | Express HTTP server on configured port; serves D3 web UI and REST API (`/graph`, `/impact`, `/service/:name`, `/scan`, `/versions`) | NEW |
-| `worker/scan-manager.js` | Spawns Claude agents into each linked repo for scanning; collects and validates findings; writes confirmed results to SQLite | NEW |
-| `worker/query-engine.js` | All SQLite queries: recursive CTE graph traversal, FTS5 full-text search, breaking change detection | NEW |
-| `worker/db.js` | SQLite connection pool with WAL mode + FTS5 indexes; handles schema migration and snapshots | NEW |
-| `worker/chroma-sync.js` | Optional async ChromaDB sync; gracefully skips if ChromaDB unavailable | NEW |
-| `worker/web/` | Static D3.js graph UI assets served by http-server.js | NEW |
-| `scripts/worker-start.sh` | Shell wrapper: reads config, checks if worker already running (via PID file), starts Node.js worker if not | NEW |
-| `scripts/worker-stop.sh` | Shell wrapper: reads PID file, kills worker process, removes `.allclear/worker.pid` | NEW |
-| `scripts/session-start.sh` | Modified: after existing context injection, check if `impact-map` section in config and auto-start worker | MODIFIED |
-| `.allclear/impact-map.db` | SQLite primary storage for all scan data (lives in the consuming project repo, not the plugin) | NEW (project-side) |
-| `.allclear/worker.pid` | PID of the running worker process; used by scripts to detect and stop the worker | NEW (project-side) |
-| `.allclear/worker.port` | Port the worker is currently listening on; written at startup, read by commands | NEW (project-side) |
-| `lib/worker-client.sh` | Bash library: reads `.allclear/worker.port`, provides `worker_call()` helper for HTTP requests from shell commands | NEW |
-| `allclear.config.json` | Extended with `impact-map` section (`port`, `history`, `chroma`); presence of section triggers worker auto-start | MODIFIED (schema) |
+| Component | Responsibility | New / Modified |
+|-----------|---------------|----------------|
+| `state.js` | Shared state object — add `currentProject`, `logPanelOpen`, `logFilter`, `logComponentFilter` | MODIFIED |
+| `renderer.js` | Canvas draw — apply devicePixelRatio scaling for HiDPI; scale font sizes by dpr | MODIFIED |
+| `interactions.js` | Zoom/pan — tune wheel delta multiplier for less aggressive zoom | MODIFIED |
+| `graph.js` | Init flow — wire project-switcher dropdown after init; call log-terminal.js init | MODIFIED |
+| `index.html` | Layout — add `#log-panel` section below `#canvas-container`; CSS for collapsible panel | MODIFIED |
+| `project-switcher.js` | NEW module — populates `#project-select`, handles change event, re-runs graph load without page reload | NEW |
+| `log-terminal.js` | NEW module — polls `/api/logs`, renders lines to `#log-panel`, handles filter/component controls | NEW |
+| `worker/server/http.js` | Fastify server — add `GET /api/logs` route reading from `~/.allclear/logs/worker.log` | MODIFIED |
 
 ---
 
-## Recommended Project Structure (v2.0 additions)
+## Recommended Project Structure (v2.1 additions)
 
 ```
-allclear/
-├── .claude-plugin/
-│   └── plugin.json                   # Plugin manifest (unchanged)
-│
-├── .mcp.json                         # NEW: MCP server registration
-│
-├── commands/
-│   ├── cross-impact.md               # MODIFIED: worker-aware + legacy fallback
-│   ├── deploy-verify.md              # unchanged
-│   ├── drift.md                      # unchanged
-│   ├── map.md                        # NEW: /allclear:map command
-│   ├── pulse.md                      # unchanged
-│   └── quality-gate.md               # unchanged
-│
-├── worker/                           # NEW: Node.js worker process
-│   ├── index.js                      # Entry point: starts http-server + optionally mcp-server
-│   ├── http-server.js                # Express HTTP + D3 UI serving
-│   ├── mcp-server.js                 # MCP stdio server (separate entry from HTTP)
-│   ├── scan-manager.js               # Agent spawning + findings collection
-│   ├── query-engine.js               # SQLite queries + FTS5 + breaking change detection
-│   ├── db.js                         # Database connection, WAL mode, schema, migrations
-│   ├── chroma-sync.js                # Optional ChromaDB sync
-│   └── web/                          # D3.js graph UI static assets
-│       ├── index.html
-│       ├── graph.js
-│       └── styles.css
-│
-├── hooks/
-│   └── hooks.json                    # unchanged
-│
-├── scripts/
-│   ├── drift-common.sh               # unchanged
-│   ├── drift-openapi.sh              # unchanged
-│   ├── drift-types.sh                # unchanged
-│   ├── drift-versions.sh             # unchanged
-│   ├── file-guard.sh                 # unchanged
-│   ├── format.sh                     # unchanged
-│   ├── impact.sh                     # unchanged (legacy grep fallback)
-│   ├── lint.sh                       # unchanged
-│   ├── pulse-check.sh                # unchanged
-│   ├── session-start.sh              # MODIFIED: worker auto-start check
-│   ├── worker-start.sh               # NEW: start Node.js worker
-│   └── worker-stop.sh                # NEW: stop Node.js worker
-│
-├── lib/
-│   ├── config.sh                     # unchanged
-│   ├── detect.sh                     # unchanged
-│   ├── linked-repos.sh               # unchanged
-│   └── worker-client.sh              # NEW: bash HTTP client for worker API
-│
-├── skills/
-│   └── quality-gate/
-│       └── SKILL.md                  # unchanged
-│
-├── tests/
-│   ├── (existing bats tests)
-│   ├── worker-start.bats             # NEW
-│   ├── worker-stop.bats              # NEW
-│   └── worker-client.bats            # NEW
-│
-├── bin/
-│   └── allclear-init.js              # unchanged (no Node.js server dep at install time)
-│
-├── package.json                      # MODIFIED: add worker dependencies
-├── allclear.config.json.example      # MODIFIED: add impact-map section example
-├── LICENSE
-└── README.md
+worker/
+├── index.js                        # unchanged — log format already correct
+├── server/
+│   └── http.js                     # MODIFIED: add GET /api/logs route
+└── ui/
+    ├── index.html                   # MODIFIED: add #log-panel HTML + CSS
+    ├── graph.js                     # MODIFIED: init project-switcher + log-terminal
+    ├── force-worker.js              # unchanged
+    └── modules/
+        ├── state.js                 # MODIFIED: add log/project state fields
+        ├── renderer.js              # MODIFIED: HiDPI dpr scaling
+        ├── interactions.js          # MODIFIED: zoom delta tuning
+        ├── detail-panel.js          # unchanged
+        ├── project-picker.js        # unchanged (still used for initial pick)
+        ├── utils.js                 # unchanged
+        ├── log-terminal.js          # NEW
+        └── project-switcher.js     # NEW
 ```
 
 ### Structure Rationale
 
-- **worker/ at root:** Keeps all Node.js worker code in one directory, cleanly separated from shell-based scripts/. The MCP server entry (`mcp-server.js`) and HTTP server entry (`http-server.js`) are separate entry points because they have different lifecycles — MCP server is stdio (one process per Claude Code invocation), HTTP server is long-lived daemon.
-- **.mcp.json at root:** Official Claude Code convention. Auto-discovered by Claude Code when plugin loads. Registers the MCP server so it auto-starts with the plugin, making impact tools available to all agents without any user action.
-- **worker/web/ inside worker/:** Static D3.js assets are served by the HTTP server. Keeping them co-located with the server code that serves them avoids path confusion and makes the worker directory self-contained.
-- **scripts/worker-start.sh and worker-stop.sh:** Shell wrappers (not Node.js scripts) for lifecycle management because: (1) session-start.sh is already shell and needs to trigger worker start; (2) `commands/*.md` reference shell scripts for consistency; (3) PID file management is natural in shell.
-- **.allclear/ in the consuming repo:** The database and worker state live where the user's project lives, not in the plugin cache. The plugin cache is immutable after installation. Worker state is per-project, so it belongs in the project.
-- **lib/worker-client.sh:** Shell commands need a consistent way to call the worker API without reimplementing HTTP logic. A shared bash library keeps this DRY and testable.
+- **log-terminal.js as separate module:** Follows the existing one-concern-per-file pattern. Log polling, rendering, and filter state are unrelated to graph rendering — they must not couple to `renderer.js`.
+- **project-switcher.js as separate module:** Project switching triggers a full graph reload (re-fetch + re-init force simulation). This logic is non-trivial and would bloat `graph.js` if inlined. The module owns the dropdown event handler and calls back into `graph.js`'s load function.
+- **HiDPI fix in renderer.js:** The canvas size and dpr scaling live entirely in the render path. The fix is isolated to `renderer.js` and the resize handler in `graph.js` — no other modules are affected.
+- **Zoom tuning in interactions.js:** The wheel handler delta multiplier is a single constant change. Contained entirely in `interactions.js`.
+- **/api/logs in http.js:** Fastify already handles all routes. Adding a log-streaming route here follows the established pattern. No new server file needed.
 
 ---
 
 ## Architectural Patterns
 
-### Pattern 1: MCP Server as stdio Subprocess (Plugin-Registered)
+### Pattern 1: HiDPI Canvas Scaling (devicePixelRatio)
 
-**What:** The `.mcp.json` file registers `worker/mcp-server.js` as a stdio MCP server. Claude Code spawns it as a child process when the plugin loads. The server communicates via stdin/stdout using the MCP JSON-RPC protocol. It reads from the SQLite database and exposes 5 tools to all Claude agents in the session.
+**What:** Canvas elements render at CSS pixel size by default, which appears blurry on Retina/HiDPI displays. The fix sets `canvas.width` and `canvas.height` to CSS size multiplied by `window.devicePixelRatio`, then calls `ctx.scale(dpr, dpr)` before drawing. CSS `width`/`height` stay at the original size.
 
-**When to use:** For capabilities that all Claude agents (not just the user-invoked commands) should have access to automatically. Impact analysis is exactly this use case — any agent making changes should be able to check impact without the user invoking a command.
+**When to use:** Always for canvas-based rendering on modern displays. devicePixelRatio is 2 on Retina, 1.5–3 on HiDPI, 1 on standard displays. The fix is backwards-compatible (dpr=1 is a no-op).
 
-**Trade-offs:** MCP server must never write to stdout for anything other than MCP protocol messages. Logging must go to stderr or a log file. The server starts with every Claude Code session when the plugin is enabled, so it must start quickly and fail gracefully if `.allclear/impact-map.db` does not exist.
+**Where it hooks in:** The `resize()` function in `graph.js` and every call to `render()` in `renderer.js`. The resize function sets physical canvas dimensions; `renderer.js` applies the scale transform.
 
-**Configuration in `.mcp.json`:**
-```json
-{
-  "mcpServers": {
-    "allclear-impact": {
-      "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/worker/mcp-server.js"],
-      "env": {
-        "ALLCLEAR_DB_PATH": ".allclear/impact-map.db"
-      }
-    }
+**Example:**
+```javascript
+// In graph.js resize():
+const dpr = window.devicePixelRatio || 1;
+canvas.width = container.clientWidth * dpr;
+canvas.height = container.clientHeight * dpr;
+canvas.style.width = container.clientWidth + 'px';
+canvas.style.height = container.clientHeight + 'px';
+render();
+
+// In renderer.js render():
+const dpr = window.devicePixelRatio || 1;
+const W = canvas.width;   // physical pixels
+const H = canvas.height;  // physical pixels
+ctx.clearRect(0, 0, W, H);
+ctx.save();
+ctx.scale(dpr, dpr);      // scale to CSS pixels before drawing
+// ... existing transform + draw code uses CSS-pixel coordinates unchanged ...
+ctx.restore();
+```
+
+**Trade-off:** The force-worker sends positions in CSS pixel space. Canvas physical dimensions change with dpr, but `toWorld()` in `utils.js` uses `state.transform` which operates in CSS pixel space. The dpr scale must be applied AFTER `ctx.save()` and BEFORE `ctx.translate/scale` for transform. The existing transform code in `renderer.js` does not need to change — only the outer dpr scale wraps it.
+
+**Font size impact:** Current code uses `Math.round(11 / state.transform.scale)px` for labels. With dpr scaling, this still works correctly because the coordinate system after `ctx.scale(dpr, dpr)` is in CSS pixels. No font size changes needed beyond any design decision to increase baseline sizes for legibility.
+
+### Pattern 2: Persistent Project Switcher (No Page Reload)
+
+**What:** The `#project-select` dropdown already exists in `index.html` but is currently hidden (`style="display: none"`). The project-switcher module populates it from `/projects` and wires an `onchange` handler that triggers a full graph reload — clearing state, stopping the force worker, then re-running the load sequence — without a page navigation.
+
+**When to use:** After initial project load is complete (not during initial picker flow). The existing `showProjectPicker()` modal is still used for the very first load when no URL param is set.
+
+**Data flow:**
+```
+project-switcher.js init:
+    fetch /projects
+    → populate #project-select options
+    → set selected option to current project (from URL params or state)
+    → show #project-select (remove display:none)
+    |
+#project-select onchange:
+    → new project selected
+    → state teardown: stop forceWorker, clear graphData, positions, selections
+    → update URL param (?hash=... or ?project=...)
+    → call loadProject(picked) — same logic as bottom half of graph.js init()
+    → re-init force simulation with new data
+    → log-terminal re-polls with new project context (no action needed — /api/logs is global)
+```
+
+**Trade-off:** Extracting the "load graph data + start simulation" logic from `graph.js init()` into a reusable `loadProject()` function is required. This refactor touches `graph.js` but is low-risk — it's a pure extraction with no logic change.
+
+### Pattern 3: Collapsible Log Terminal (Polling)
+
+**What:** A fixed-height panel below `#canvas-container` that polls `GET /api/logs` every 2 seconds for new log lines. Uses a `since` timestamp query param to fetch only new lines. Renders lines as monospace text with level-based color coding. Supports component filter (dropdown) and text search (input).
+
+**When to use:** For real-time worker observability without WebSocket complexity. Polling every 2s is sufficient for a developer tool. The panel is collapsible to avoid occupying screen real estate when not needed.
+
+**Layout integration:** The body uses `flex-direction: column`. `#canvas-container` has `flex: 1` (takes all remaining space). Adding `#log-panel` as the next sibling with a fixed height (e.g., `200px`) and `flex-shrink: 0` works naturally — the canvas shrinks to accommodate. When log panel is collapsed, it has `height: 0; overflow: hidden`, and canvas-container expands back to fill.
+
+**Example module structure:**
+```javascript
+// modules/log-terminal.js
+let lastTs = null;
+let pollTimer = null;
+
+export function initLogTerminal() {
+  // Wire filter controls
+  document.getElementById('log-search').addEventListener('input', renderLines);
+  document.getElementById('log-component').addEventListener('change', renderLines);
+  document.getElementById('log-toggle').addEventListener('click', togglePanel);
+  startPolling();
+}
+
+async function poll() {
+  const params = new URLSearchParams();
+  if (lastTs) params.set('since', lastTs);
+  params.set('limit', '100');
+  const component = document.getElementById('log-component').value;
+  if (component) params.set('component', component);
+  const resp = await fetch(`/api/logs?${params}`);
+  if (!resp.ok) return;
+  const { lines } = await resp.json();
+  if (lines.length > 0) {
+    lastTs = lines[lines.length - 1].ts;
+    appendLines(lines);
   }
 }
 ```
 
-**Key constraint:** `ALLCLEAR_DB_PATH` must be relative to the working directory (the user's project), not the plugin root. The MCP server reads the DB from the project being worked on, not from the plugin itself.
+### Pattern 4: /api/logs Route (Tail + Filter)
 
-### Pattern 2: HTTP Worker as Shell-Managed Daemon (PID File)
+**What:** A Fastify GET route that reads the structured JSON log file (`~/.allclear/logs/worker.log`), parses lines, applies `since` / `component` / `limit` filters, and returns `{ lines: [...] }`. Reads the file on each request (no streaming, no watch) — sufficient for 2s polling.
 
-**What:** The Node.js HTTP server (`worker/http-server.js`) runs as a background daemon, started and stopped by shell scripts using a PID file in `.allclear/worker.pid`. The shell command reads the PID file to check if the worker is running before starting a new instance.
+**When to use:** Simple log tail. The log file is append-only and small (worker logs are low-volume — startup, scan events, errors). File read on each poll is acceptable at this scale.
 
-**When to use:** For long-lived state (SQLite writes, ChromaDB sync, web UI serving) that needs to persist across multiple command invocations within a working session. The worker is project-scoped — one worker per project, not one per Claude Code session.
+**Route signature:**
+```
+GET /api/logs
+  ?since=<ISO timestamp>    — return only lines with ts > since
+  ?component=<string>       — filter by extra.component field (if present)
+  ?limit=<number>           — max lines to return (default 200, hard cap 500)
 
-**Trade-offs:** PID files can go stale if the process crashes. Worker start scripts must handle stale PIDs by checking if the PID is actually alive (`kill -0 $PID`) before deciding the worker is running.
-
-**Worker start pattern (`scripts/worker-start.sh`):**
-```bash
-#!/usr/bin/env bash
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-DB_DIR=".allclear"
-PID_FILE="${DB_DIR}/worker.pid"
-PORT_FILE="${DB_DIR}/worker.port"
-
-mkdir -p "$DB_DIR"
-
-# Check for live worker (stale PID guard)
-if [[ -f "$PID_FILE" ]]; then
-  PID=$(cat "$PID_FILE")
-  if kill -0 "$PID" 2>/dev/null; then
-    exit 0  # already running
-  fi
-  rm -f "$PID_FILE"  # stale PID
-fi
-
-# Read port from config (default 37888)
-PORT=$(jq -r '."impact-map".port // 37888' allclear.config.json 2>/dev/null || echo 37888)
-
-# Start worker in background
-node "${PLUGIN_ROOT}/worker/http-server.js" \
-  --port "$PORT" \
-  --db "${DB_DIR}/impact-map.db" \
-  --port-file "$PORT_FILE" \
-  >/dev/null 2>&1 &
-echo $! > "$PID_FILE"
+Response: { lines: [{ ts, level, msg, pid, port, component?, ...extra }] }
 ```
 
-### Pattern 3: Command-to-Worker Communication via Shell HTTP Client
-
-**What:** Shell-based commands (`commands/*.md`) need to query the worker API. Rather than embedding curl calls in every command markdown file, a shared bash library (`lib/worker-client.sh`) provides `worker_call()` and `worker_running()` helpers. Commands source this library via shell injection.
-
-**When to use:** Any command that needs to check worker status or query the impact map.
-
-**Trade-offs:** Adds a curl dependency for shell commands (curl is universally available). Abstracts port discovery (reads `.allclear/worker.port`) from individual commands.
-
-**Library pattern (`lib/worker-client.sh`):**
-```bash
-worker_running() {
-  local port_file=".allclear/worker.port"
-  [[ -f "$port_file" ]] || return 1
-  local port; port=$(cat "$port_file")
-  curl -s --max-time 1 "http://localhost:${port}/health" >/dev/null 2>&1
-}
-
-worker_call() {
-  local endpoint="$1"; shift
-  local port; port=$(cat ".allclear/worker.port" 2>/dev/null) || return 1
-  curl -sf --max-time 5 "http://localhost:${port}${endpoint}" "$@"
-}
+**Server-side implementation sketch:**
+```javascript
+fastify.get('/api/logs', async (request, reply) => {
+  const logFile = path.join(dataDir, 'logs', 'worker.log');
+  let raw;
+  try {
+    raw = fs.readFileSync(logFile, 'utf8');
+  } catch {
+    return reply.send({ lines: [] });
+  }
+  const { since, component, limit = '200' } = request.query;
+  const cap = Math.min(parseInt(limit, 10) || 200, 500);
+  let lines = raw.trim().split('\n').filter(Boolean).map(l => {
+    try { return JSON.parse(l); } catch { return null; }
+  }).filter(Boolean);
+  if (since) lines = lines.filter(l => l.ts > since);
+  if (component) lines = lines.filter(l => l.component === component);
+  return reply.send({ lines: lines.slice(-cap) });
+});
 ```
 
-### Pattern 4: SessionStart Hook with Conditional Worker Auto-Start
-
-**What:** The existing `session-start.sh` hook is modified to detect the `impact-map` section in `allclear.config.json`. If present and the worker is not already running, it starts the worker as a background process before injecting session context. The hook must remain non-blocking (exit 0 always, 10s timeout constraint).
-
-**When to use:** Auto-start on session open when the user has opted in to impact intelligence (presence of `impact-map` section in config = opt-in signal per design doc).
-
-**Trade-offs:** Worker startup adds latency to `session-start.sh`. Mitigation: start the worker in background (`node ... &`), don't wait for it to be ready. The hook's job is to fire the worker, not confirm it started. The first command that needs the worker checks health before calling the API.
-
-**Modified section in `session-start.sh`:**
-```bash
-# Auto-start worker if impact-map section present in config
-if jq -e '."impact-map"' allclear.config.json >/dev/null 2>&1; then
-  bash "${PLUGIN_ROOT}/scripts/worker-start.sh" 2>/dev/null || true
-  CONTEXT="${CONTEXT} Impact map available: /allclear:cross-impact, /allclear:map."
-fi
-```
-
-### Pattern 5: Graceful Degradation in cross-impact.md
-
-**What:** The redesigned `cross-impact` command checks three conditions in sequence: (1) is the worker running? (2) does the impact map have data? The command falls back to legacy grep-based scan if the worker is absent, and suggests `/allclear:map` if the worker is running but no data exists.
-
-**When to use:** Required for the v2.0 design's graceful degradation table (see design doc).
-
-**Trade-offs:** More complex command logic, but essential for backwards compatibility — users who have v2.0 installed but haven't run `/allclear:map` yet must not experience a broken cross-impact command.
+**Challenge:** `http.js` currently has no reference to `dataDir` — it only knows the path to the UI files. `dataDir` is known to `worker/index.js` which starts both the HTTP server and the logger. The `dataDir` value must be passed into `createHttpServer()` via the `options` object.
 
 ---
 
 ## Data Flow
 
-### Map Build Flow (`/allclear:map`)
+### HiDPI Canvas Fix Flow
 
 ```
-User invokes /allclear:map
+window.devicePixelRatio (browser API)
     |
     v
-commands/map.md: read config, discover linked repos, present to user
+graph.js resize() — called on init + window resize
     |
     v
-User confirms repo list → saved to allclear.config.json
+Sets canvas.width/height = container size * dpr
+Sets canvas.style.width/height = container CSS size
     |
     v
-map.md: ensure worker running → bash ${CLAUDE_PLUGIN_ROOT}/scripts/worker-start.sh
+renderer.js render() — called by force ticks + interactions
     |
     v
-map.md: POST /scan to worker HTTP API → scan-manager.js
+ctx.save() → ctx.scale(dpr, dpr) → existing translate/scale transform → draw → ctx.restore()
     |
     v
-scan-manager.js: spawns Claude agents into each linked repo
-    |
-    v
-Agents analyze codebase → return findings (services, connections, schemas)
-    |
-    v
-map.md: receives findings, presents ALL to user for confirmation
-    |
-    v
-User confirms → map.md: POST /scan/confirm to worker with confirmed findings
-    |
-    v
-db.js: snapshot existing DB (if history=true) → write new findings to SQLite
-    |
-    v
-chroma-sync.js: async vector sync (if ChromaDB available) — does not block response
-    |
-    v
-map.md: open browser to http://localhost:PORT for D3 graph UI
+All coordinates in state.transform and state.positions are CSS-pixel values (unchanged)
+All hit-testing in utils.js uses offsetX/offsetY (CSS pixels, unchanged)
 ```
 
-### MCP Impact Query Flow (agent-invoked)
+### Project Switcher Flow
 
 ```
-Claude agent decides to check impact before making a change
+graph.js init() completes for first project
     |
     v
-Agent calls MCP tool: impact_changed (or impact_query)
+graph.js calls project-switcher.js initProjectSwitcher(currentHash)
     |
     v
-mcp-server.js receives tool call via stdio MCP protocol
+project-switcher.js: fetch /projects → populate #project-select → show dropdown
     |
     v
-query-engine.js: reads .allclear/impact-map.db via better-sqlite3
+User selects different project from dropdown
     |
     v
-Recursive CTE query: walks connection graph transitively
+project-switcher.js onChange:
+  state.forceWorker.postMessage({ type: 'stop' })
+  state.forceWorker.terminate()
+  state.graphData = { nodes: [], edges: [], mismatches: [] }
+  state.positions = {}
+  state.selectedNodeId = null
+  state.blastNodeId = null
+  state.blastSet = new Set()
+  state.blastCache = {}
     |
     v
-Results classified: CRITICAL (removed endpoint) / WARN (schema change) / INFO (additive)
+update URL params (history.replaceState)
     |
     v
-mcp-server.js: returns structured result to agent via MCP protocol
+call graph.js loadProject(hash) — extracted from init()
     |
     v
-Agent incorporates impact assessment into its response
+fetch /graph?hash=... → map response → init positions → start new forceWorker → setupInteractions
 ```
 
-### Worker Lifecycle Flow
+### Log Terminal Polling Flow
 
 ```
-Claude Code session starts
+Browser tab open (log panel visible or collapsed — polling runs regardless)
     |
     v
-hooks/hooks.json: fires session-start.sh
+log-terminal.js: setInterval poll every 2000ms
     |
     v
-session-start.sh: detects impact-map in allclear.config.json?
-    |-- No  → skip worker start, no change to context
-    |-- Yes → scripts/worker-start.sh (background, non-blocking)
-                |
-                v
-              Check .allclear/worker.pid — stale? alive?
-                |-- Alive → exit 0 (already running)
-                |-- Absent/stale → start Node.js, write PID + port files
+fetch GET /api/logs?since=<lastTs>&component=<filter>&limit=100
     |
     v
-session-start.sh: includes impact commands in context string
+http.js /api/logs route:
+  read ~/.allclear/logs/worker.log (readFileSync)
+  parse JSON lines
+  filter by since + component
+  return { lines: [...] }
     |
     v
-Worker runs until: session ends, user runs worker-stop, process killed
+log-terminal.js: append new lines to #log-lines div
+  auto-scroll if user is at bottom
+  apply text search filter (client-side, CSS display toggle)
+    |
+    v
+lastTs = last line's ts value (for next poll's since param)
 ```
 
-### D3 Web UI Asset Serving
+### State Management
 
 ```
-User runs /allclear:map --view (or first map build completes)
+state.js (single shared object — existing pattern, unchanged)
     |
-    v
-map.md: verify worker running + map data exists
-    |
-    v
-map.md: open browser → http://localhost:PORT/
-    |
-    v
-http-server.js: serves worker/web/index.html as static file
-    |
-    v
-Browser loads D3.js, calls GET /graph to fetch dependency data
-    |
-    v
-http-server.js: routes /graph to query-engine.js → SQLite query
-    |
-    v
-Returns JSON graph: {nodes: [...services], edges: [...connections]}
-    |
-    v
-D3.js renders interactive force-directed graph
+    v (read/write by all modules)
+renderer.js    — reads graphData, positions, transform, selections
+interactions.js — writes transform, selectedNodeId, blastNodeId, isDragging, isPanning
+project-switcher.js — writes currentProject (new field); resets graphData, positions
+log-terminal.js — reads/writes logPanelOpen, logFilter, logComponentFilter (new fields)
+graph.js — writes everything during init; calls loadProject() on project switch
 ```
 
 ---
 
 ## Integration Points
 
-### New Component Boundaries
+### New Components
 
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `commands/map.md` → `scripts/worker-start.sh` | Shell script invocation via Bash tool | Command ensures worker running before scan |
-| `commands/map.md` → worker HTTP API | `curl` via `lib/worker-client.sh` helper | POST /scan, POST /scan/confirm, GET /versions |
-| `commands/cross-impact.md` → `lib/worker-client.sh` | Shell source | worker_running() and worker_call() helpers |
-| `commands/cross-impact.md` → `scripts/impact.sh` | Shell script invocation (fallback only) | Legacy grep scan when no worker/map |
-| `.mcp.json` → `worker/mcp-server.js` | Claude Code spawns as stdio MCP subprocess | Auto-starts with plugin; communicates via MCP protocol |
-| `scripts/session-start.sh` → `scripts/worker-start.sh` | Shell script invocation | Auto-start trigger; non-blocking (background) |
-| `worker/mcp-server.js` → `worker/query-engine.js` | Direct Node.js module import | Same process; no IPC needed |
-| `worker/http-server.js` → `worker/query-engine.js` | Direct Node.js module import | Same process |
-| `worker/query-engine.js` → SQLite | `better-sqlite3` synchronous API | WAL mode enabled; FTS5 virtual tables for search |
-| `worker/chroma-sync.js` → ChromaDB | HTTP client to `localhost:8000` (or configured host) | Async, non-blocking; absence = graceful skip |
-| Worker process → `.allclear/impact-map.db` | File system (project repo) | DB lives in project, not plugin cache |
-| Worker process → `.allclear/worker.pid` | File system | Written at start; read by worker-start.sh for dedup |
-| Worker process → `.allclear/worker.port` | File system | Written at startup; read by lib/worker-client.sh |
+| Component | File | Integrates With | Contract |
+|-----------|------|-----------------|---------|
+| `log-terminal.js` | `worker/ui/modules/log-terminal.js` | `index.html` (#log-panel DOM), `http.js` (/api/logs) | `initLogTerminal()` — called from graph.js after DOM ready |
+| `project-switcher.js` | `worker/ui/modules/project-switcher.js` | `index.html` (#project-select DOM), `state.js`, `graph.js` loadProject() | `initProjectSwitcher(currentHash)` — called from graph.js after first load completes |
+| `/api/logs` route | `worker/server/http.js` | `worker/index.js` (dataDir), log file at `~/.allclear/logs/worker.log` | GET with since/component/limit params; returns `{ lines: [] }` |
 
-### Modified Existing Boundaries
+### Modified Existing Components
 
-| Boundary | What Changes | Why |
-|----------|-------------|-----|
-| `hooks/hooks.json` → `scripts/session-start.sh` | session-start.sh adds worker auto-start | Worker must start early; session hook is the right trigger |
-| `commands/cross-impact.md` → `scripts/impact.sh` | No longer primary path; becomes fallback | v2.0 uses worker API; grep remains for graceful degradation |
-| `allclear.config.json` schema | Add `impact-map` section | Worker config (port, history, ChromaDB settings) |
-| `package.json` | Add Node.js worker dependencies | `better-sqlite3`, `express`, `@modelcontextprotocol/sdk` |
+| Component | What Changes | Why |
+|-----------|-------------|-----|
+| `state.js` | Add fields: `currentProject`, `logPanelOpen`, `logFilter`, `logComponentFilter` | Log terminal and project switcher need shared state |
+| `renderer.js` | Wrap draw sequence in dpr scale: `ctx.scale(dpr, dpr)` after save; remove `dpr` from canvas size logic (that stays in graph.js) | HiDPI fix — crisp rendering on Retina |
+| `interactions.js` | Tune wheel zoom: change `1.1 / 0.9` delta to softer values (e.g., `1.05 / 0.95`); optionally cap deltaY for trackpad | Zoom sensitivity — trackpads fire many small deltas |
+| `graph.js` | Extract bottom half of `init()` into `loadProject(hash)` function; call `initProjectSwitcher()` and `initLogTerminal()` after first load | Required for project switching without reload |
+| `index.html` | Add `#log-panel` section below `#canvas-container`; add CSS for collapsible panel; ensure `#project-select` wiring is ready | New layout elements |
+| `worker/server/http.js` | Add `GET /api/logs` route; accept `dataDir` in options object | Log terminal API endpoint |
+| `worker/index.js` | Pass `dataDir` to `createHttpServer()` via options | Allows http.js to know where to read log file |
 
-### External Service Integrations
+### Unchanged Components
 
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| ChromaDB | HTTP client from `worker/chroma-sync.js` to configured host:port | Optional; skip gracefully if not available; never block on it |
-| SQLite | `better-sqlite3` embedded in worker process | No separate process; DB file lives in project repo |
-| Claude agents (scan) | `scan-manager.js` spawns agents into each linked repo | Agent-based scanning; no external tools (tree-sitter, etc.) |
-| D3.js (web UI) | Bundled static assets in `worker/web/` | No CDN; fully offline; served by HTTP worker |
+| Component | Reason Unchanged |
+|-----------|-----------------|
+| `project-picker.js` | Still used for initial empty-URL flow — full-screen modal picker |
+| `detail-panel.js` | Node detail overlay — no changes needed |
+| `utils.js` | Hit testing and coordinate math — HiDPI fix does not affect CSS-pixel coordinate system |
+| `force-worker.js` | D3 simulation — runs in separate thread, position values are CSS pixels, unchanged |
+| `worker/index.js` | Only change: pass `dataDir` to `createHttpServer(options)` — one-line addition |
 
 ---
 
-## Build Order (v2.0 Phases)
+## Build Order (v2.1 Phases)
 
-Dependencies determine phase ordering. The MCP server must be buildable and testable independently of the HTTP server and scan manager.
+Dependencies determine phase order. The HiDPI fix and zoom tuning are independent of all new modules. The log terminal depends on the `/api/logs` server route. The project switcher depends on the `loadProject()` refactor in `graph.js`.
 
 ```
-Phase A — Storage Foundation (no dependencies):
-  worker/db.js                ← SQLite schema, WAL mode, FTS5 indexes, migrations
-  worker/query-engine.js      ← All read/write queries; depends only on db.js
-  (Tests: query accuracy, recursive CTEs, FTS5 search)
+Phase 1 — Canvas Rendering Fixes (no new modules, no server changes):
+  renderer.js      HiDPI dpr scaling in render loop
+  graph.js         dpr-aware resize() function
+  interactions.js  zoom wheel delta tuning
+  (Verify: renders crisp on Retina, zoom feels natural)
 
-Phase B — Worker Lifecycle (depends on: shell scripts, PID/port file pattern):
-  scripts/worker-start.sh     ← Start daemon, write PID + port files
-  scripts/worker-stop.sh      ← Stop daemon, clean up PID + port files
-  lib/worker-client.sh        ← Shell HTTP client helpers
-  (Tests: start/stop/stale-PID/already-running cases)
+Phase 2 — Log Terminal API (server side only):
+  worker/index.js  pass dataDir to createHttpServer options
+  worker/server/http.js  add GET /api/logs route
+  (Verify: curl /api/logs returns JSON lines from worker.log)
 
-Phase C — MCP Server (depends on Phase A):
-  worker/mcp-server.js        ← stdio MCP server; 5 tools; reads from query-engine
-  .mcp.json                   ← Plugin registration for Claude Code
-  (Tests: MCP tool responses, no-DB graceful fallback)
+Phase 3 — Log Terminal UI (depends on Phase 2):
+  index.html       add #log-panel HTML structure + CSS
+  state.js         add logPanelOpen, logFilter, logComponentFilter fields
+  log-terminal.js  new module: polling, rendering, filter controls
+  graph.js         call initLogTerminal() in init()
+  (Verify: panel shows, logs appear, filter works, collapse works)
 
-Phase D — HTTP Server + Web UI (depends on Phase A):
-  worker/http-server.js       ← Express routes: /graph, /impact, /service, /scan, /versions
-  worker/web/                 ← D3.js UI static assets
-  (Tests: REST API response shapes, D3 data contract)
-
-Phase E — Scan Manager (depends on Phase A, D):
-  worker/scan-manager.js      ← Agent orchestration, findings collection
-  worker/chroma-sync.js       ← Optional async ChromaDB sync
-  (Tests: mock agent responses, confirm/reject flow, snapshot creation)
-
-Phase F — Command Layer (depends on Phases B, C, D, E):
-  commands/map.md             ← /allclear:map: discovery → scan → confirm → persist → UI
-  commands/cross-impact.md    ← MODIFIED: worker-aware + legacy fallback path
-  (Tests: command flows with mocked worker API)
-
-Phase G — Session Hook Integration (depends on Phase B):
-  scripts/session-start.sh    ← MODIFIED: add worker auto-start conditional
-  (Tests: session hook with/without impact-map in config)
-
-Phase H — End-to-End Tests (depends on all phases):
-  Bats integration tests for complete scan + query flow
-  Manual smoke test: /allclear:map on real repo, verify D3 UI
+Phase 4 — Project Switcher (depends on Phase 1 completion, graph.js refactor):
+  graph.js         extract loadProject(hash) from init()
+  state.js         add currentProject field
+  project-switcher.js  new module: populate dropdown, handle change, call loadProject
+  graph.js         call initProjectSwitcher(hash) after first load
+  (Verify: dropdown shows all projects, switching reloads graph without page reload)
 ```
 
-**Critical path:** Phase A (storage) → Phase C (MCP server) → Phase F (commands). Everything else can be built in parallel once Phase A is done.
+**Critical path:** Phase 1 is independent and highest-value (affects all users immediately). Phase 2 must precede Phase 3. Phase 4 requires the `loadProject()` refactor — do Phase 1 first so the renderer is stable before refactoring graph.js.
+
+**Parallelization:** Phase 2 (server route) can be built in parallel with Phase 1 (canvas fixes) since they touch completely different files.
 
 ---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Running the Worker Inside a Hook Script
+### Anti-Pattern 1: Applying dpr Scale to Coordinate Math
 
-**What people do:** Start the Node.js worker process as a synchronous child in `session-start.sh` and wait for it to be ready.
+**What people do:** Multiply `state.transform.x/y` or hit-test coordinates by `devicePixelRatio` when adding HiDPI support.
 
-**Why it's wrong:** Hooks have a hard 10-second timeout. Node.js + SQLite startup (especially on first run with schema creation) can exceed this. A blocking hook start will time out and fail, leaving the worker not started and producing a confusing error in the session.
+**Why it's wrong:** `state.transform`, `state.positions`, `e.offsetX/offsetY`, and the force simulation all operate in CSS pixel space. `devicePixelRatio` is purely a canvas buffer size concern — it affects how many physical pixels the canvas draws into, not the logical coordinate system. Multiplying coordinates by dpr breaks hit testing, drag, and pan.
 
-**Do this instead:** Fire `node worker/http-server.js ... &` (background) from the hook. Write the PID file immediately. The first command that needs the worker calls `worker_running()` from `lib/worker-client.sh`, which polls with a short timeout (e.g., 3 retries at 500ms) to wait for the worker to be actually ready before calling the API.
+**Do this instead:** Apply `ctx.scale(dpr, dpr)` once after `ctx.save()` at the start of render. The existing `ctx.translate(transform.x, transform.y)` and `ctx.scale(transform.scale, transform.scale)` continue to work exactly as before. Only `canvas.width = container.clientWidth * dpr` changes; all coordinate math is untouched.
 
-### Anti-Pattern 2: Putting the SQLite DB in the Plugin Cache
+### Anti-Pattern 2: Reloading the Page for Project Switching
 
-**What people do:** Use `${CLAUDE_PLUGIN_ROOT}/.allclear/impact-map.db` for the database path.
+**What people do:** Set `window.location.href = '/?hash=' + newHash` on project select change.
 
-**Why it's wrong:** The plugin cache is immutable after installation. Writes will fail with a permission error or silently be lost on plugin update. Worse, the DB would be shared across all projects using the plugin, which breaks the per-project design.
+**Why it's wrong:** Causes a full page reload, losing scroll position, collapsing the log panel, and causing a flash of unstyled content. Also means the force simulation has to re-stabilize every time. With the modular ES module architecture in place, a clean state reset and re-init is straightforward.
 
-**Do this instead:** The DB always lives in `.allclear/` relative to the project's working directory (the repo where `/allclear:map` was invoked). The MCP server receives `ALLCLEAR_DB_PATH` as an environment variable resolved from the project CWD at startup time.
+**Do this instead:** Stop and terminate the existing forceWorker, clear graphData/positions/selections in state, call the extracted `loadProject(hash)` function. The page DOM (toolbar, panels, controls) stays intact.
 
-### Anti-Pattern 3: MCP Server Writing to stdout for Logging
+### Anti-Pattern 3: Embedding Log Polling in an Existing Module
 
-**What people do:** Add `console.log()` debug statements in `mcp-server.js` for troubleshooting.
+**What people do:** Add log polling to `graph.js` or `interactions.js` rather than creating a dedicated module.
 
-**Why it's wrong:** The MCP stdio transport uses stdout exclusively for JSON-RPC messages. Any non-MCP output on stdout corrupts the protocol, causing Claude Code to silently drop the connection or produce JSON parse errors.
+**Why it's wrong:** The existing modules have single, well-defined concerns (graph rendering, user interactions). Log polling introduces timer management, DOM manipulation for a new panel, and HTTP fetching that have nothing to do with those concerns. Mixing them makes both concerns harder to test and modify independently.
 
-**Do this instead:** All logging in `mcp-server.js` must go to stderr: `console.error()`. Use a log level flag controlled by an environment variable (e.g., `ALLCLEAR_MCP_DEBUG=1`). The HTTP server has no such constraint and can log freely.
+**Do this instead:** `log-terminal.js` as a standalone module. `graph.js` calls `initLogTerminal()` once, then owns nothing else about the log panel.
 
-### Anti-Pattern 4: One Port Hardcoded for All Projects
+### Anti-Pattern 4: WebSocket for Log Streaming
 
-**What people do:** Hardcode port 37888 everywhere and skip the `worker.port` file.
+**What people do:** Implement a WebSocket in the Fastify server for real-time log push, because "polling is inefficient."
 
-**Why it's wrong:** If a user is running two projects simultaneously (common for multi-repo work), both workers bind to the same port. The second worker silently fails to start, and commands in that project hit the wrong worker's data.
+**Why it's wrong:** This is a developer tool used by one person at a time. Polling every 2 seconds is imperceptible. WebSocket adds significant complexity: Fastify WebSocket plugin, connection lifecycle management, reconnect logic on the client. The log file is append-only and tiny. The polling approach is simpler, more debuggable, and more than sufficient.
 
-**Do this instead:** Port is configured per-project in `allclear.config.json` (default 37888 but overridable). The worker writes its actual bound port to `.allclear/worker.port` at startup. All shell commands read this file for the port, not the config. This also handles port collision: if 37888 is taken, the worker can try the next port and write that to the port file.
+**Do this instead:** `GET /api/logs?since=<ts>` polled every 2 seconds. The `since` timestamp ensures only new lines are fetched after the first load.
 
-### Anti-Pattern 5: Blocking the Scan on ChromaDB Availability
+### Anti-Pattern 5: Hardcoding dataDir in http.js
 
-**What people do:** Make the scan flow synchronous: scan → write SQLite → sync ChromaDB → return success.
+**What people do:** Read `os.homedir() + '/.allclear/logs/worker.log'` directly inside the `/api/logs` route handler in `http.js`.
 
-**Why it's wrong:** ChromaDB sync is slow and optional. Making `/allclear:map` wait for ChromaDB makes the common case (ChromaDB not running) feel broken. The design doc is explicit that SQLite is the source of truth.
+**Why it's wrong:** `http.js` is created by `worker/index.js` which already resolves `dataDir` from CLI args and environment. Hardcoding in `http.js` breaks the `--data-dir` CLI override (used in tests and non-standard installations), and duplicates the dataDir resolution logic.
 
-**Do this instead:** ChromaDB sync is always async. After confirmed findings are written to SQLite, fire `chroma-sync.js` in the background. The map command returns success immediately after SQLite write. ChromaDB sync completion is not reported unless there's an error.
+**Do this instead:** Pass `dataDir` in the `options` object to `createHttpServer(queryEngine, options)`. The route handler closes over `options.dataDir`. The existing `options` object already carries `port` and `resolveQueryEngine` — adding `dataDir` follows the established pattern.
 
 ---
 
@@ -568,30 +468,26 @@ Phase H — End-to-End Tests (depends on all phases):
 
 | Scale | Architecture Adjustments |
 |-------|--------------------------|
-| 2-5 linked repos | Default configuration works; single SQLite file; single worker per project |
-| 5-15 linked repos | Incremental scan (git diff) becomes important; full re-scan is slow; FTS5 search adequate |
-| 15-50 repos (large monorepo) | ChromaDB vector search strongly recommended for semantic queries; SQLite FTS5 may struggle with very large graphs; consider SQLite WAL checkpoint interval tuning |
-| Multiple simultaneous projects | Each project has its own `.allclear/` dir and worker on its own port; no sharing between projects |
+| Normal use (1 project, small graph) | All four features work with zero scaling concern |
+| Large log files (long-running worker, verbose logging) | `/api/logs` reads entire file on each poll — add tail behavior: read last N KB of file instead of full file. At normal log volume (INFO level), files stay small. |
+| Many projects in switcher | `/projects` returns all projects; dropdown renders all. No pagination needed for typical use (< 50 projects). |
 
 ### Scaling Priorities
 
-1. **First bottleneck:** Full scan latency. Scanning 10+ repos with agent-based analysis is slow. Incremental scan (Phase A: check `repo_state` table for last scanned commit) must be working before the product is usable for large setups.
-2. **Second bottleneck:** Graph query performance on large maps. Recursive CTEs with hundreds of services and thousands of connections can be slow. Ensure indexes on `connections.source_service_id`, `connections.target_service_id`, and `services.name` are created in Phase A.
+1. **First bottleneck:** Log file size for long-running workers. Mitigation: implement log rotation in `worker/index.js` (cap file at 1MB, rotate to `worker.log.1`) — but this is out of scope for v2.1. For now, read only the last 500 lines in the `/api/logs` route.
+2. **Second bottleneck:** Force simulation re-run on project switch. The simulation runs up to 300 ticks and is off-thread (Web Worker). For large graphs (100+ services), there is a visible settling period after switch. No mitigation needed in v2.1 — this is inherent to the force layout approach.
 
 ---
 
 ## Sources
 
-- Claude Code Plugins Reference (official): https://code.claude.com/docs/en/plugins-reference
-- MCP server plugin registration (official docs, `.mcp.json` convention): https://code.claude.com/docs/en/plugins-reference#mcp-servers
-- Claude Code MCP documentation: https://code.claude.com/docs/en/mcp
-- MCP Build Server guide: https://modelcontextprotocol.io/docs/develop/build-server
-- better-sqlite3 WAL mode and concurrency: https://github.com/WiseLibs/better-sqlite3
-- SQLite WAL documentation: https://sqlite.org/wal.html
-- ChromaDB client-server mode: https://docs.trychroma.com/docs/run-chroma/client-server
-- AllClear v2.0 design document: `.planning/designs/cross-impact-v2.md`
-- AllClear v1.0 codebase (inspected directly): `scripts/`, `hooks/`, `lib/`, `commands/`
+- Direct codebase inspection: `worker/ui/graph.js`, `worker/ui/modules/*.js`, `worker/ui/index.html`, `worker/ui/force-worker.js`
+- Direct codebase inspection: `worker/server/http.js`, `worker/index.js`
+- MDN Canvas API — devicePixelRatio and HiDPI: https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Optimizing_canvas#scaling_for_high_resolution_displays
+- Fastify static file plugin (@fastify/static): https://github.com/fastify/fastify-static
+- AllClear v2.0 architecture: `.planning/research/ARCHITECTURE.md` (v2.0 version)
+- AllClear PROJECT.md: `.planning/PROJECT.md`
 
 ---
-*Architecture research for: AllClear v2.0 Service Dependency Intelligence integration*
-*Researched: 2026-03-15*
+*Architecture research for: AllClear v2.1 UI Polish & Observability*
+*Researched: 2026-03-16*

@@ -471,3 +471,315 @@ D3 is a **browser-side** dependency, not a Node.js dependency. It is either load
 
 *Stack research addendum for: AllClear v2 — Service Dependency Intelligence (worker, SQLite, MCP, D3, ChromaDB)*
 *Researched: 2026-03-15*
+
+---
+---
+
+# Stack Addendum: v2.1 UI Polish & Observability
+
+**Milestone:** v2.1 — HiDPI canvas, zoom/pan tuning, project switcher, log terminal
+**Researched:** 2026-03-16
+**Confidence:** HIGH for HiDPI pattern and SSE (MDN + npm registry verified); HIGH for @xterm/xterm (npm registry, 2 months old); MEDIUM for zoom sensitivity (D3 docs verified, wheel delta tuning is underdocumented)
+
+This section covers only the **new** stack additions for v2.1. The existing v1 and v2 stacks remain unchanged. No new npm packages are required for HiDPI or zoom tuning — those are pure JavaScript patterns applied to the existing Canvas 2D context.
+
+---
+
+## New Capabilities Required
+
+| Capability | Approach | New npm dep? |
+|------------|----------|--------------|
+| HiDPI / Retina canvas | `devicePixelRatio` + `ResizeObserver` pattern in renderer.js | No |
+| Zoom/pan sensitivity tuning | Custom wheel delta multiplier in interactions.js | No |
+| Project switcher dropdown | DOM enhancement to existing `#project-select` in index.html | No |
+| Log terminal with real-time streaming | `@xterm/xterm` (browser) + `@fastify/sse` (server) | Yes — 2 packages |
+
+---
+
+## New npm Dependencies
+
+### Server-side: `@fastify/sse`
+
+| Library | Version | Purpose | Why Recommended |
+|---------|---------|---------|-----------------|
+| `@fastify/sse` | 0.4.0 | Server-Sent Events endpoint for log streaming | Official Fastify plugin; compatible with Fastify v5 (peer dep `^5.x`); accepts async generators and Node.js Readable streams natively. One new Fastify route (`GET /logs`) streams `~/.allclear/logs/worker.log` tail as SSE. No WebSocket overhead — SSE is one-directional (server → browser), exactly the right primitive for log tailing. |
+
+### Browser-side: `@xterm/xterm` + `@xterm/addon-fit`
+
+| Library | Version | Purpose | Why Recommended |
+|---------|---------|---------|-----------------|
+| `@xterm/xterm` | 6.0.0 | Terminal emulator for log display panel | Current stable (published 2 months ago, Jan 2026). Full ANSI/VT100 support means structured JSON logs with color codes render correctly. Powers VS Code's integrated terminal — battle-tested for this exact use case. Successor to the `xterm` package (5.3.0) which is no longer updated. |
+| `@xterm/addon-fit` | 0.11.0 | Resize xterm.js to fill its container | Required companion for responsive panels; call `fitAddon.fit()` on panel open/resize — without it the terminal has a fixed character grid that won't fill the log panel. |
+
+These are **browser-side only** and loaded via CDN `+esm` import in `index.html`. They do NOT go in the Node.js `dependencies` in `package.json`.
+
+---
+
+## Implementation Patterns
+
+### HiDPI Canvas Fix
+
+The existing `resize()` function in `graph.js` sets `canvas.width = container.clientWidth` — this maps one canvas pixel to one CSS pixel, which is blurry on Retina displays (devicePixelRatio = 2).
+
+**Fix — apply in `graph.js` resize function and propagate to renderer.js:**
+
+```javascript
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const cssWidth = container.clientWidth;
+  const cssHeight = container.clientHeight;
+
+  // Physical pixel dimensions (crisp on Retina)
+  canvas.width = Math.round(cssWidth * dpr);
+  canvas.height = Math.round(cssHeight * dpr);
+
+  // CSS size stays the same — browser scales down to fit
+  canvas.style.width = cssWidth + 'px';
+  canvas.style.height = cssHeight + 'px';
+
+  // Scale drawing context so all coordinates remain in CSS pixels
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  render();
+}
+```
+
+**Monitor devicePixelRatio changes** (user drags window between monitors):
+
+```javascript
+function watchDPR() {
+  const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+  mq.addEventListener('change', () => { resize(); watchDPR(); }, { once: true });
+}
+watchDPR();
+```
+
+**Critical:** After `ctx.scale(dpr, dpr)`, all drawing code uses CSS pixel coordinates. The existing `renderer.js` code requires no changes to coordinates — only the canvas setup changes.
+
+**Font size fix:** The existing renderer uses `${Math.round(11 / state.transform.scale)}px` for node labels. On HiDPI this renders at the correct logical size since the ctx is already scaled. However, the base font sizes (11px, 9px) are small — increase to 13px and 11px for legibility at normal zoom.
+
+### Zoom/Pan Sensitivity Tuning
+
+The existing wheel handler in `interactions.js` uses a fixed multiplier of `1.1` (zoom in) / `0.9` (zoom out). This is coarse — 10% per tick feels jumpy on trackpads where events fire rapidly.
+
+**Recommended approach:** Replace fixed multiplier with a continuous delta based on `e.deltaY` magnitude, matching the D3 zoom default formula:
+
+```javascript
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+
+  // D3-style wheel delta: normalize across deltaMode values, apply sensitivity factor
+  const SENSITIVITY = 0.001; // lower = slower zoom; D3 default is 0.002
+  const delta = -e.deltaY * (e.deltaMode === 1 ? 0.05 : e.deltaMode ? 1 : SENSITIVITY);
+  const factor = Math.pow(2, delta);  // exponential feels more natural than linear
+
+  const newScale = Math.min(5, Math.max(0.15, state.transform.scale * factor));
+  const ratio = newScale / state.transform.scale;
+  state.transform.x = e.offsetX - ratio * (e.offsetX - state.transform.x);
+  state.transform.y = e.offsetY - ratio * (e.offsetY - state.transform.y);
+  state.transform.scale = newScale;
+  render();
+}, { passive: false });
+```
+
+**Pan sensitivity:** Current pan is 1:1 pixel-to-pixel which is correct — no tuning needed.
+
+**Zoom bounds:** Lower minimum from `0.2` to `0.15` (allows seeing larger graphs) and keep maximum at `5`.
+
+### Project Switcher (Persistent Dropdown)
+
+The existing `#project-select` element is hidden and partially wired. The v2.1 goal is a working dropdown in the toolbar that switches projects without a page reload.
+
+**No new library needed.** The pattern:
+
+1. On load, `GET /projects` → populate `<select id="project-select">` options
+2. On `change`, fetch new graph data and reinitialize the force simulation in-place
+3. Persist selection to `localStorage` so refresh restores last project
+
+The existing `project-picker.js` module handles first-load selection. The toolbar dropdown is the persistent "already selected, switch it" control. Both can coexist — picker fires once on first load (no URL params), dropdown is always visible after.
+
+### Log Terminal Panel
+
+**Server side — new Fastify route in `server/http.js`:**
+
+```javascript
+import { createReadStream } from 'fs';
+import { createInterface } from 'readline';
+import { watch } from 'fs';
+
+fastify.get('/logs', { config: { sse: true } }, async (request, reply) => {
+  const logFile = path.join(os.homedir(), '.allclear', 'logs', 'worker.log');
+
+  // Stream existing lines, then tail for new ones
+  async function* logLines() {
+    // 1. Emit last N lines of existing log (backfill)
+    try {
+      const rl = createInterface({ input: createReadStream(logFile) });
+      const buffer = [];
+      for await (const line of rl) buffer.push(line);
+      for (const line of buffer.slice(-200)) yield { data: line };
+    } catch { /* log file may not exist yet */ }
+
+    // 2. Watch for appends
+    let resolve;
+    const watcher = watch(logFile, () => { if (resolve) resolve(); });
+    request.raw.on('close', () => watcher.close());
+
+    let position = 0;
+    try {
+      const stat = await fs.promises.stat(logFile);
+      position = stat.size;
+    } catch { /* ok */ }
+
+    while (!request.raw.destroyed) {
+      await new Promise(r => { resolve = r; setTimeout(r, 5000); }); // max 5s wait
+      const stream = createReadStream(logFile, { start: position });
+      const rl = createInterface({ input: stream });
+      for await (const line of rl) {
+        position += Buffer.byteLength(line + '\n');
+        yield { data: line };
+      }
+    }
+    watcher.close();
+  }
+
+  await reply.sse.send(logLines());
+});
+```
+
+**Browser side — `ui/modules/log-terminal.js` (new module):**
+
+```javascript
+import { Terminal } from 'https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/+esm';
+import { FitAddon } from 'https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0/+esm';
+
+let term = null;
+let fitAddon = null;
+let eventSource = null;
+let componentFilter = '';
+let searchFilter = '';
+
+export function openLogTerminal(container) {
+  if (!term) {
+    term = new Terminal({
+      theme: { background: '#0f1117', foreground: '#e2e8f0' },
+      fontSize: 12,
+      fontFamily: 'ui-monospace, "Cascadia Code", "Fira Code", monospace',
+      convertEol: true,
+      scrollback: 5000,
+    });
+    fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    term.open(container);
+    fitAddon.fit();
+  }
+
+  if (!eventSource) {
+    eventSource = new EventSource('/logs');
+    eventSource.onmessage = (e) => {
+      const line = e.data;
+      // Apply component/search filter before writing
+      if (shouldShow(line)) term.writeln(line);
+    };
+  }
+}
+
+function shouldShow(line) {
+  if (componentFilter && !line.includes(componentFilter)) return false;
+  if (searchFilter && !line.toLowerCase().includes(searchFilter)) return false;
+  return true;
+}
+
+export function setComponentFilter(value) {
+  componentFilter = value;
+}
+
+export function setSearchFilter(value) {
+  searchFilter = value.toLowerCase();
+}
+
+export function closeLogTerminal() {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+}
+
+export function resizeLogTerminal() {
+  if (fitAddon) fitAddon.fit();
+}
+```
+
+**xterm.js CSS** — required for correct rendering. Load via CDN link tag in `index.html`:
+
+```html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/css/xterm.css" />
+```
+
+---
+
+## Installation (v2.1 additions)
+
+```bash
+# Server-side only — one new npm dependency
+npm install @fastify/sse@^0.4.0
+
+# No npm install for xterm — loaded via CDN in index.html
+# CDN URLs (pin to specific versions for reproducibility):
+# @xterm/xterm:     https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/+esm
+# @xterm/addon-fit: https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.11.0/+esm
+# xterm CSS:        https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/css/xterm.css
+```
+
+---
+
+## Alternatives Considered
+
+| Recommended | Alternative | Why Not |
+|-------------|-------------|---------|
+| `@xterm/xterm` 6.0 via CDN | `xterm` 5.3.0 (legacy package) | `xterm` (without `@xterm/` scope) is the old package; no longer updated; 5.3.0 is the last release. The `@xterm/xterm` scoped package is the official continuation. |
+| `@xterm/xterm` via CDN | Bundle xterm into a static asset | Xterm ships both CJS and ESM; ESM CDN import from jsDelivr works directly in `<script type="module">` with no bundler. Bundling is only needed for offline/air-gapped deployments. |
+| `@fastify/sse` 0.4.0 | `fastify-sse-v2` 4.2.2 | `fastify-sse-v2` is a community plugin; `@fastify/sse` is the official Fastify-org plugin with Fastify 5 peer dep verified. Both work; official plugin preferred for long-term maintenance alignment. |
+| `@fastify/sse` + `fs.watch` | WebSocket (`ws` package) for log streaming | WebSockets are bidirectional; log tailing is server-to-client only. SSE is simpler (no handshake, native browser `EventSource` API, automatic reconnect), and `@fastify/sse` integrates cleanly with the existing Fastify instance. |
+| Native `fs.watch` + readline | `tail` npm package | The `tail` npm package (last meaningful update 2021) adds a dependency for functionality achievable with 20 lines of native Node.js. `fs.watch` + `readline` + position tracking is well-understood and sufficient. |
+| `window.matchMedia` + `{ once: true }` re-registration | `ResizeObserver` with `devicePixelContentBoxSize` | `devicePixelContentBoxSize` is the most precise modern API but has inconsistent support in older Chrome/Safari versions still in use. `matchMedia('(resolution: Xdppx)')` + `change` event is the MDN-documented pattern with broad compatibility. |
+
+---
+
+## What NOT to Add
+
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| WebGL renderer for xterm | `@xterm/addon-webgl` is available but xterm's Canvas renderer (default in v6) is sufficient for log display; WebGL renderer is for interactive PTY sessions with heavy rendering | Default Canvas renderer (built-in to `@xterm/xterm`) |
+| `ansi-to-html` npm package | AllClear worker logs are structured JSON, not raw ANSI sequences; xterm handles ANSI natively if color codes appear | Let xterm render ANSI directly |
+| `chokidar` for file watching | `chokidar` adds a dependency (and fsevents native on macOS) for something `fs.watch` already does adequately for a single log file | Native `fs.watch` |
+| `loglevel` or `pino` browser logger | The log terminal is a viewer, not a logger; no browser-side log library is needed | `EventSource` + xterm `writeln()` |
+| Virtualized log list (React-window, etc.) | xterm.js has a built-in `scrollback` buffer with configurable line count; no virtual list needed | `Terminal({ scrollback: 5000 })` |
+
+---
+
+## Version Compatibility (v2.1 additions)
+
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| `@fastify/sse` 0.4.0 | `fastify` ^5.x | Verified peer dep. Will NOT work with Fastify v4 — if ever downgraded, use `fastify-sse-v2` instead. |
+| `@xterm/xterm` 6.0.0 | Modern browsers (Chrome 89+, Firefox 85+, Safari 14+) | v6 removed the legacy Canvas renderer addon in favor of built-in Canvas; removed WebGL by default. ES module import requires a browser with native ESM support — all browsers in scope qualify. |
+| `@xterm/addon-fit` 0.11.0 | `@xterm/xterm` v4+ | Verified against v6.0.0 (same release cycle, same maintainer). |
+| `fs.watch` log tailing | Node.js 20+ (macOS, Linux) | `fs.watch` on macOS uses FSEvents (reliable); on Linux uses inotify (reliable). Does not work for network file systems — not a concern for `~/.allclear/logs/`. |
+
+---
+
+## Sources (v2.1 addendum)
+
+- `https://developer.mozilla.org/en-US/docs/Web/API/Window/devicePixelRatio` — devicePixelRatio property, matchMedia pattern for DPR change detection (HIGH confidence — MDN official docs)
+- `https://web.dev/articles/canvas-hidipi` — Three-step HiDPI canvas pattern: multiply dimensions, CSS scale back down, scale context (HIGH confidence — Google web.dev official article)
+- `npm info @fastify/sse` — version 0.4.0, peerDependencies: `{ fastify: '^5.x' }`, published 2026 (HIGH confidence — npm registry, verified 2026-03-16)
+- `npm info @xterm/xterm` — version 6.0.0, MIT license, published ~2 months ago (Jan 2026) (HIGH confidence — npm registry, verified 2026-03-16)
+- `npm info @xterm/addon-fit` — version 0.11.0, requires xterm.js v4+ (HIGH confidence — npm registry, verified 2026-03-16)
+- `https://cdn.jsdelivr.net/npm/@xterm/xterm@6.0.0/` — ESM package available at jsDelivr with `+esm` suffix (HIGH confidence — CDN directory listing, verified 2026-03-16)
+- `https://raw.githubusercontent.com/fastify/sse/main/README.md` — `reply.sse.send(asyncGenerator)` and `reply.sse.send(readableStream)` API; async generator pattern for streaming (HIGH confidence — official Fastify SSE README, fetched 2026-03-16)
+- `https://d3js.org/d3-zoom` — wheel delta formula `−event.deltaY * (deltaMode=1 ? 0.05 : deltaMode ? 1 : 0.002)`, `zoom.wheelDelta()` customization (MEDIUM confidence — official D3 docs; sensitivity tuning is documented but behavior varies by trackpad driver)
+- `https://newreleases.io/project/github/xtermjs/xterm.js/release/6.0.0` — xterm.js 6.0.0 breaking changes: Canvas renderer addon removed (built-in now), viewport/scrollbar changes (MEDIUM confidence — release announcement, not official changelog)
+
+---
+
+*Stack research addendum for: AllClear v2.1 — UI Polish & Observability (HiDPI canvas, zoom tuning, log terminal)*
+*Researched: 2026-03-16*

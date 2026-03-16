@@ -1,12 +1,11 @@
 # Feature Research
 
-**Domain:** Claude Code plugin — service dependency intelligence for multi-repo polyglot teams (v2.0 milestone)
-**Researched:** 2026-03-15
-**Confidence:** HIGH (design document verified, ecosystem patterns confirmed via multiple sources)
+**Domain:** Developer tool graph UI — UI polish and observability for v2.1 milestone
+**Researched:** 2026-03-16
+**Confidence:** HIGH (core patterns are well-established in developer tooling; D3 and Canvas APIs are stable)
 
-> **Scope note:** This document covers v2.0 new features only. v1.0 features (quality gate, format/lint hooks,
-> file guard, session context, pulse, deploy) are already shipped and are listed here only where they represent
-> dependencies for v2.0 features.
+> **Scope note:** This document covers v2.1 features only. v2.0 features (D3 Canvas graph, worker daemon,
+> detail panel, click/hover/drag interactions) are already shipped and are dependencies, not targets.
 
 ---
 
@@ -14,148 +13,110 @@
 
 ### Table Stakes (Users Expect These)
 
-Features a service dependency intelligence tool must have. Missing these = the product feels incomplete or
-untrustworthy for its stated purpose.
+Features expected in any production-quality developer tool graph UI. Missing these makes the tool feel
+like a prototype.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Service-to-service dependency graph (stored) | Any dependency intelligence tool must persist its graph; in-memory-only is not queryable by agents | HIGH | SQLite as source of truth; WAL mode for concurrent reads; `repos`, `services`, `connections` tables per design |
-| API-level impact analysis (not symbol grep) | Symbol grep is v1 quality — users building real multi-service systems need endpoint/schema-level analysis | HIGH | `connections` table with protocol, method, path; `fields` table for schema fields; replaces v1 grep approach |
-| Incremental scan (git diff driven) | Full rescans are too slow for daily use; any modern static analysis tool (Aikido, Designite) does incremental by default | HIGH | `repo_state` table tracking last_scanned_commit; git diff since that commit drives what to scan |
-| Graceful fallback to grep when map is absent | Users must not hit a hard error before they have built a map; existing v1 behavior must remain accessible | MEDIUM | `/allclear:cross-impact` checks for worker + map data; falls back to grep-based scan if absent; suggests `/allclear:map` |
-| User confirmation before persisting findings | Agent findings are hypotheses, not facts; persisting unreviewed data breaks trust | MEDIUM | ALL findings presented to user before SQLite write, regardless of agent confidence level; this is a hard requirement per design |
-| Breaking vs additive change classification | Removing an endpoint is categorically different from adding a new field; treating them the same produces false alarm fatigue | MEDIUM | CRITICAL for removed endpoints; WARN for changed field types; INFO for additive fields; drives report severity |
-| Transitive impact traversal | Direct consumers are obvious; transitive consumers (A calls B calls C) are the dangerous blind spot | HIGH | Recursive CTE or BFS graph walk; depth must be bounded; `direction` parameter (upstream/downstream/both) |
-| Worker process start/stop management | A localhost process that doesn't reliably start and stop erodes trust fast | MEDIUM | Presence of `impact-map` section in config implies auto-start; remove section to disable; PID file management |
-| Graph visualization (browser-based) | Every mature dependency tool (Grafana Service Dependency Graph, Port.io, ReSharper dependency diagrams) provides a visual; text-only output is insufficient for graph comprehension | HIGH | D3.js force-directed graph; nodes = services; edges = connections colored by protocol; rendered on `localhost:PORT` |
-| MCP tools for agent use | MCP is the de-facto standard (as of 2025) for connecting agents to tools; not exposing impact data via MCP means agents cannot autonomously query it | HIGH | `impact_query`, `impact_changed`, `impact_graph`, `impact_scan`, `impact_search` per design document |
+| HiDPI/Retina canvas rendering | On any Mac with Retina display (default since 2012) a blurry canvas immediately reads as "unfinished"; developer tools are used on high-DPI screens | LOW | Standard `devicePixelRatio` fix: multiply canvas width/height by ratio, scale context, set CSS dimensions to unscaled size; one-time setup on resize |
+| Zoom/pan with mouse wheel + drag | Every graph UI (Grafana, Kibana, network maps) supports wheel-to-zoom and drag-to-pan as baseline interactions; without them users feel stuck | LOW | Already partially working; tuning `d3.zoom().wheelDelta()` multiplier controls sensitivity; `scaleExtent([min, max])` prevents runaway zoom |
+| Fit-to-screen / reset view button | Any graph that can be panned off-screen needs a "reset" button; users expect one visible control to restore the initial centered view | LOW | `zoom.transform()` with `d3.zoomIdentity` + smooth transition via `selection.transition().duration(300)` |
+| Zoom level indicator or controls (+/-) | VS Code, Figma, every canvas tool shows current zoom %; optional +/- buttons provide discoverability for users who don't know wheel zooms | LOW | Read `d3.zoomTransform(element).k`, format as %, update on every zoom event; +/- buttons call `zoom.scaleBy()` |
+| Project switcher (no reload) | Any tool managing multiple projects needs in-place switching; forcing a page reload to change projects is a regression from typical SPA behavior | MEDIUM | `<select>` or custom dropdown; on change: fetch new project's data from worker REST API, re-render graph without page navigation; persist selection to `localStorage` |
+| Log/output panel accessible without leaving UI | Developer tools all provide observability (VS Code output panel, Chrome DevTools console, Webpack output); hiding logs behind file tail creates friction | MEDIUM | Collapsible panel at bottom or side; reads from worker's structured JSON log file via REST endpoint or EventSource; shows latest N lines on open |
 
 ### Differentiators (Competitive Advantage)
 
-Features that set AllClear v2.0 apart from the few tools that attempt service dependency intelligence.
+Features that elevate the UI from functional to developer-grade. Not strictly required but clearly
+differentiate a serious tool.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Agent-based scanning (no external parsers) | CodeLogic, Augment Code use language-specific parsers (tree-sitter, stack-graphs) that miss non-standard code; Claude agents read code like a human and handle any language/framework | HIGH | Spawn agents into each linked repo; agents extract endpoints, consumers, events, schemas and return structured findings; no tree-sitter dependency |
-| Protocol-aware connections (REST, gRPC, events, internal) | Most tools model "service calls service"; AllClear models the protocol, making Kafka/RabbitMQ event consumers visible alongside HTTP consumers | HIGH | `protocol` field on `connections` table: rest/grpc/kafka/rabbitmq/internal/sdk; impact analysis considers protocol semantics |
-| Field-level schema tracking | Breaking change tools (oasdiff, Buf) work on OpenAPI/proto files; AllClear discovers schemas from code regardless of whether an OpenAPI spec exists | HIGH | `schemas` and `fields` tables; `required` flag on fields; distinguishes field removal (breaking) from field addition (additive) |
-| Map versioning with snapshot history | Most dependency map tools have no concept of "what changed in the graph since last week"; AllClear snapshots SQLite files | MEDIUM | SQLite file copy to `.allclear/snapshots/`; `map_versions` table tracks metadata; enables graph diff queries |
-| ChromaDB optional semantic search | Keyword search (FTS5) misses "find services that handle user authentication" — semantic search finds them; optional so tool works without it | HIGH | ChromaDB local or remote; falls back to FTS5 if unavailable; falls back to direct SQL if FTS5 unavailable; three-tier fallback chain |
-| Mono-repo and multi-repo unified model | Most tools are mono-repo-only or multi-repo-only; AllClear models services, not repos — a mono-repo with 8 services and 4 separate repos with 2 services each are the same data model | MEDIUM | `repos` table is a container; `services` is the graph node; `repo.type` = mono/single but graph queries ignore this boundary |
-| First-run recommendations for MCP setup | New users don't know to add the MCP server to their Claude Code settings; AllClear prompts on first successful map build | LOW | After first `/allclear:map` completion, output instructions: add `allclear-mcp` to `.claude/settings.json`; one-time only |
-| `/allclear:map --view` shortcut | Users want to open the visualization without triggering a rescan; single flag skips straight to browser open | LOW | `--view` flag exits early if map data exists, opens browser; shows "no data yet" message if map is empty |
+| Log terminal with component filter | Most embedded log views show all output; filtering by component (scanner, mcp, api) lets users focus on the subsystem they care about — same pattern as VS Code Output Channel selector | MEDIUM | Worker logs include `component` field in structured JSON; filter as a `<select>` or button group that re-queries or hides rows client-side; avoids needing separate log channels |
+| Log terminal with live-tail toggle | VS Code terminal auto-scrolls to newest output; Grafana Loki live tail; ability to "pause" scroll while inspecting a specific log line is standard | LOW | Toggle boolean; when enabled, `scrollIntoView()` on each new log entry; when disabled, freeze scroll position; debounce renders to avoid jank on log bursts |
+| Log search (text filter) | Grep-style search in the log panel reduces time to find an error vs scrolling; used in lnav, Tailviewer, VS Code output filtering | LOW | Client-side substring or regex filter on already-loaded log lines; input debounced ~200ms; highlight matching text in results |
+| Canvas font size bump (larger throughout) | HiDPI fix alone makes the canvas sharp but node labels often remain too small at default zoom; explicit font size increase improves readability at all zoom levels | LOW | `ctx.font` on node labels, edge labels, tooltip text — increase base size from typical 10-11px to 13-14px; test at 1x and 2x DPI |
+| Smooth zoom transitions on +/- button clicks | Wheel zoom is instant; button-driven zoom that uses `transition().duration(250)` feels polished vs a jump — this is what Figma and browser zoom do | LOW | Pass `{duration: 250}` option to `zoom.scaleBy()` transition; wheel zoom stays instantaneous (transitions on wheel feel laggy) |
+| Persistent project selection across reloads | `localStorage` persistence so the last-viewed project is pre-selected on next open; removes the step of re-selecting every session | LOW | Write selected project ID to `localStorage` on change; read on page load; validate against available projects before applying |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Auto-persist findings without user review | Speed — skip the confirmation step | Agent findings are probabilistic; unreviewed data in the graph silently propagates wrong edges to all downstream impact queries; one bad edge corrupts the whole blast radius calculation | Always present findings to user; make the confirmation fast (show summary for high-confidence, ask questions for low-confidence) — not slow |
-| OpenAPI spec parsing as primary scanner | OpenAPI gives structured schema data reliably | Services without OpenAPI specs (gRPC without reflection, internal SDKs, event producers) are invisible; creates a false "complete" graph that misses connections | Use agent scanning as primary; if an OpenAPI spec is found, use it as supporting evidence to increase confidence, not as the only source |
-| Automatic re-scan on every file edit | Always-fresh graph | A full repo scan after every file save is prohibitively slow; hooks fire synchronously — a slow hook blocks Claude Code | Incremental scan on demand (after git commit range); re-scan suggestion at end of `/allclear:cross-impact` when map is stale |
-| External service catalog integration (Backstage, Port.io) | Teams using Backstage want AllClear to read from it | Adds external service dependency; violates the "no external deps" constraint; Backstage schemas change without notice | Remain self-contained; AllClear's own SQLite is the catalog; document export path for teams wanting to push to Backstage |
-| Git blame / ownership tracking in impact reports | "Who owns the affected service?" is a useful question | Requires GitHub/GitLab API access; violates no-external-deps constraint; ownership data goes stale | Scope to code and file paths only; let users look up owners through their own tooling |
-| Auto-fix of breaking changes | "Just update all consumers for me" is appealing | Auto-updating consumer code is semantically unsafe; Claude making unsupervised changes to multiple repos is high-risk | Surface the affected files and what needs changing; let the user or Claude agent decide per-file with full context |
-| Real-time graph streaming (WebSocket) | Live dependency visualization as code changes | WebSocket server adds significant complexity to the worker; the graph changes slowly (not on every keystroke); polling is sufficient for the use case | HTTP polling on 30s interval from D3 UI; `Last-Modified` header allows efficient conditional requests |
+| Full xterm.js terminal emulator | "Real terminal" with ANSI colors, cursor — used in VS Code, Hyper | AllClear's log panel shows structured JSON log output from a file, not an interactive shell. xterm.js is designed for PTY-backed interactive terminals; adding it here brings a ~300 KB dependency and PTY plumbing for zero additional value over a styled `<div>` with colored JSON rows | Styled log rows with JSON field highlighting; color-code log levels (ERROR=red, WARN=yellow, INFO=white); no xterm dependency needed |
+| WebSocket streaming for real-time logs | "Live updates feel more real-time" | WebSocket adds server-side connection management and reconnect logic to the worker. The log file already exists on disk; polling it every 1-2 seconds via a simple HTTP endpoint is indistinguishable to the user for this use case | HTTP polling with `EventSource` (SSE) as the ceiling; polling every 1-2s is imperceptible latency for a log viewer |
+| Multi-project side-by-side comparison | Show two project graphs at once | Doubles DOM/Canvas complexity, breaks the existing layout, and the use case (comparing two dependency graphs side by side) is rare. Users can switch between graphs in seconds | Single-project switcher with fast switching; visual comparison not supported in v2.1 |
+| Infinite zoom (no scale limits) | "I want to zoom in as much as I want" | Without `scaleExtent` limits, users zoom into individual pixels and lose orientation; zooming out too far makes all nodes invisible. Scale limits are a UX feature, not a restriction | Set `scaleExtent([0.1, 5])` — 10% to 500% zoom; covers all realistic use cases without getting lost |
+| Custom log level color themes / theming | "I want dark/light mode, custom colors" | Theming adds significant CSS scope for marginal benefit in a single-user localhost tool; colors can always be adjusted later | Use sensible defaults (dark background, red errors, yellow warnings, white info); single consistent theme for v2.1 |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Worker process (Node.js, localhost)]
-    └──required by──> [SQLite storage]
-    └──required by──> [HTTP REST API]
-    └──required by──> [MCP server (stdio)]
-    └──required by──> [D3 web UI]
+[HiDPI canvas fix]
+    (standalone — no dependencies on other v2.1 features)
+    └──enhances──> [Larger fonts throughout] (both address visual quality; do together)
 
-[SQLite storage + schema]
-    └──required by──> [Service graph build (/allclear:map)]
-    └──required by──> [Impact query (/allclear:cross-impact)]
-    └──required by──> [MCP tool: impact_query]
-    └──required by──> [MCP tool: impact_changed]
-    └──required by──> [Map versioning / snapshots]
-    └──enhances──> [ChromaDB vector sync (optional)]
+[D3 zoom behavior (existing v2.0)]
+    └──required by──> [Zoom sensitivity tuning]
+    └──required by──> [Fit-to-screen / reset button]
+    └──required by──> [Zoom level indicator]
+    └──required by──> [Smooth zoom transitions on button clicks]
 
-[Agent-based repo scanning]
-    └──required by──> [Service graph build]
-    └──required by──> [Incremental scanning]
-    └──feeds──> [User confirmation flow]
+[Worker REST API (existing v2.0)]
+    └──required by──> [Project switcher] (needs endpoint listing available projects)
+    └──required by──> [Log terminal panel] (needs endpoint serving log lines)
 
-[User confirmation flow]
-    └──required by──> [SQLite write (findings persistence)]
-    (hard gate — no writes bypass this)
+[Worker structured JSON log file (existing v2.0)]
+    └──required by──> [Log terminal panel]
+    └──required by──> [Component filter] (depends on `component` field in log entries)
 
-[Linked-repos config (v1.0, existing)]
-    └──required by──> [Repo discovery for /allclear:map]
-    └──enhances──> [/allclear:map — skips parent dir scan if config present]
+[Log terminal panel]
+    └──required by──> [Live-tail toggle] (toggle is a behavior of the panel)
+    └──required by──> [Log search] (search operates on panel content)
+    └──required by──> [Component filter] (filter operates on panel content)
 
-[Incremental scanning (git diff + repo_state)]
-    └──required by──> [Default scan mode after first map build]
-    └──depends on──> [repo_state table tracking last_scanned_commit]
-
-[Breaking change classification]
-    └──required by──> [Impact report severity levels (CRITICAL/WARN/INFO)]
-    └──depends on──> [field-level schema tracking]
-
-[Transitive graph traversal]
-    └──required by──> [Full blast radius calculation]
-    └──depends on──> [connections table with source/target service IDs]
-
-[ChromaDB sync (optional)]
-    └──enhances──> [impact_search MCP tool (semantic)]
-    └──enhances──> [/allclear:cross-impact query quality]
-    (graceful skip when unavailable — SQLite + FTS5 fallback)
-
-[MCP server]
-    └──enhances──> [/allclear:cross-impact] (agents can query without manual command)
-    └──enables──> [autonomous agent impact checking before code changes]
+[Project switcher]
+    └──enhances──> [Persistent project selection] (persist the switcher's value)
 ```
 
 ### Dependency Notes
 
-- **Worker is the load-bearing foundation**: All v2.0 features require the Node.js worker process. It must be phase 1 of the v2.0 build.
-- **SQLite schema locks in the data model**: The `connections`, `schemas`, and `fields` tables must be stable before agents start scanning. Schema migrations are painful post-facto.
-- **User confirmation is a hard gate, not a feature toggle**: Bypassing it for "speed" breaks the trust contract. Build it into the core write path from day one.
-- **Incremental scanning requires repo_state seeded on first full scan**: First scan is always full; subsequent scans use `last_scanned_commit` from `repo_state`. Do not attempt incremental before the first full scan completes.
-- **ChromaDB is optional but the fallback chain must be tested**: Three-tier fallback (ChromaDB → FTS5 → direct SQL) must work correctly; ChromaDB unavailability cannot crash the worker.
-- **MCP server depends on worker being registered in Claude Code settings**: After first map build, recommend user add the MCP server entry. This is a one-time manual step — no way to auto-register.
+- **HiDPI fix is fully independent**: Can be implemented and shipped first; touches only canvas setup code.
+- **Zoom tuning depends on existing d3.zoom**: No new infrastructure needed — only parameter adjustments to existing behavior.
+- **Log panel depends on a log-serving API endpoint**: The worker daemon writes structured JSON logs to file already; a simple REST endpoint to read the last N lines (or an SSE endpoint for streaming) is the only new backend work.
+- **Project switcher depends on a project-listing API endpoint**: Worker needs to expose `GET /projects` listing available project IDs; graph data endpoint already exists per project.
+- **All log panel sub-features (filter, search, live-tail) depend on the base panel existing first**: Implement the base panel before adding sub-features.
 
 ---
 
-## MVP Definition (v2.0)
+## MVP Definition (v2.1)
 
-### Launch With (v2.0 core)
+### Launch With (v2.1 core)
 
-Minimum viable product — validates the service dependency intelligence concept.
+Minimum for the milestone to deliver its stated goal: "production-quality with crisp rendering, usable
+zoom/pan, persistent project switching, and an embedded log terminal."
 
-- [ ] Worker process (Node.js) with HTTP server — all other v2.0 features are unreachable without this
-- [ ] SQLite schema (repos, services, connections, schemas, fields, map_versions, repo_state) — stable data model before any scanning
-- [ ] Agent-based scanning via `/allclear:map` — the primary user-facing build flow
-- [ ] User confirmation flow — hard gate before any SQLite write
-- [ ] Incremental scanning (git diff since last_scanned_commit) — required for daily usability; full rescan is too slow
-- [ ] `/allclear:cross-impact` redesign using graph queries — replaces grep scan when map data exists; keeps grep fallback
-- [ ] Transitive impact traversal — blast radius is the core value; direct-only impact is insufficient
-- [ ] Breaking change classification (CRITICAL/WARN/INFO) — differentiates removed endpoints from additive changes
-- [ ] D3 web UI (basic force-directed graph) — required for users to validate the map and understand the dependency structure
-- [ ] MCP server with `impact_query` and `impact_changed` tools — enables agents to check impact autonomously before making changes
+- [ ] HiDPI canvas fix + larger fonts — crisp rendering on all developer machines
+- [ ] Zoom/pan sensitivity tuning + `scaleExtent` limits — usable wheel zoom without runaway behavior
+- [ ] Fit-to-screen reset button — escape hatch when graph is panned off-screen
+- [ ] Project switcher dropdown — switch repos without page reload; persist selection to `localStorage`
+- [ ] Log terminal panel (collapsible) — view worker output without leaving the UI; shows last N lines on open
 
-### Add After Validation (v2.x)
+### Add After Validation (v2.1.x)
 
-Features to add once core graph intelligence is working and validated by real usage.
+Features to add once the base panel is confirmed working.
 
-- [ ] `impact_graph` MCP tool (subgraph for a service) — add when users ask for service-scoped views
-- [ ] `impact_search` MCP tool + ChromaDB sync — add when users need semantic search across the map
-- [ ] Map snapshot diffing (graph changes since last week) — add when users ask "what changed in our dependencies?"
-- [ ] D3 UI enhancements: node filtering by protocol, zoom, service detail pane — add after basic visualization is validated
-- [ ] `impact_scan` MCP tool (trigger scan from agent) — add when agents need to self-trigger rescans
+- [ ] Live-tail toggle in log panel — triggered when users complain that auto-scroll disrupts inspection
+- [ ] Component filter in log panel — add when log volume is high enough that filtering is needed
+- [ ] Log search — add when users ask "how do I find the error that just happened?"
+- [ ] Zoom level indicator (% display) — add for discoverability; low effort once zoom is tuned
 
-### Future Consideration (v2.x+)
+### Future Consideration (v2.2+)
 
-Features to defer until v2.0 core proves the value proposition.
-
-- [ ] Graph export (JSON, dot format for Graphviz) — defer until users ask for external tooling integration
-- [ ] Snapshot comparison UI (visual graph diff) — defer; SQLite file diff is sufficient for MVP
-- [ ] ChromaDB cloud mode (remote host) — defer; local ChromaDB covers the semantic search use case; cloud mode adds config complexity
+- [ ] Smooth animated zoom transitions on +/- buttons — polish, not blocking
+- [ ] Log export (copy to clipboard, download .log) — add if users need to share logs
 
 ---
 
@@ -163,68 +124,51 @@ Features to defer until v2.0 core proves the value proposition.
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Worker process + HTTP API | HIGH | MEDIUM | P1 — foundation |
-| SQLite schema | HIGH | MEDIUM | P1 — foundation |
-| Agent-based scanning + `/allclear:map` | HIGH | HIGH | P1 — primary user interface |
-| User confirmation flow | HIGH | MEDIUM | P1 — trust requirement |
-| Incremental scanning | HIGH | MEDIUM | P1 — daily usability |
-| Transitive impact traversal | HIGH | HIGH | P1 — blast radius is the core value |
-| Breaking change classification | HIGH | MEDIUM | P1 — CRITICAL/WARN/INFO report |
-| `/allclear:cross-impact` redesign | HIGH | MEDIUM | P1 — existing command gets new backend |
-| D3 web UI (basic) | HIGH | HIGH | P1 — required for map validation |
-| MCP server (impact_query, impact_changed) | HIGH | MEDIUM | P1 — agent autonomy |
-| Map versioning / snapshots | MEDIUM | LOW | P2 |
-| ChromaDB sync + impact_search | MEDIUM | HIGH | P2 |
-| D3 UI enhancements (filter, zoom, detail) | MEDIUM | MEDIUM | P2 |
-| impact_scan MCP tool | MEDIUM | LOW | P2 |
-| impact_graph MCP tool | MEDIUM | MEDIUM | P2 |
-| Graph export (JSON/dot) | LOW | LOW | P3 |
-| Snapshot comparison UI | LOW | HIGH | P3 |
+| HiDPI/Retina canvas fix | HIGH | LOW | P1 — visual regression on every Mac |
+| Larger fonts throughout | HIGH | LOW | P1 — pair with HiDPI fix |
+| Zoom sensitivity tuning | HIGH | LOW | P1 — usability baseline |
+| Fit-to-screen reset button | HIGH | LOW | P1 — escape hatch |
+| Project switcher (no reload) | HIGH | MEDIUM | P1 — stated milestone goal |
+| Log terminal panel (base) | HIGH | MEDIUM | P1 — stated milestone goal |
+| Live-tail toggle | MEDIUM | LOW | P2 — behavior enhancement |
+| Component filter | MEDIUM | LOW | P2 — depends on log volume |
+| Log search | MEDIUM | LOW | P2 — convenience feature |
+| Zoom level indicator | LOW | LOW | P2 — discoverability |
+| Smooth button zoom transitions | LOW | LOW | P3 — polish only |
+| Persistent project selection | MEDIUM | LOW | P1 — pairs with project switcher |
 
 **Priority key:**
-- P1: Must have for v2.0 launch
-- P2: Should have, add when P1 is validated
-- P3: Nice to have, future consideration
+- P1: Required to meet the v2.1 milestone goal
+- P2: Should add in same milestone pass if time allows
+- P3: Nice to have, v2.2+
 
 ---
 
 ## Competitor Feature Analysis
 
-Tools in the service dependency intelligence space, verified via research.
+Reference implementations in the developer tool space for each feature area.
 
-| Feature | CodeLogic MCP server | Augment Code microservices analysis | Grafana Service Dependency Graph | AllClear v2.0 |
-|---------|---------------------|--------------------------------------|----------------------------------|---------------|
-| MCP tool interface | Yes (codelogic-method-impact, codelogic-database-impact) | No | No | Yes (5 tools) |
-| Agent-based scanning | No (requires CodeLogic server, commercial) | No (static analysis) | No (telemetry-based) | **Yes — Claude agents, no external deps** |
-| No external service dependency | No — requires CodeLogic cloud | No — requires Augment Code platform | No — requires Grafana stack | **Yes — SQLite local only** |
-| Protocol-aware connections | No (code-only, no event bus) | Partial (HTTP only) | Yes (telemetry-based) | **Yes — REST/gRPC/events/internal** |
-| Field-level schema tracking | Partial (database column level) | No | No | **Yes — `fields` table with required flag** |
-| Breaking vs additive classification | No | Partial | No | **Yes — CRITICAL/WARN/INFO** |
-| Transitive impact | Yes | Yes | Yes | Yes |
-| Incremental scanning | N/A (static at scan time) | No | N/A (real-time telemetry) | **Yes — git diff driven** |
-| Map versioning / history | No | No | Limited (Grafana state) | **Yes — SQLite snapshots** |
-| Graph visualization | No (IDE only) | No | Yes (Grafana panel) | **Yes — D3.js localhost** |
-| User confirmation flow | No | No | No | **Yes — hard gate before persistence** |
-| Works without network access | No | No | No | **Yes — all local** |
-| Open source | No | No | Yes (plugin) | Yes (Apache 2.0) |
+| Feature | VS Code | Grafana | Chrome DevTools | AllClear v2.1 approach |
+|---------|---------|---------|-----------------|------------------------|
+| Embedded log/output panel | Output panel, collapsible, per-channel filter | Log browser panel with live tail | Console tab with level filter | Collapsible bottom panel, component filter, live-tail toggle |
+| Project switcher | Workspace / folder switcher in title bar | Dashboard picker in top nav | N/A | `<select>` in header bar; `localStorage` persistence |
+| HiDPI canvas | N/A (DOM-based) | Canvas panels use devicePixelRatio | DevTools canvas uses devicePixelRatio | Standard `devicePixelRatio` multiply + CSS scale |
+| Zoom controls | Ctrl+= / Ctrl+- with % indicator | Scroll to zoom + magnifying glass button | N/A (DOM zoom) | Wheel zoom + +/- buttons + fit-to-screen; `scaleExtent([0.1, 5])` |
 
 ---
 
 ## Sources
 
-- [cross-impact-v2.md design document](../../.planning/designs/cross-impact-v2.md) — HIGH confidence (primary source)
-- [Designing MCP tools for agents — Datadog Engineering](https://www.datadoghq.com/blog/engineering/mcp-server-agent-tools/) — HIGH confidence (first-hand implementation lessons)
-- [CodeLogic MCP server — GitHub](https://github.com/CodeLogicIncEngineering/codelogic-mcp-server) — HIGH confidence (direct inspection)
-- [MCP Apps — modelcontextprotocol.io blog](https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/) — HIGH confidence (official MCP blog)
-- [Augment Code microservices impact analysis](https://www.augmentcode.com/tools/microservices-impact-analysis) — MEDIUM confidence (vendor marketing)
-- [Breaking change detection — Buf Docs](https://buf.build/docs/breaking/) — HIGH confidence (official Buf documentation)
-- [oasdiff breaking changes — Nordic APIs](https://nordicapis.com/using-oasdiff-to-detect-breaking-changes-in-apis/) — MEDIUM confidence
-- [Incremental analysis — SD Times](https://sdtimes.com/devops/demystifying-differential-and-incremental-analysis-for-static-code-analysis-within-devops/) — MEDIUM confidence
-- [Blast Radius impact analysis tool](https://blast-radius.dev/) — MEDIUM confidence (pattern reference)
-- [Axon graph-powered code intelligence — GitHub](https://github.com/harshkedia177/axon) — MEDIUM confidence (pattern reference for blast radius)
-- [Grafana Service Dependency Graph plugin](https://grafana.com/grafana/plugins/novatec-sdg-panel/) — MEDIUM confidence
-- [Human-in-the-loop AI agents 2025 — Fast.io](https://fast.io/resources/ai-agent-human-in-the-loop/) — MEDIUM confidence (confirmation flow patterns)
+- [D3 d3-zoom documentation — d3js.org](https://d3js.org/d3-zoom) — HIGH confidence (official docs)
+- [d3-zoom GitHub repository](https://github.com/d3/d3-zoom) — HIGH confidence (source + README)
+- [MDN — Window.devicePixelRatio](https://developer.mozilla.org/en-US/docs/Web/API/Window/devicePixelRatio) — HIGH confidence (official Web API docs)
+- [Kirupa — Canvas HiDPI/Retina](https://www.kirupa.com/canvas/canvas_high_dpi_retina.htm) — MEDIUM confidence (tutorial, well-known source)
+- [VS Code Panel UX Guidelines](https://code.visualstudio.com/api/ux-guidelines/panel) — HIGH confidence (official VS Code extension docs)
+- [VS Code Terminal Basics](https://code.visualstudio.com/docs/terminal/basics) — HIGH confidence (official docs)
+- [D3 Zoom and Pan — d3indepth.com](https://www.d3indepth.com/zoom-and-pan/) — MEDIUM confidence (tutorial)
+- [Logdy — Web-based real-time log viewer](https://logdy.dev/) — MEDIUM confidence (product, pattern reference)
+- [xterm.js — xtermjs.org](https://xtermjs.org/) — HIGH confidence (official docs; used to confirm xterm is overkill for this use case)
 
 ---
-*Feature research for: AllClear v2.0 — Service Dependency Intelligence milestone*
-*Researched: 2026-03-15*
+*Feature research for: AllClear v2.1 — UI Polish & Observability*
+*Researched: 2026-03-16*

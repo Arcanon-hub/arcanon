@@ -1,232 +1,200 @@
 # Project Research Summary
 
-**Project:** AllClear — Claude Code Plugin (v2.0 Service Dependency Intelligence)
-**Domain:** Claude Code plugin — quality gates, cross-repo checks, auto-format/lint hooks, and service dependency graph intelligence
-**Researched:** 2026-03-15
+**Project:** AllClear v2.1 — UI Polish & Observability
+**Domain:** Canvas-based developer tool graph UI — HiDPI rendering, zoom/pan controls, log terminal, project switcher
+**Researched:** 2026-03-16
 **Confidence:** HIGH
 
 ## Executive Summary
 
-AllClear v2.0 is a Claude Code plugin that evolves from v1.0 shell-based quality gates and hooks into a full service dependency intelligence layer for multi-repo polyglot teams. The v2.0 milestone centers on a locally-running Node.js worker process that builds and maintains a SQLite-backed dependency graph by spawning Claude agents to scan linked repos, then exposes that graph via a stdio MCP server (for agent-autonomous impact checking) and a D3.js web UI (for human visualization). The recommended approach is to layer the new capabilities directly onto the existing plugin structure — `worker/` alongside existing `scripts/`, `hooks/`, and `commands/` — with the worker acting as the shared service that all new commands and MCP tools delegate to.
+AllClear v2.1 adds four production-quality features to the already-shipped v2.0 D3 Canvas graph: HiDPI/Retina rendering, tuned zoom/pan controls, an embedded log terminal panel, and a persistent project switcher. Research was conducted against the live codebase (all UI modules inspected directly) and against official MDN, D3, Fastify, and npm sources. The recommended approach is a phased build ordered by dependency: canvas rendering fixes first (independent, highest value), then the log terminal server route, then the log terminal UI, and finally the project switcher which requires a `graph.js` refactor. Every feature has a well-understood implementation pattern; no novel design work is required.
 
-The key architectural insight is that the worker must be the first thing built. Every v2.0 capability — MCP tools, graph visualization, incremental scanning, impact queries — is only reachable through the worker. This makes Phase 1 (storage foundation: SQLite schema and query engine) and Phase 2 (worker lifecycle: PID file management, readiness probes) the critical path. Everything else parallelizes once those two phases are solid. Agent-based scanning with no tree-sitter or external parsers is the primary differentiator over competitors like CodeLogic and Augment Code, and a user-confirmation hard gate before any SQLite write is the trust mechanism that makes probabilistic agent findings safe to act on.
+The two highest-risk areas are the project switcher teardown and the SSE log stream. The project switcher requires refactoring all anonymous event handler functions in `setupInteractions()` to named functions before the feature can work correctly — skipping this causes duplicate listeners, double-firing clicks, and two simultaneous Web Workers. The SSE log endpoint requires an explicit `request.raw.on('close')` cleanup handler or the worker process will leak memory across development sessions. Both risks are well-documented and preventable; they are non-obvious the first time but each has a concrete 3-5 line fix.
 
-The top risks are operational rather than architectural: worker process orphaning (no PID file), MCP stdout pollution (protocol corruption), ChromaDB hard failures (must be fully async), and agent hallucinations entering the graph unchecked (confirmation UX must group by confidence to prevent rubber-stamping). All are preventable by building the right primitives first. The one confirmed external limitation is that background subagents cannot access MCP tools (Claude Code issue #13254) — agent scanning must run in the foreground.
+The v2.1 milestone deliberately avoids over-engineering. The log terminal uses HTTP polling (not WebSockets), the graph UI uses vanilla JS + D3 (no React, no bundler), and the worker is a single Node.js process (no pm2, no daemon manager). These constraints are load-bearing: they keep the install story simple, keep the worker process inspectable, and avoid toolchain dependencies that complicate the plugin distribution model. Every recommended approach stays consistent with these constraints.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The plugin continues to use the official Claude Code plugin format: `plugin.json` in `.claude-plugin/`, skills in `skills/<name>/SKILL.md`, and hooks configured via `hooks/hooks.json`. Shell and jq remain the right runtime for hooks and wrapper scripts; bats-core 1.13.0 remains the test framework. The v2.0 additions raise the Node.js minimum to 20+ (driven by `better-sqlite3` 12.x and Fastify 5.x).
+The existing v2.0 stack (better-sqlite3, Fastify 5, @modelcontextprotocol/sdk, D3 v7, Node.js 20+) requires only two new npm packages for v2.1. `@fastify/sse` (0.4.0, Fastify 5 compatible) handles the SSE log streaming endpoint. `@xterm/xterm` (6.0.0) and `@xterm/addon-fit` (0.11.0) are loaded browser-side via CDN — they are not Node.js dependencies. The HiDPI canvas fix, zoom tuning, and project switcher require zero new packages; they are pure JavaScript changes to existing modules.
 
 **Core technologies:**
-- `better-sqlite3` 12.8.0 — synchronous SQLite with WAL + FTS5; single connection, single thread eliminates WAL checkpoint starvation
-- `fastify` 5.8.2 — HTTP server for REST API and static D3 UI; 2.4x faster than Express; built-in schema validation; requires Node.js 20+
-- `@modelcontextprotocol/sdk` 1.27.1 — official Anthropic TypeScript SDK; `McpServer` + `StdioServerTransport` is the canonical stdio MCP server pattern
-- `d3` 7.9.0 — force-directed graph visualization as a static single-file HTML page; no build step; Canvas renderer required for graphs above 30 nodes
-- `chromadb` 3.3.3 — optional vector search client (v3 is a complete rewrite; 70% smaller than v2); three-tier fallback chain: ChromaDB → FTS5 → direct SQL
-- `${CLAUDE_PLUGIN_ROOT}` — mandatory runtime path variable for all hook and script references; hardcoded paths break after plugin cache installation
+- `@fastify/sse` 0.4.0: SSE endpoint for log streaming — official Fastify plugin, Fastify v5 peer dep verified, async generator API
+- `@xterm/xterm` 6.0.0 (CDN only): Terminal emulator for log display — battle-tested (powers VS Code's terminal), full ANSI support, Canvas renderer built-in; use scoped `@xterm/xterm`, not legacy unscoped `xterm` (5.3.0, abandoned)
+- `@xterm/addon-fit` 0.11.0 (CDN only): Resize xterm to fill its container — required companion, same release cycle as xterm
+- `window.devicePixelRatio` + `ctx.scale(dpr, dpr)`: HiDPI canvas fix — zero dependencies, MDN-documented three-step pattern, backwards-compatible at dpr=1
+- `e.ctrlKey` wheel event check: Trackpad pinch vs two-finger scroll detection — browser convention, widely supported in Chrome/Safari/Firefox
 
-**Critical version requirements:**
-- Node.js 20+ is the v2.0 minimum (better-sqlite3 12.x and Fastify 5.x both require it; v1.0 required 18+)
-- Claude Code 1.0.33+ for plugin system support
-- `skills/` format only for new skills — `commands/` is legacy and does not support autonomous invocation
+**Critical version notes:**
+- Node.js 20+ required (established in v2.0; driven by better-sqlite3 12.x and Fastify 5.x)
+- `@fastify/sse` 0.4.0 requires Fastify v5 — will not work with Fastify v4
+- The scoped `@xterm/xterm` package is the current package; the unscoped `xterm` package stopped updates at 5.3.0
 
 ### Expected Features
 
-AllClear v2.0 features are well-defined by the internal design document (`cross-impact-v2.md`). The feature dependency tree is clear: the worker is the load-bearing foundation; the SQLite schema must be stable before any scanning; the user confirmation gate is a hard constraint, not a toggle.
+Research confirms all four v2.1 features are standard patterns in developer tooling, with reference implementations in VS Code, Grafana, Chrome DevTools, and Figma. Missing HiDPI rendering is an immediate visual regression on any Mac (Retina display default since 2012); it reads as "unfinished" to any developer audience.
 
-**Must have (table stakes for v2.0 launch):**
-- Worker process with HTTP server — all other v2.0 features are unreachable without it
-- Stable SQLite schema before scanning begins — `repos`, `services`, `connections`, `schemas`, `fields`, `map_versions`, `repo_state` tables
-- Agent-based scanning via `/allclear:map` — primary user-facing build flow; no external parser dependencies
-- User confirmation gate (hard, not optional) — ALL findings presented before any SQLite write, regardless of agent confidence
-- Incremental scanning (git diff since `last_scanned_commit`) — full re-scans are too slow for daily use; this is required at launch
-- Transitive impact traversal — blast radius is the core value; direct-only impact is insufficient
-- Breaking change classification (CRITICAL/WARN/INFO) — removed endpoints vs additive changes require different severity
-- `/allclear:cross-impact` redesign — uses worker graph queries when map exists; falls back to legacy grep scan when absent
-- D3 web UI (basic force-directed graph) — required for users to validate the dependency map visually
-- MCP server with `impact_query` and `impact_changed` tools — enables agents to check impact autonomously
+**Must have (v2.1 table stakes):**
+- HiDPI/Retina canvas rendering — blurry canvas on any Mac reads as unfinished; standard 5-line fix
+- Zoom/pan with mouse wheel and drag — every graph tool (Grafana, Kibana, network maps) supports this as a baseline
+- Fit-to-screen / reset view button — escape hatch required for any pan-able canvas
+- Project switcher without page reload — forcing a full reload to change projects is a regression from SPA behavior
+- Log terminal panel (collapsible) — developer tools always surface observability; hiding logs behind `tail -f` creates friction
 
-**Should have (competitive differentiators):**
-- Protocol-aware connections: REST, gRPC, Kafka/RabbitMQ events, internal SDK — models the actual dependency, not just "service calls service"
-- Field-level schema tracking — discovers schemas from code regardless of whether an OpenAPI spec exists
-- Map versioning with snapshot history — SQLite file copy to `.allclear/snapshots/`; enables graph diff queries
-- ChromaDB optional semantic search — FTS5 keyword search misses "find services handling authentication"; semantic finds them
-- Mono-repo and multi-repo unified model — services are the graph nodes; `repos` is just a container
+**Should have (competitive):**
+- Live-tail toggle — VS Code and Grafana Loki pattern; prevents auto-scroll from disrupting log inspection
+- Component filter in log panel — narrows to scanner/mcp/api subsystem, same as VS Code Output Channel selector
+- Log search (text filter) — grep-style; add when users ask "how do I find the error that just happened?"
+- Persistent project selection via `localStorage` — eliminates re-selection friction every session
+- Zoom level indicator (%) — discoverability; low effort once zoom is tuned
 
-**Defer to v2.x (post-validation):**
-- `impact_graph` and `impact_search` MCP tools
-- D3 UI enhancements (protocol filtering, zoom, node detail pane)
-- Snapshot comparison UI (visual graph diff)
-- Graph export in JSON or dot format
-- ChromaDB cloud mode
-
-**Anti-features to explicitly reject:**
-- Auto-persist findings without user review — agent findings are probabilistic; unreviewed data corrupts blast radius calculations
-- Automatic re-scan on every file save — hooks fire synchronously; a slow hook blocks Claude Code
-- OpenAPI spec parsing as primary scanner — misses gRPC, internal SDKs, event producers; creates a false "complete" graph
-- Real-time WebSocket graph streaming — HTTP polling with `Last-Modified` is sufficient; WebSocket adds complexity for no gain
+**Defer to v2.2+:**
+- Smooth animated zoom transitions on +/- buttons — polish only, not blocking
+- Log export (copy/download) — add if users need to share logs
+- Multi-project side-by-side comparison — rare use case, doubles DOM/Canvas complexity
+- Full xterm PTY integration — overkill for structured JSON log viewing; 300KB+ dependency for zero additional value over a styled div
 
 ### Architecture Approach
 
-The v2.0 architecture adds a Worker Layer (Node.js process) and MCP Layer (stdio server) to the existing plugin structure, while keeping the existing Event Layer (hooks) and Support Layer (shell libs) unchanged. The worker runs as a project-scoped background daemon managed by PID file; the MCP server runs as a stdio subprocess spawned by Claude Code via `.mcp.json`. Both share the same SQLite connection and query engine within a single Node.js process. The database and all worker state live in `.allclear/` in the user's project repo, not in the plugin cache (which is immutable after installation).
+The v2.1 additions follow the existing one-concern-per-module pattern already established in the codebase. Two new modules are created (`log-terminal.js`, `project-switcher.js`), five existing modules are modified (`state.js`, `renderer.js`, `interactions.js`, `graph.js`, `index.html`), and one server route is added to `http.js`. No changes to the worker process architecture are required — HTTP and MCP stdio continue to coexist in a single Node.js process. The phased build order is determined by module dependencies, not by arbitrary grouping.
 
 **Major components:**
-1. `worker/db.js` — SQLite connection with WAL mode, FTS5 indexes, schema migrations; the foundation for everything
-2. `worker/query-engine.js` — all SQLite read/write queries; recursive CTE graph traversal with cycle detection; breaking change classification
-3. `worker/mcp-server.js` — stdio MCP server; 5 tools; reads from query engine; logs to stderr only (stdout is protocol-exclusive)
-4. `worker/http-server.js` — Fastify REST API and static D3 UI; `/graph`, `/impact`, `/scan`, `/scan/confirm`, `/health`, `/versions`
-5. `worker/scan-manager.js` — spawns Claude agents into linked repos; collects findings; drives grouped user confirmation flow
-6. `scripts/worker-start.sh` and `worker-stop.sh` — PID file lifecycle management with stale-PID detection and readiness probe
-7. `lib/worker-client.sh` — shared bash HTTP client (`worker_running()`, `worker_call()`); all commands source this
-8. `commands/map.md` (new) and `commands/cross-impact.md` (modified) — thin user-facing orchestration shells
+1. `renderer.js` (MODIFIED) — wrap draw sequence in `ctx.scale(dpr, dpr)` after `ctx.save()`; font size adjustments for legibility at normal zoom
+2. `interactions.js` (MODIFIED) — wheel delta tuning; `e.ctrlKey` check for trackpad pinch vs two-finger scroll
+3. `graph.js` (MODIFIED) — extract `loadProject(hash)` from `init()`; call `initProjectSwitcher()` and `initLogTerminal()` after first load; wire fit-to-screen button
+4. `project-switcher.js` (NEW) — populate `#project-select` from `/projects`, handle `onchange`, full teardown then re-init via `loadProject()`
+5. `log-terminal.js` (NEW) — 2s polling of `GET /api/logs`, ring-buffer DOM cap at 500 lines, component filter, live-tail toggle
+6. `worker/server/http.js` (MODIFIED) — add `GET /api/logs` route reading from `~/.allclear/logs/worker.log`; accept `dataDir` via options object
+7. `state.js` (MODIFIED) — add `currentProject`, `logPanelOpen`, `logFilter`, `logComponentFilter` fields
 
-**Build order is architecturally constrained:**
-Phase A (storage) → Phase C (MCP) and Phase D (HTTP) in parallel → Phase E (scan manager) → Phase F (commands) → Phase G (session hook)
+**Key architectural rule:** `state.transform`, `state.positions`, and all mouse coordinates must remain in CSS pixel space throughout. `devicePixelRatio` scaling is applied once at render-time (`ctx.scale(dpr, dpr)`) and nowhere else. Applying DPR to coordinates breaks hit testing, drag, and pan.
 
 ### Critical Pitfalls
 
-1. **Worker process orphaning** — Always write PID to `.allclear/worker.pid` on spawn; use `kill -0 $PID` to distinguish stale from live PIDs before starting a second worker. Missing this causes EADDRINUSE errors and split-brain SQLite access. Address in worker foundation phase.
+1. **HiDPI mouse coordinate mismatch** — After `ctx.scale(dpr, dpr)`, `e.offsetX`/`e.offsetY` remain CSS pixels. Never multiply mouse coordinates by DPR. The DPR scale wraps only the canvas context draw stack, not `state.transform` or any input coordinate. Violation breaks click-to-select by a factor of `devicePixelRatio`.
 
-2. **Shell-to-Node.js race condition** — Never send HTTP requests immediately after spawning the worker. Implement a readiness probe: poll `GET /health` with 20 retries at 250ms intervals. The `/health` route must be registered as the very first Fastify route, before any DB initialization. Address in worker foundation phase.
+2. **Project switcher without full teardown** — `init()` was designed as a one-shot startup. Re-running without teardown creates: (a) two simultaneous `forceWorker` Web Workers — visual flicker and double CPU; (b) duplicate canvas event listeners — clicks fire twice; (c) state from project A leaking into project B. Teardown requires named handler functions (currently anonymous in `setupInteractions()`), `forceWorker.terminate()`, and full state reset. Refactor anonymous handlers before implementing the switcher.
 
-3. **MCP stdout pollution** — The MCP stdio transport uses stdout exclusively for JSON-RPC. A single `console.log()` corrupts the entire MCP session silently — tools appear registered but never return results. All logging in `mcp-server.js` must go to stderr. Add a CI lint rule to catch `console.log` in mcp-server.js. Address at MCP server phase start.
+3. **SSE zombie connection leak** — SSE endpoints keep HTTP responses open indefinitely. Without `request.raw.on('close', cleanup)`, browser tab closes accumulate zombie connections. Worker memory grows 1-5 MB per abandoned connection and eventually crashes. The close handler is mandatory; it must be in the first implementation, not added later.
 
-4. **Transitive graph traversal cycles** — Any cycle in the service graph (mutual auth, callback patterns) will infinite-loop a naive recursive CTE. Use SQLite recursive CTE with visited-set pattern and a depth cap (default 5, max 10). Test with a deliberately cyclic graph. Address in query engine phase.
+4. **Trackpad two-finger scroll fires as wheel event** — On macOS, both two-finger scroll and pinch-to-zoom arrive as `wheel` events. Current code treats all wheel input as zoom. Check `e.ctrlKey`: `true` = pinch (zoom); `false` = two-finger scroll (pan via `state.transform.x -= e.deltaX`).
 
-5. **ChromaDB hard failure blocking SQLite writes** — If ChromaDB sync is in the same code path as SQLite persistence, a ChromaDB outage silently prevents all scan findings from being saved. Always write SQLite first, confirm success, then fire ChromaDB sync asynchronously with `.catch()`. Address at ChromaDB integration phase.
-
-6. **Confirmation fatigue causing rubber-stamping** — Presenting 50+ individual findings for confirmation causes users to approve everything without reading, defeating the validation purpose. Group by confidence: HIGH = single batch confirm; MEDIUM = per-repo confirm; LOW = individual questions. Cap LOW confidence findings at 10 per scan. Address in map command UX design before implementation.
-
-7. **Background subagents cannot access MCP tools** — Confirmed Claude Code issue #13254. Agents spawned with `run_in_background: true` do not inherit MCP tool access. Scan manager must run agents sequentially in the foreground. Validate in first agent scan prototype before building the full scan pipeline.
+5. **DOM log buffer unbounded growth** — Naive `logContainer.appendChild(line)` with no cap causes 100+ MB tab memory after a scan session and janky scrolling at 1000+ lines. Cap at 500 lines with a ring buffer: remove `logContainer.firstChild` when `children.length > MAX`.
 
 ## Implications for Roadmap
 
-Based on the combined research, the build order is architecturally constrained. The storage foundation and worker lifecycle are the critical path that unlocks all subsequent work.
+The dependency graph established in architecture research produces a clear, four-phase build order.
 
-### Phase 1: Storage Foundation
+### Phase 1: Canvas Rendering Fixes
 
-**Rationale:** Every v2.0 feature depends on the SQLite schema being stable. Schema migrations after agents have written data are painful and risky. This phase has no dependencies on any other phase and must come first.
-**Delivers:** `worker/db.js` (schema, WAL mode, FTS5 indexes, migrations), `worker/query-engine.js` (all queries including recursive CTE transitive traversal with cycle detection and depth cap), test suite exercising the query engine directly
-**Addresses features:** SQLite schema stability, transitive impact traversal, breaking change classification, incremental scan via `repo_state` table
-**Avoids pitfalls:** WAL file growth (set `journal_size_limit` and `busy_timeout` on first open — not patchable later), recursive CTE cycles (depth cap and visited-set from day one), snapshot corruption (use `VACUUM INTO` not `cp`)
+**Rationale:** Independent of all other v2.1 work; touches only `renderer.js`, `graph.js`, and `interactions.js`; no server changes; no new modules. Affects every user immediately on any Retina Mac. Getting the renderer correct before adding new modules avoids re-auditing every `ctx` call later. Phase 2 (log API) can be developed in parallel.
 
-### Phase 2: Worker Lifecycle
+**Delivers:** Crisp rendering on all HiDPI displays; usable zoom/pan with trackpad pinch vs scroll detection; natural wheel sensitivity; fit-to-screen button.
 
-**Rationale:** The worker process shell scripts have no Node.js code dependencies and unblock all subsequent phases that need a running worker. The readiness probe pattern must be established here and reused by all later phases.
-**Delivers:** `scripts/worker-start.sh`, `scripts/worker-stop.sh`, `lib/worker-client.sh`, PID file management with stale-PID detection, readiness probe (`wait_for_worker()`), port file pattern (`.allclear/worker.port`), per-project port configuration
-**Addresses features:** Worker process start/stop management, port-per-project configuration
-**Avoids pitfalls:** Worker orphaning (PID file plus `kill -0` check), shell-to-Node.js race condition (readiness probe built here), port conflicts from multiple simultaneous projects
+**Addresses:** HiDPI fix + font size bump, zoom sensitivity tuning, `scaleExtent` bounds, trackpad pinch vs scroll, fit-to-screen reset.
 
-### Phase 3: MCP Server
+**Avoids:** Blurry canvas pitfall, mouse coordinate mismatch pitfall, passive wheel event conflict pitfall, trackpad scroll-as-zoom pitfall.
 
-**Rationale:** Depends only on Phase 1 (query engine). Can be built in parallel with Phase 4. MCP tools provide agent-autonomous impact checking — the most strategically important v2.0 capability. Establishing the stderr-only logging convention early prevents protocol corruption from ever entering the codebase.
-**Delivers:** `worker/mcp-server.js` (5 MCP tools), `.mcp.json` plugin registration, graceful behavior when DB does not yet exist
-**Addresses features:** MCP server for agent use, `impact_query` and `impact_changed` at launch
-**Avoids pitfalls:** MCP stdout pollution (stderr-only log wrapper before any tool handler code), graceful DB-absent startup (tools return empty results, not errors)
+**Research flag:** Standard. MDN and web.dev documentation is definitive. No additional research needed.
 
-### Phase 4: HTTP Server and Web UI
+### Phase 2: Log Terminal API (parallel with Phase 1)
 
-**Rationale:** Depends only on Phase 1 (query engine). Can be built in parallel with Phase 3. The graph visualization is required for users to validate the dependency map. The Canvas rendering decision must be made before writing any graph code — retrofitting Canvas onto an SVG implementation requires a full rewrite.
-**Delivers:** `worker/http-server.js` (Fastify REST routes), `worker/web/index.html` and `graph.js` (D3 Canvas-based force-directed graph with Web Worker simulation), `GET /health` registered first
-**Addresses features:** D3 web UI (basic force-directed graph), `/allclear:map --view` shortcut
-**Avoids pitfalls:** D3 performance at scale (Canvas plus Web Worker from the start; SVG freezes above 30 nodes), `GET /health` as the very first route so the readiness probe from Phase 2 can detect it
+**Rationale:** Server-side only; zero UI work; touches different files from Phase 1. The log terminal UI (Phase 3) is blocked on this endpoint; building it in parallel with Phase 1 saves wall-clock time.
 
-### Phase 5: Scan Manager
+**Delivers:** `GET /api/logs?since=&component=&limit=` route on Fastify server; reads `~/.allclear/logs/worker.log`; returns `{ lines: [] }` with filtered JSON. Pass `dataDir` into `createHttpServer()` via options object — do not hardcode in `http.js`.
 
-**Rationale:** Depends on Phases 1 and 4 (needs HTTP API to receive POST /scan). This is the highest-risk phase — agent hallucination, confirmation fatigue, and background agent MCP limitations all live here. Validate agent MCP access in the first prototype before building the full pipeline.
-**Delivers:** `worker/scan-manager.js` (foreground agent orchestration, confidence scoring), grouped confirmation UX (HIGH batch / MEDIUM per-repo / LOW individual, cap 10 LOW per scan), snapshot creation after confirmed writes, incremental scan via `repo_state` and `git diff --name-status`
-**Addresses features:** Agent-based scanning, user confirmation gate (hard), incremental scanning, map versioning, stale connection cleanup for deleted/renamed files
-**Avoids pitfalls:** Background agents without MCP access (foreground-only agent spawning), agent hallucination (confidence levels, literal-string-only prompt instructions, file-existence secondary validation), confirmation fatigue (grouped UX), snapshot bloat (auto-gitignore `.allclear/`, 10-snapshot retention default), incremental scan missing renames (`--name-status` not `--name-only`)
+**Addresses:** Log terminal data API, server-side log filtering.
 
-### Phase 6: Command Layer
+**Avoids:** Hardcoding `dataDir` in `http.js` (breaks `--data-dir` CLI override used in tests).
 
-**Rationale:** Commands are thin orchestration shells over the worker API. Depends on all prior phases. Building commands last also prevents premature commitment to command UX before worker behavior is fully understood.
-**Delivers:** `commands/map.md` (new: repo discovery → scan → confirm → persist → browser open), `commands/cross-impact.md` (modified: worker-aware plus legacy grep fallback), first-run MCP registration instructions after first successful map build
-**Addresses features:** `/allclear:map`, `/allclear:cross-impact` redesign, graceful fallback to grep when map absent
-**Avoids pitfalls:** Graceful degradation ensures v2.0 upgrade does not break users who have not yet run `/allclear:map`
+**Research flag:** Standard. Fastify GET route pattern with query params is well-established in the existing `http.js`. No additional research needed.
 
-### Phase 7: Session Hook Integration
+### Phase 3: Log Terminal UI
 
-**Rationale:** A lightweight modification to an existing hook; intentionally last to keep risk isolated. Depends on Phase 2 (worker-start.sh).
-**Delivers:** Modified `scripts/session-start.sh` (conditional worker auto-start when `impact-map` section present in config, one-line worker health status in session context)
-**Addresses features:** Worker auto-start on session open, session context showing impact commands available
-**Avoids pitfalls:** Blocking hook startup (fire worker in background; hook exits immediately; first command polls readiness via Phase 2 probe)
+**Rationale:** Depends on Phase 2 (the `/api/logs` endpoint must exist). New module `log-terminal.js` is fully isolated from graph rendering — it can be scaffolded without touching graph code.
 
-### Phase 8: End-to-End Tests and ChromaDB Integration
+**Delivers:** Collapsible log panel below `#canvas-container`; 2s polling with `since` timestamp; ring-buffer DOM cap at 500 lines; component filter dropdown; auto-scroll with bottom-detection; `@fastify/sse` for SSE streaming (ceiling option; polling is sufficient for MVP).
 
-**Rationale:** ChromaDB is optional acceleration and must not block any earlier phase. End-to-end tests validate the complete scan → query → impact flow after all components are integrated.
-**Delivers:** `worker/chroma-sync.js` (async, non-blocking, graceful skip), complete bats integration test suite, manual smoke test documentation for the full map-build-to-D3-UI flow
-**Addresses features:** ChromaDB optional semantic search, three-tier fallback chain validation, worker localhost-only binding security check
-**Avoids pitfalls:** ChromaDB hard failure (fully async with `.catch()`, health-check flag on startup), ChromaDB desync is non-fatal (FTS5 fallback always works)
+**Addresses:** Log terminal base panel, live-tail toggle, component filter, log search, SSE close-handler cleanup.
+
+**Avoids:** SSE zombie connection leak (close handler mandatory from first implementation), unbounded DOM buffer (ring buffer at 500 from first implementation), SSE reconnect flood (jitter on `retry:` field), SSE log injection (strip newlines from log text before writing to SSE).
+
+**Research flag:** SSE close-handler zombie leak (Pitfall 7 in PITFALLS.md) needs explicit attention during implementation. It is non-obvious and the source of the most common production SSE bugs.
+
+### Phase 4: Project Switcher
+
+**Rationale:** Requires the `loadProject(hash)` extraction from `graph.js`, which is safest after Phase 1 (renderer is stable). The named-handler refactor of `setupInteractions()` must gate this phase — it is a prerequisite with its own risk surface.
+
+**Delivers:** Persistent `#project-select` dropdown populated from `/projects`; in-place project switching without page reload; `localStorage` persistence of selected project; full state teardown (named handlers, `forceWorker.terminate()`, state reset) before reload.
+
+**Addresses:** Project switcher, persistent project selection.
+
+**Avoids:** No-teardown pitfall — duplicate Web Workers, duplicate listeners, state leakage from project A to B. Named-function refactor of `setupInteractions()` is the prerequisite gate.
+
+**Research flag:** The teardown/tearup sequence (Pitfall 6 in PITFALLS.md) is the primary implementation concern. The teardown function code example in PITFALLS.md should be reviewed before writing `project-switcher.js`.
 
 ### Phase Ordering Rationale
 
-- **Storage before scanning:** The SQLite schema is the data model contract. Agents write to it; commands read from it; the MCP server exposes it. Any schema change after real data is written requires a migration. Locking in the schema in Phase 1 removes this risk for all subsequent phases.
-- **Worker lifecycle before worker code:** The PID file and readiness probe patterns are needed by every phase that starts or communicates with the worker. Building these as a foundation in Phase 2 means all subsequent phases use proven utilities rather than each reinventing the pattern.
-- **MCP and HTTP in parallel (Phases 3 and 4):** Both depend only on the query engine and are architecturally independent. Separating them enforces the clean boundary between the stdio MCP transport and the TCP HTTP server.
-- **Scan manager after HTTP:** The scan manager posts findings to the HTTP API (`POST /scan/confirm`). It needs a working HTTP server to write through.
-- **Commands after scan manager:** Commands are thin; they add value only when the underlying worker pipeline is tested and solid.
-- **ChromaDB last:** Optional feature. Its absence must not block any prior phase. Its failure mode (graceful skip) is tested explicitly in Phase 8 rather than assumed.
+- Phase 1 before Phase 4: Renderer stability before `graph.js` refactor. Both touch `graph.js` but for different reasons; combining them risks introducing coordinate bugs that are harder to diagnose with two concurrent changes.
+- Phase 2 parallel with Phase 1: Server and canvas code are completely decoupled — `http.js` and `renderer.js` share no code. Running in parallel saves wall-clock time with no coordination cost.
+- Phase 3 after Phase 2: The UI polls the endpoint; the endpoint must exist for integration testing. Module scaffolding can start before Phase 2 completes, but end-to-end validation requires Phase 2 done.
+- Phase 4 last: The named-handler refactor creates risk for Phase 1 interactions if rushed. Phase 4 is the only phase that modifies existing canvas event handler wiring; doing it last contains the blast radius.
 
 ### Research Flags
 
-Phases likely needing deeper research during planning:
-- **Phase 5 (Scan Manager):** Agent scanning prompts and findings schema require iteration — hallucination rate is unknown until tested on real repos. Plan for a research-and-iterate loop on the agent prompt template. The Claude SDK direct approach for controlled parallelism was identified but not fully designed.
-- **Phase 3 (MCP Server):** The `.mcp.json` plugin registration convention and MCP tool description length limits warrant re-verification against Claude Code docs at implementation time; the MCP spec evolves.
-- **Phase 4 (D3 Web UI):** Canvas hit detection for node click/hover without DOM elements requires custom point-in-circle math on `mousemove`. Warrants a spike before committing to the full UI implementation.
+Needs attention during implementation:
+- **Phase 3 (Log Terminal):** SSE zombie connection leak (PITFALLS.md Pitfall 7) — explicit close handler required in first implementation.
+- **Phase 4 (Project Switcher):** Full teardown before re-init (PITFALLS.md Pitfall 6) — named-handler refactor is a prerequisite gate; do not skip.
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1 (Storage Foundation):** SQLite WAL mode, FTS5, and better-sqlite3 are fully documented with code examples in the stack research.
-- **Phase 2 (Worker Lifecycle):** PID file management and readiness probe are established shell patterns with direct code examples in the architecture research.
-- **Phase 6 (Command Layer):** Command markdown files follow the existing AllClear pattern; the worker client library provides the abstraction.
-- **Phase 7 (Session Hook):** Small modification to an existing hook; pattern is fully documented in the architecture research.
+Standard patterns (no additional research needed):
+- **Phase 1 (Canvas Fixes):** MDN `devicePixelRatio` pattern is definitive; three-step HiDPI fix has broad codebase precedent.
+- **Phase 2 (Log API):** Fastify GET route with query params follows the existing `http.js` pattern exactly.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Primary sources: official Claude Code docs, verified installed plugins in local cache, GitHub releases for exact versions. Node.js 20+ minimum is hard (better-sqlite3 12.x and Fastify 5.x both require it). |
-| Features | HIGH | Design document (`cross-impact-v2.md`) is the primary source. Competitor analysis confirms differentiators. Feature dependency tree is well-understood with no ambiguous ordering. |
-| Architecture | HIGH | Based on official Claude Code plugin docs, direct v1.0 codebase inspection, and verified MCP server patterns. Build order is architecturally constrained with a clear critical path. |
-| Pitfalls | HIGH | Most pitfalls backed by official SQLite docs, confirmed Claude Code GitHub issues, MCP spec, and 2025 D3 performance benchmarks. Background agent MCP limitation is confirmed via issue #13254. |
+| Stack | HIGH | All packages verified against npm registry and GitHub releases on 2026-03-16; version compatibility confirmed for Node.js 20+, Fastify 5, xterm 6 |
+| Features | HIGH | Reference implementations exist in VS Code, Grafana, Chrome DevTools for every feature; all patterns are stable and well-documented |
+| Architecture | HIGH | Based on direct codebase inspection of all UI modules and server; no inference required; existing module boundaries are well-defined |
+| Pitfalls | HIGH | MDN official docs confirmed; specific issue trackers (expressjs, nestjs, excaliburjs) cross-referenced for SSE and canvas pitfalls |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Agent hallucination rate in practice:** Research cites 27%+ inaccuracy in automated dependency extraction (ScienceDirect 2025). The actual rate for AllClear's agent-based approach is unknown until tested on real repos. Build confidence-level reporting into the agent prompt from day one and plan for prompt iteration during Phase 5.
-- **MCP tool context window impact:** Tool description verbosity can consume significant context window. Keep tool descriptions lean and validate against a real Claude Code session during Phase 3 before finalizing descriptions.
-- **Agent scan parallelism approach:** Sequential foreground scanning is the safe default (avoids background MCP limitation). For large multi-repo setups (10+ repos), scan latency may be unacceptable. The Claude SDK direct approach for controlled parallelism was noted but not fully designed — flag for Phase 5 design.
-- **Snapshot VACUUM INTO performance:** `VACUUM INTO` is correct for consistent snapshots but slower than `cp`. For large databases, this may add noticeable latency. Benchmark with representative data during Phase 5.
+- **Zoom sensitivity final tuning:** The D3 wheel delta formula (SENSITIVITY = 0.001) is a documented starting point, not a validated constant. Budget one round of manual trackpad testing after implementation. The `scaleExtent([0.15, 5])` bounds are a reasonable starting point but may need adjustment for large graphs.
+- **xterm.js vs styled div decision:** FEATURES.md flags xterm.js as a potential anti-feature (overkill for structured JSON log output); STACK.md includes it as the recommended package for ANSI rendering. The implementation team should decide during Phase 3 based on the actual log format encountered in the worker. Either approach is architecturally valid; only the `log-terminal.js` module changes.
+- **Log file rotation scope:** The `/api/logs` route reads the entire log file on each poll; for a long-running worker, this grows without bound. Log rotation (cap at 1MB, rotate to `worker.log.1`) is out of scope for v2.1. Mitigate in v2.1 by reading only the last 500 lines server-side. Flag for v2.2.
+- **Force worker canvas dimensions after resize:** After the DPR fix, `canvas.width` is `cssW * dpr`. The force simulation layout respects CSS dimensions, not physical pixel dimensions. Any `canvas.width` / `canvas.height` passed to the force worker must be divided by `devicePixelRatio` first. Verify this integration point during Phase 1 testing.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `https://code.claude.com/docs/en/plugins` — Plugin structure, SKILL.md format, hooks.json location, --plugin-dir flag
-- `https://code.claude.com/docs/en/plugins-reference` — Complete manifest schema, component paths, hook event types, CLI commands
-- `https://code.claude.com/docs/en/hooks` — Hook stdin JSON format, stdout fields, exit code semantics, blocking vs non-blocking
-- `https://code.claude.com/docs/en/plugin-marketplaces` — marketplace.json schema, distribution patterns
-- `https://github.com/WiseLibs/better-sqlite3/releases` — v12.8.0 (2026-03-13), Node.js 20+ required, SQLite 3.51.3 bundled
-- `https://github.com/fastify/fastify/releases` — Fastify 5.8.2, Node.js 20+ required
-- `https://github.com/modelcontextprotocol/typescript-sdk/releases` — @modelcontextprotocol/sdk v1.27.1 current
-- `https://d3js.org/getting-started` — D3 v7.9.0 current stable, ESM import pattern
-- `https://www.trychroma.com/changelog/js-client-v3` — chromadb v3 rewrite, v3.3.3 current
-- `https://sqlite.org/wal.html` — WAL checkpoint starvation, WAL growth, reader snapshot behavior
-- `https://github.com/anthropics/claude-code/issues/13254` — Confirmed: background subagents cannot access MCP tools
-- `.planning/designs/cross-impact-v2.md` — AllClear v2.0 primary design document (internal)
-- `~/.claude/plugins/cache/thedotmack/claude-mem/10.5.5/` — Direct inspection of production plugin (PID patterns, SessionStart hooks, SKILL.md format)
+
+- `https://developer.mozilla.org/en-US/docs/Web/API/Window/devicePixelRatio` — DPR definition, matchMedia pattern for DPR change detection
+- `https://web.dev/articles/canvas-hidipi` — Three-step HiDPI canvas pattern: multiply dimensions, CSS scale back, scale context
+- `https://github.com/fastify/fastify/releases` — Fastify 5.8.2 current, Node.js v20+ required
+- `npm info @fastify/sse` — version 0.4.0, peerDependencies `fastify ^5.x`, verified 2026-03-16
+- `npm info @xterm/xterm` — version 6.0.0, published Jan 2026, verified 2026-03-16
+- `npm info @xterm/addon-fit` — version 0.11.0, requires xterm v4+, verified 2026-03-16
+- `https://d3js.org/d3-zoom` — wheel delta formula, `zoom.wheelDelta()` customization, `scaleExtent`
+- Direct codebase inspection: `worker/ui/graph.js`, `worker/ui/modules/*.js`, `worker/ui/index.html`, `worker/server/http.js`, `worker/index.js` — confirmed anonymous handler pattern, no DPR scaling, no teardown, `#project-select` hidden
 
 ### Secondary (MEDIUM confidence)
-- `https://modelcontextprotocol.info/docs/tutorials/building-a-client-node/` — StdioServerTransport pattern confirmed
-- `https://github.com/CodeLogicIncEngineering/codelogic-mcp-server` — Competitor MCP tool interface (direct inspection)
-- `https://sqlite.org/forum/info/a188951b80292831794256a5c29f20f64f718d98ed0218bf44b51dd5907f1c39` — Real-world WAL growth scenarios
-- `https://github.com/chroma-core/chroma/issues/346` — ChromaDB connection reliability failure modes
-- D3 force simulation performance: Canvas vs SVG vs WebGL thresholds (2025 benchmarks)
-- `https://www.sciencedirect.com/article/pii/S0950584925001934` — 27%+ inaccuracy in automated dependency extraction
-- `https://www.nngroup.com/articles/confirmation-dialog/` — Confirmation fatigue and overuse consequences
+
+- `https://tigerabrodi.blog/how-to-handle-trackpad-pinch-to-zoom-vs-two-finger-scroll-in-javascript-canvas-apps` — `e.ctrlKey` convention for trackpad pinch detection
+- `https://github.com/excaliburjs/Excalibur/issues/1195` — Passive wheel event breaking canvas zoom (real-world example)
+- `https://github.com/expressjs/express/issues/2248` — SSE connection accumulation without close handler
+- `https://github.com/nestjs/nest/issues/11601` — SSE cleanup patterns in Node.js servers
+- `https://d3js.org/d3-zoom` — sensitivity tuning is documented but trackpad delta behavior varies by driver (MEDIUM for sensitivity constants specifically)
+
+### Tertiary (for reference)
+
+- `https://medium.com/@benjamin.botto/zooming-at-the-mouse-coordinates-with-affine-transformations-86e7312fd50b` — Zoom-to-cursor formula (matches current implementation)
+- `https://newreleases.io/project/github/xtermjs/xterm.js/release/6.0.0` — xterm.js 6.0.0 breaking changes (Canvas renderer addon removed, now built-in)
 
 ---
-*Research completed: 2026-03-15*
+*Research completed: 2026-03-16*
 *Ready for roadmap: yes*
