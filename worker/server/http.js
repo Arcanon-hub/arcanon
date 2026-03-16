@@ -23,6 +23,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 async function createHttpServer(queryEngine, options = {}) {
   const fastify = Fastify({ logger: false });
   const resolve = options.resolveQueryEngine || (() => queryEngine);
+  const log = options.logger || null;
+
+  function httpLog(level, msg, extra = {}) {
+    if (log) log.log(level, msg, extra);
+  }
 
   /**
    * Resolve query engine from request.
@@ -95,6 +100,7 @@ async function createHttpServer(queryEngine, options = {}) {
     try {
       return reply.send(qe.getGraph());
     } catch (err) {
+      httpLog('ERROR', err.message, { route: '/graph' });
       return reply.code(500).send({ error: err.message });
     }
   });
@@ -112,6 +118,7 @@ async function createHttpServer(queryEngine, options = {}) {
     try {
       return reply.send(qe.getImpact(change));
     } catch (err) {
+      httpLog('ERROR', err.message, { route: '/impact' });
       return reply.code(500).send({ error: err.message });
     }
   });
@@ -129,6 +136,7 @@ async function createHttpServer(queryEngine, options = {}) {
       }
       return reply.send(result);
     } catch (err) {
+      httpLog('ERROR', err.message, { route: '/service/:name' });
       return reply.code(500).send({ error: err.message });
     }
   });
@@ -159,6 +167,7 @@ async function createHttpServer(queryEngine, options = {}) {
       qe.persistFindings(repoId, findings, commit || null);
       return reply.code(200).send({ status: "persisted", repo_id: repoId });
     } catch (err) {
+      httpLog('ERROR', err.message, { route: '/scan' });
       return reply.code(500).send({ error: err.message });
     }
   });
@@ -172,6 +181,7 @@ async function createHttpServer(queryEngine, options = {}) {
     try {
       return reply.send(qe.getVersions());
     } catch (err) {
+      httpLog('ERROR', err.message, { route: '/versions' });
       return reply.code(500).send({ error: err.message });
     }
   });
@@ -184,6 +194,8 @@ async function createHttpServer(queryEngine, options = {}) {
   } else {
     await fastify.ready();
   }
+
+  httpLog('INFO', 'http server listening', { port: options.port });
 
   return fastify;
 }
