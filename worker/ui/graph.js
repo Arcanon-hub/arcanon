@@ -16,11 +16,21 @@ async function init() {
   const container = document.getElementById("canvas-container");
 
   function resize() {
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    const cssW = container.clientWidth;
+    const cssH = container.clientHeight;
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    canvas.style.width = cssW + 'px';
+    canvas.style.height = cssH + 'px';
     render();
   }
   window.addEventListener("resize", resize);
+  function watchDPR() {
+    const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    mq.addEventListener('change', () => { resize(); watchDPR(); }, { once: true });
+  }
+  watchDPR();
   resize();
 
   // Resolve project from URL or show picker
@@ -100,11 +110,13 @@ async function init() {
   document.getElementById("node-info").textContent =
     `${state.graphData.nodes.length} services, ${state.graphData.edges.length} connections`;
 
-  // Initialize positions
+  // Initialize positions in CSS pixel space
+  const cssBoundsW = Math.round(canvas.width / (window.devicePixelRatio || 1));
+  const cssBoundsH = Math.round(canvas.height / (window.devicePixelRatio || 1));
   state.graphData.nodes.forEach((n) => {
     state.positions[n.id] = {
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
+      x: Math.random() * cssBoundsW,
+      y: Math.random() * cssBoundsH,
     };
   });
 
@@ -128,8 +140,8 @@ async function init() {
       source: e.source_service_id,
       target: e.target_service_id,
     })),
-    width: canvas.width,
-    height: canvas.height,
+    width: Math.round(canvas.width / (window.devicePixelRatio || 1)),
+    height: Math.round(canvas.height / (window.devicePixelRatio || 1)),
   });
 
   setupInteractions(canvas);
