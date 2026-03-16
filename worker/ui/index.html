@@ -241,6 +241,19 @@
         max-width: 200px;
         cursor: pointer;
       }
+      #fit-btn {
+        background: #2d3748;
+        border: 1px solid #4a5568;
+        color: #e2e8f0;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      #fit-btn:hover {
+        border-color: #63b3ed;
+      }
     </style>
   </head>
   <body>
@@ -257,6 +270,7 @@
         placeholder="Filter services..."
         autocomplete="off"
       />
+      <button id="fit-btn" title="Fit all nodes to screen">Fit</button>
       <div id="filters">
         <span>Protocol:</span>
         <label class="filter-label"
