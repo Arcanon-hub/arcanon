@@ -9,8 +9,8 @@ Requirements for scan data integrity and cross-repo MCP queries.
 
 ### Schema & Dedup
 
-- [ ] **SCAN-01**: Re-scanning a repo upserts services by (repo_id, name) using ON CONFLICT DO UPDATE — no duplicate rows created
-- [ ] **SCAN-02**: Migration 004 adds UNIQUE(repo_id, name) to services table, deduplicates existing data, and rebuilds FTS5 indexes
+- [x] **SCAN-01**: Re-scanning a repo upserts services by (repo_id, name) using ON CONFLICT DO UPDATE — no duplicate rows created
+- [x] **SCAN-02**: Migration 004 adds UNIQUE(repo_id, name) to services table, deduplicates existing data, and rebuilds FTS5 indexes
 
 ### Scan Versioning
 
@@ -48,8 +48,8 @@ Requirements for scan data integrity and cross-repo MCP queries.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCAN-01 | Phase 27 | Pending |
-| SCAN-02 | Phase 27 | Pending |
+| SCAN-01 | Phase 27 | Complete |
+| SCAN-02 | Phase 27 | Complete |
 | SCAN-03 | Phase 28 | Pending |
 | SCAN-04 | Phase 27 | Complete |
 | SCAN-05 | Phase 29 | Pending |

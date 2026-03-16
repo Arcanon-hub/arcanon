@@ -51,7 +51,7 @@ Full details: `.planning/milestones/v2.1-ROADMAP.md`
 
 **Milestone Goal:** Fix data duplication from re-scanning, enforce consistent service naming, and enable cross-project MCP queries from any repo.
 
-- [ ] **Phase 27: Schema Foundation + Upsert Repair** — Migration 004 adds UNIQUE constraint, deduplicates existing data, rebuilds FTS5; upsert rewrite ships atomically; agent naming convention enforced
+- [x] **Phase 27: Schema Foundation + Upsert Repair** — Migration 004 adds UNIQUE constraint, deduplicates existing data, rebuilds FTS5; upsert rewrite ships atomically; agent naming convention enforced (completed 2026-03-16)
 - [ ] **Phase 28: Scan Version Bracket** — Migration 005 adds scan_versions table; beginScan/endScan bracket makes re-scan atomic; stale rows cleaned up after successful persist
 - [ ] **Phase 29: Cross-Project MCP Queries** — MCP tools accept optional `project` parameter; per-call DB resolution via pool.js; agents in any repo can query any project graph
 
@@ -106,6 +106,6 @@ Plans:
 | 1-13 | v1.0 | 17/17 | Complete | 2026-03-15 |
 | 14-21 | v2.0 | 19/19 | Complete | 2026-03-15 |
 | 22-26 | v2.1 | 11/11 | Complete | 2026-03-16 |
-| 27. Schema Foundation + Upsert Repair | 1/2 | In Progress|  | - |
+| 27. Schema Foundation + Upsert Repair | 2/2 | Complete   | 2026-03-16 | - |
 | 28. Scan Version Bracket | v2.2 | 0/2 | Not started | - |
 | 29. Cross-Project MCP Queries | v2.2 | 0/1 | Not started | - |
