@@ -26,7 +26,7 @@ async function createHttpServer(queryEngine, options = {}) {
   const log = options.logger || null;
 
   function httpLog(level, msg, extra = {}) {
-    if (log) log.log(level, msg, extra);
+    if (log) log.log(level, msg, { component: 'http', ...extra });
   }
 
   /**
