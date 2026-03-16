@@ -22,6 +22,12 @@ Requirements for UI polish and observability release. Each maps to roadmap phase
 
 - [ ] **PROJ-01**: User can switch between projects via a persistent dropdown without page reload
 
+### Logging Instrumentation
+
+- [ ] **LOG-INFRA-01**: All worker components use a shared structured logger instead of console.log/console.error
+- [ ] **LOG-INFRA-02**: Every log line includes a `component` field (worker, http, mcp, scan)
+- [ ] **LOG-INFRA-03**: No console.log/console.error calls remain in production worker code
+
 ### Log Terminal
 
 - [ ] **LOG-01**: User can open a collapsible bottom panel showing real-time worker logs (collapsed by default)
@@ -53,22 +59,27 @@ Requirements for UI polish and observability release. Each maps to roadmap phase
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CANVAS-01 | — | Pending |
-| CANVAS-02 | — | Pending |
-| ZOOM-01 | — | Pending |
-| ZOOM-02 | — | Pending |
-| ZOOM-03 | — | Pending |
-| PROJ-01 | — | Pending |
-| LOG-01 | — | Pending |
-| LOG-02 | — | Pending |
-| LOG-03 | — | Pending |
-| LOG-04 | — | Pending |
+| CANVAS-01 | Phase 22 | Pending |
+| CANVAS-02 | Phase 22 | Pending |
+| ZOOM-01 | Phase 22 | Pending |
+| ZOOM-02 | Phase 22 | Pending |
+| ZOOM-03 | Phase 22 | Pending |
+| LOG-INFRA-01 | Phase 23 | Pending |
+| LOG-INFRA-02 | Phase 23 | Pending |
+| LOG-INFRA-03 | Phase 23 | Pending |
+| LOG-01 | Phase 25 | Pending |
+| LOG-02 | Phase 25 | Pending |
+| LOG-03 | Phase 25 | Pending |
+| LOG-04 | Phase 25 | Pending |
+| PROJ-01 | Phase 26 | Pending |
 
 **Coverage:**
-- v2.1 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10 ⚠️
+- v2.1 requirements: 13 total
+- Mapped to phases: 13
+- Unmapped: 0 ✓
+
+**Note:** Phase 24 (Log Terminal API) is an infrastructure phase with no direct REQUIREMENTS.md items. It delivers the server-side endpoint that Phase 25 depends on. All LOG requirements map to Phase 25 where the user-visible outcome is achieved.
 
 ---
 *Requirements defined: 2026-03-16*
-*Last updated: 2026-03-16 after initial definition*
+*Last updated: 2026-03-16 — traceability mapped after roadmap creation*

@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: UI Polish & Observability
-status: planning
-stopped_at: Defining requirements
+status: ready_to_plan
+stopped_at: Roadmap created; ready to plan Phase 22
 last_updated: "2026-03-16"
-last_activity: 2026-03-16 — Milestone v2.1 started
+last_activity: 2026-03-16 — v2.1 roadmap created; phases 22-26 defined
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** v2.1 UI Polish & Observability
+**Current focus:** Phase 22 — Canvas & Zoom
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-16 — Milestone v2.1 started
+Phase: 22 of 26 (Canvas & Zoom)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-03-16 — v2.1 roadmap created; phases 22-25 defined
+
+Progress: [░░░░░░░░░░] 0% (v2.1)
 
 ## Accumulated Context
 
@@ -38,7 +40,10 @@ Last activity: 2026-03-16 — Milestone v2.1 started
 - [v2.0]: Web Worker for D3 force simulation — keeps main thread free for smooth 60fps interaction
 - [v2.0]: Worker logs to ~/.allclear/logs/worker.log as structured JSON (one line per entry)
 - [v2.0]: Server binds to 127.0.0.1 only — never 0.0.0.0
-- [v2.0]: null queryEngine returns 503 on data routes — expected transient state before DB ready
+- [v2.1 Roadmap]: Phase 23 (Logging Instrumentation) adds component tags to all worker modules — prerequisite for log filtering
+- [v2.1 Roadmap]: Phase 24 (Log Terminal API) is infrastructure; all LOG requirements map to Phase 25 where user-visible outcome lives
+- [v2.1 Roadmap]: Phase 22 and Phase 23 can be developed in parallel (renderer.js and logger are fully decoupled)
+- [v2.1 Roadmap]: Phase 26 gated on named-handler refactor of setupInteractions() — prerequisite, not optional polish
 
 ### Pending Todos
 
@@ -46,10 +51,11 @@ None yet.
 
 ### Blockers/Concerns
 
-None yet.
+- **Phase 25 (Log Terminal UI):** SSE zombie connection leak — request.raw.on('close', cleanup) is mandatory in first implementation
+- **Phase 26 (Project Switcher):** Named-function refactor of setupInteractions() must precede switcher work; anonymous handlers cannot be torn down
 
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Defining requirements for v2.1
+Stopped at: Roadmap created; ready to plan Phase 22
 Resume file: None
