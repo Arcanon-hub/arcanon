@@ -13,7 +13,7 @@
  */
 
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, basename, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,6 +37,74 @@ export function setScanLogger(logger) {
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// ---------------------------------------------------------------------------
+// Repo type detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect whether a repo is a service, library, or infra project.
+ * Checks for presence of indicator files — first match wins.
+ *
+ * @param {string} repoPath
+ * @returns {"service" | "library" | "infra"}
+ */
+function detectRepoType(repoPath) {
+  // Infra indicators — check first (most specific)
+  const infraIndicators = [
+    "kustomization.yaml", "Chart.yaml", "helmfile.yaml",
+    "docker-compose.yml", "docker-compose.yaml",
+  ];
+  for (const f of infraIndicators) {
+    if (existsSync(join(repoPath, f))) return "infra";
+  }
+  // Check for terraform files
+  try {
+    const files = readdirSync(repoPath);
+    if (files.some((f) => f.endsWith(".tf"))) return "infra";
+  } catch { /* ignore */ }
+  // Check for overlays/ or terraform/ directories
+  if (existsSync(join(repoPath, "overlays")) || existsSync(join(repoPath, "terraform"))) {
+    return "infra";
+  }
+
+  // Library indicators — no server entry point, has package exports
+  // Check if package.json has a "main" or "exports" but no "start" script
+  try {
+    const pkgPath = join(repoPath, "package.json");
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+      const hasStart = pkg.scripts && (pkg.scripts.start || pkg.scripts.serve);
+      const hasExports = pkg.main || pkg.exports || pkg.types;
+      if (!hasStart && hasExports) return "library";
+    }
+  } catch { /* ignore */ }
+
+  // Python: if pyproject.toml has [project] but no [project.scripts] entry point
+  try {
+    const pyproj = join(repoPath, "pyproject.toml");
+    if (existsSync(pyproj)) {
+      const content = readFileSync(pyproj, "utf8");
+      if (content.includes("[project]") && !content.includes("[project.scripts]")) {
+        return "library";
+      }
+    }
+  } catch { /* ignore */ }
+
+  // Rust: if Cargo.toml has [lib] but no [[bin]]
+  try {
+    const cargo = join(repoPath, "Cargo.toml");
+    if (existsSync(cargo)) {
+      const content = readFileSync(cargo, "utf8");
+      if (content.includes("[lib]") && !content.includes("[[bin]]")) {
+        return "library";
+      }
+    }
+  } catch { /* ignore */ }
+
+  // Default: service
+  return "service";
+}
 
 // ---------------------------------------------------------------------------
 // Agent runner injection
@@ -211,9 +279,14 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     if (_logger) _logger.log(level, msg, extra);
   }
 
-  // Load the agent prompt template once
-  const promptTemplatePath = join(__dirname, "agent-prompt-deep.md");
-  const promptTemplate = readFileSync(promptTemplatePath, "utf8");
+  // Load shared prompt components once
+  const commonRules = readFileSync(join(__dirname, "agent-prompt-common.md"), "utf8");
+  const schemaJson = readFileSync(join(__dirname, "agent-schema.json"), "utf8");
+  const promptService = readFileSync(join(__dirname, "agent-prompt-service.md"), "utf8");
+  const promptLibrary = readFileSync(join(__dirname, "agent-prompt-library.md"), "utf8");
+  const promptInfra = readFileSync(join(__dirname, "agent-prompt-infra.md"), "utf8");
+  // Legacy prompt kept as fallback
+  const promptDeep = readFileSync(join(__dirname, "agent-prompt-deep.md"), "utf8");
 
   /** @type {ScanResult[]} */
   const results = [];
@@ -240,11 +313,20 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     // 4. Open scan version bracket — records scan start in scan_versions table
     const scanVersionId = queryEngine.beginScan(repo.id);
 
-    // 5. Interpolate prompt
-    const serviceHint = basename(repoPath);
+    // 5. Detect repo type and select prompt
+    const repoType = detectRepoType(repoPath);
+    let promptTemplate;
+    if (repoType === "infra") promptTemplate = promptInfra;
+    else if (repoType === "library") promptTemplate = promptLibrary;
+    else promptTemplate = promptService;
+
+    slog('DEBUG', 'repo type detected', { repoPath, repoType });
+
     const interpolatedPrompt = promptTemplate
       .replaceAll("{{REPO_PATH}}", repoPath)
-      .replaceAll("{{SERVICE_HINT}}", serviceHint);
+      .replaceAll("{{SERVICE_HINT}}", basename(repoPath))
+      .replaceAll("{{COMMON_RULES}}", commonRules.replaceAll("{{REPO_PATH}}", repoPath))
+      .replaceAll("{{SCHEMA_JSON}}", schemaJson);
 
     // 6. Invoke agent (foreground — agentRunner injected by MCP server or test)
     slog('INFO', 'scan started', { repoPath, mode: ctx.mode });

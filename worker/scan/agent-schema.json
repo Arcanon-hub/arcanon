@@ -1,0 +1,51 @@
+{
+  "$schema": "AllClear scan findings schema",
+  "type": "object",
+  "required": ["service_name", "confidence", "services", "connections", "schemas"],
+  "properties": {
+    "service_name": "string — primary service/library/infra name (lowercase-hyphenated)",
+    "confidence": "high | low",
+    "services": {
+      "type": "array",
+      "items": {
+        "name": "string — lowercase-hyphenated, from package manifest",
+        "root_path": "string — relative path to root within repo",
+        "language": "string — typescript, python, go, rust, java, yaml, etc.",
+        "type": "service | library | sdk | infra",
+        "boundary_entry": "string | null — entry point file",
+        "exposes": ["string — format depends on type (see prompt)"],
+        "confidence": "high | low"
+      }
+    },
+    "connections": {
+      "type": "array",
+      "items": {
+        "source": "string — name of calling service/library/infra",
+        "target": "string — name of called service/library (can be external)",
+        "protocol": "rest | grpc | kafka | rabbitmq | internal | sdk | k8s | tf | helm",
+        "crossing": "external | sdk | internal",
+        "method": "string — GET/POST/etc, produce, consume, import, call, deploy, configure",
+        "path": "string — format depends on protocol (see prompt)",
+        "source_file": "string | null — file:function in caller",
+        "target_file": "string | null — file:function in callee (null if unknown)",
+        "confidence": "high | low",
+        "evidence": "string — exact code snippet (≤ 3 lines) proving this connection"
+      }
+    },
+    "schemas": {
+      "type": "array",
+      "items": {
+        "name": "string — schema/type name",
+        "role": "request | response | event_payload",
+        "file": "string — file where defined",
+        "fields": [
+          {
+            "name": "string",
+            "type": "string",
+            "required": "boolean (true/false, not string)"
+          }
+        ]
+      }
+    }
+  }
+}
