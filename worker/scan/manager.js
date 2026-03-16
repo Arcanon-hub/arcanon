@@ -184,12 +184,20 @@ export function buildScanContext(repoPath, repoId, queryEngine, options = {}) {
  * Scan one or more repos by dispatching agents sequentially in the foreground.
  * Background agents cannot access MCP tools (Claude Code issue #13254) — foreground only.
  *
+ * Each non-skip repo is wrapped in a scan version bracket:
+ *   beginScan() is called before agent invocation.
+ *   persistFindings() is called on success with the scan version ID.
+ *   endScan() is called after persistFindings on the success path only.
+ *   On parse failure, endScan is NOT called — prior scan data remains intact.
+ *
  * @param {string[]} repoPaths - Absolute paths to repos to scan
  * @param {{ full?: boolean }} [options]
  * @param {{
  *   upsertRepo: (repoData: object) => { id: number },
  *   getRepoState: (id: number) => object|null,
- *   setRepoState: (id: number, commit: string) => void,
+ *   beginScan: (repoId: number) => number,
+ *   persistFindings: (repoId: number, findings: object, commit: string, scanVersionId: number) => void,
+ *   endScan: (repoId: number, scanVersionId: number) => void,
  * }} queryEngine
  * @returns {Promise<ScanResult[]>}
  */
@@ -222,29 +230,32 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     // 2. Determine scan mode
     const ctx = buildScanContext(repoPath, repo.id, queryEngine, options);
 
-    // 3. Skip — no scan needed
+    // 3. Skip — no scan needed (no bracket for no-op scans)
     if (ctx.mode === "skip") {
       slog('DEBUG', 'scan skipped — no changes', { repoPath });
       results.push({ repoPath, mode: "skip", findings: null });
       continue;
     }
 
-    // 4. Interpolate prompt
+    // 4. Open scan version bracket — records scan start in scan_versions table
+    const scanVersionId = queryEngine.beginScan(repo.id);
+
+    // 5. Interpolate prompt
     const serviceHint = basename(repoPath);
     const interpolatedPrompt = promptTemplate
       .replaceAll("{{REPO_PATH}}", repoPath)
       .replaceAll("{{SERVICE_HINT}}", serviceHint);
 
-    // 5. Invoke agent (foreground — agentRunner injected by MCP server or test)
+    // 6. Invoke agent (foreground — agentRunner injected by MCP server or test)
     slog('INFO', 'scan started', { repoPath, mode: ctx.mode });
     const rawResponse = await agentRunner(interpolatedPrompt, repoPath);
 
-    // 6. Parse and validate agent output
+    // 7. Parse and validate agent output
     const result = parseAgentOutput(rawResponse);
 
     if (result.valid === false) {
-      slog('ERROR', 'agent output invalid', { repoPath, error: result.error });
-      // Error per repo — one bad agent result does not stop other repos
+      slog('WARN', 'scan failed — preserving prior data', { repoPath, error: result.error });
+      // endScan is NOT called — prior scan data remains intact
       results.push({
         repoPath,
         mode: ctx.mode,
@@ -254,9 +265,10 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       continue;
     }
 
-    // 7. Update repo state on success
+    // 8. Persist findings and close scan bracket — success path only
     const currentHead = getCurrentHead(repoPath);
-    queryEngine.setRepoState(repo.id, currentHead);
+    queryEngine.persistFindings(repo.id, result.findings, currentHead, scanVersionId);
+    queryEngine.endScan(repo.id, scanVersionId);
 
     slog('INFO', 'scan complete', { repoPath, mode: ctx.mode });
     results.push({ repoPath, mode: ctx.mode, findings: result.findings });

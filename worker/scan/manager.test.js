@@ -251,6 +251,7 @@ describe("scanRepos", () => {
   /**
    * Build a minimal mock queryEngine for scanRepos tests.
    * repoState=null means no prior scan (first scan → full).
+   * Includes beginScan/persistFindings/endScan for the scan version bracket.
    */
   function makeQueryEngine({ repoState = null } = {}) {
     return {
@@ -258,6 +259,9 @@ describe("scanRepos", () => {
       getRepoState: (_id) => repoState,
       setRepoState: (_id, _commit) => {},
       getRepoByPath: (_path) => null,
+      beginScan: (_repoId) => 1,
+      persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
+      endScan: (_repoId, _scanVersionId) => {},
     };
   }
 
@@ -339,11 +343,11 @@ describe("scanRepos", () => {
     cleanupDir(repo2.dir);
   });
 
-  test("successful scan returns findings and updates repo state", async () => {
+  test("successful scan returns findings and calls persistFindings", async () => {
     const qe = makeQueryEngine({ repoState: null });
-    let setRepoStateCalled = false;
-    qe.setRepoState = (_id, _commit) => {
-      setRepoStateCalled = true;
+    let persistFindingsCalled = false;
+    qe.persistFindings = (_repoId, _findings, _commit, _scanVersionId) => {
+      persistFindingsCalled = true;
     };
 
     const validFindings = JSON.stringify({
@@ -367,8 +371,8 @@ describe("scanRepos", () => {
     assert.equal(results.length, 1);
     assert.equal(results[0].findings.service_name, "my-service");
     assert.ok(
-      setRepoStateCalled,
-      "setRepoState should be called after successful scan",
+      persistFindingsCalled,
+      "persistFindings should be called after successful scan",
     );
   });
 
