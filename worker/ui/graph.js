@@ -46,6 +46,15 @@ const NODE_TYPE_COLORS = {
   service: "#4299e1", // blue for services (default)
 };
 
+function getNodeType(node) {
+  if (node.type === "library" || node.type === "sdk") return node.type;
+  if (node.name && /sdk|lib|client|shared|common/i.test(node.name))
+    return "library";
+  if (node.name && /ui|frontend|web|dashboard|app/i.test(node.name))
+    return "frontend";
+  return "service";
+}
+
 function getNodeColor(node) {
   // Check type field from scan data
   if (node.type === "library" || node.type === "sdk")
@@ -407,6 +416,14 @@ function render() {
     ctx.textBaseline = "top";
     ctx.fillText(label, pos.x, pos.y + NODE_RADIUS + 3);
 
+    // Draw type subtitle below name
+    const nodeType = getNodeType(node);
+    if (nodeType !== "service") {
+      ctx.fillStyle = getNodeColor(node);
+      ctx.font = `${Math.round(9 / transform.scale)}px system-ui, sans-serif`;
+      ctx.fillText(nodeType, pos.x, pos.y + NODE_RADIUS + 16);
+    }
+
     ctx.globalAlpha = 1;
   }
 
@@ -468,8 +485,9 @@ function setupInteractions(canvas) {
       tooltip.style.display = "block";
       tooltip.style.left = px + 12 + "px";
       tooltip.style.top = py - 8 + "px";
+      const tt = getNodeType(node);
       tooltip.textContent =
-        node.name + (node.language ? ` (${node.language})` : "");
+        node.name + ` [${tt}]` + (node.language ? ` (${node.language})` : "");
     } else {
       canvas.style.cursor = isDragging ? "grabbing" : "grab";
       tooltip.style.display = "none";
@@ -613,7 +631,14 @@ function showDetailPanel(node) {
   const nameById = {};
   graphData.nodes.forEach((n) => (nameById[n.id] = n.name));
 
+  const nodeType = getNodeType(node);
+  const typeColor = getNodeColor(node);
   let html = `<h3>${node.name}</h3>`;
+
+  html += `<div class="detail-section">
+    <div class="detail-label">Type</div>
+    <div class="detail-value" style="color:${typeColor}">${nodeType}</div>
+  </div>`;
 
   html += `<div class="detail-section">
     <div class="detail-label">Language</div>
