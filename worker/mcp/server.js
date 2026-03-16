@@ -8,9 +8,18 @@ import path from "path";
 import fs from "fs";
 import { execSync } from "child_process";
 import { z } from "zod";
+import { createLogger } from '../lib/logger.js';
 
 const dataDir =
   process.env.ALLCLEAR_DATA_DIR || path.join(os.homedir(), ".allclear");
+
+let _mcpLogLevel = 'INFO';
+try {
+  const _settings = JSON.parse(fs.readFileSync(path.join(dataDir, 'settings.json'), 'utf8'));
+  if (_settings.ALLCLEAR_LOG_LEVEL) _mcpLogLevel = _settings.ALLCLEAR_LOG_LEVEL;
+} catch { /* settings absent — use default */ }
+
+const logger = createLogger({ dataDir, logLevel: _mcpLogLevel, component: 'mcp' });
 
 /**
  * Resolve the per-project DB path: ~/.allclear/projects/<hash>/impact-map.db
@@ -42,7 +51,7 @@ export function openDb() {
     db.pragma("journal_mode = WAL");
     return db;
   } catch (err) {
-    console.error("[allclear-mcp] Failed to open database:", err.message);
+    logger.error('Failed to open database', { error: err.message });
     return null;
   }
 }
@@ -403,7 +412,7 @@ export async function querySearch(db, { query, limit = 20 }) {
         .all(pattern, pattern, limit);
       return { results: rows, search_mode: "sql_fallback" };
     }
-    console.error("[allclear-mcp] querySearch error:", err.message);
+    logger.error('querySearch error', { error: err.message });
     return { results: [], search_mode: "error" };
   }
 }
