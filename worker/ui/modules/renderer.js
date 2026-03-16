@@ -167,8 +167,31 @@ export function render() {
 
     ctx.globalAlpha = alpha;
 
+    const nodeType = getNodeType(node);
     ctx.beginPath();
-    ctx.arc(pos.x, pos.y, NODE_RADIUS, 0, Math.PI * 2);
+    if (nodeType === "library" || nodeType === "sdk") {
+      // Hexagon for libraries/SDKs
+      const r = NODE_RADIUS;
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i - Math.PI / 6;
+        const hx = pos.x + r * Math.cos(angle);
+        const hy = pos.y + r * Math.sin(angle);
+        if (i === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+    } else if (nodeType === "infra") {
+      // Diamond for infrastructure
+      const r = NODE_RADIUS * 1.1;
+      ctx.moveTo(pos.x, pos.y - r);
+      ctx.lineTo(pos.x + r, pos.y);
+      ctx.lineTo(pos.x, pos.y + r);
+      ctx.lineTo(pos.x - r, pos.y);
+      ctx.closePath();
+    } else {
+      // Circle for services (default)
+      ctx.arc(pos.x, pos.y, NODE_RADIUS, 0, Math.PI * 2);
+    }
     ctx.fillStyle = nodeColor;
     ctx.fill();
 
@@ -191,8 +214,7 @@ export function render() {
     ctx.textBaseline = "top";
     ctx.fillText(label, pos.x, pos.y + NODE_RADIUS + 3);
 
-    // Type subtitle
-    const nodeType = getNodeType(node);
+    // Type subtitle (nodeType already computed above for shape selection)
     if (nodeType !== "service") {
       ctx.fillStyle = getNodeColor(node);
       ctx.font = `${Math.round(11 / state.transform.scale)}px system-ui, sans-serif`;
