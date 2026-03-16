@@ -46,6 +46,13 @@ Requirements for UI polish and observability release. Each maps to roadmap phase
 - **LOG-05**: Log rotation support for long-running worker instances
 - **LOG-06**: Export visible logs to file
 
+### Scan Data Integrity (BUG)
+
+- **SCAN-01**: Re-scanning a repo upserts services by (repo_id, name) instead of creating duplicates
+- **SCAN-02**: Cross-repo service identity — same service name from different repos merges into one graph node
+- **SCAN-03**: Each scan creates a versioned snapshot; graph shows latest version; UI can browse scan history
+- **SCAN-04**: Agent prompt enforces consistent service naming (no event-journal vs event_journal drift)
+
 ## Out of Scope
 
 | Feature | Reason |

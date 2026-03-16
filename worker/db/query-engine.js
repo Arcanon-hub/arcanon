@@ -546,6 +546,7 @@ export class QueryEngine {
       SELECT s.id, s.name, s.root_path, s.language, s.type, s.repo_id, r.name as repo_name, r.path as repo_path
       FROM services s
       JOIN repos r ON r.id = s.repo_id
+      WHERE s.id IN (SELECT MAX(id) FROM services GROUP BY name)
     `,
       )
       .all();

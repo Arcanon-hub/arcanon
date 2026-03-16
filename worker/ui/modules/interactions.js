@@ -139,7 +139,7 @@ export function setupInteractions(canvas) {
       if (e.ctrlKey) {
         // Pinch-to-zoom (trackpad) or Ctrl+scroll (mouse) — ZOOM
         // D3-style continuous delta: normalize across deltaMode, apply sensitivity factor
-        const SENSITIVITY = 0.001; // lower = slower zoom; D3 default is 0.002
+        const SENSITIVITY = 0.004; // higher = faster zoom; D3 default is 0.002
         const rawDelta = -e.deltaY * (e.deltaMode === 1 ? 0.05 : e.deltaMode ? 1 : SENSITIVITY);
         const factor = Math.pow(2, rawDelta); // exponential feels natural vs linear
         const newScale = Math.min(5, Math.max(0.15, state.transform.scale * factor));

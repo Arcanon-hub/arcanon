@@ -58,7 +58,12 @@ Progress: [░░░░░░░░░░] 0% (v2.1)
 
 ### Pending Todos
 
-None yet.
+- **BUG: Scan data duplication** — Re-scanning a repo creates duplicate service/connection rows instead of upserting. Cross-repo scans that discover the same service (e.g. repo A and repo B both report `management-api`) also duplicate. Current workaround: `MAX(id) GROUP BY name` in getGraph(). Real fix needs:
+  1. Upsert services by (repo_id, name) — re-scan replaces, not appends
+  2. Cross-repo service identity merging — same service name from different repos = one node
+  3. Scan versioning — each scan creates a version entry; graph shows latest version; UI can browse history
+  - **Workaround applied:** `WHERE s.id IN (SELECT MAX(id) FROM services GROUP BY name)` in getGraph()
+  - **Also seen:** naming inconsistencies across scans (event-journal vs event_journal) — agent prompt should enforce consistent naming
 
 ### Blockers/Concerns
 
