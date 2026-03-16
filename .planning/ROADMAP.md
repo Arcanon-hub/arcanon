@@ -106,6 +106,6 @@ Plans:
 | 1-13 | v1.0 | 17/17 | Complete | 2026-03-15 |
 | 14-21 | v2.0 | 19/19 | Complete | 2026-03-15 |
 | 22-26 | v2.1 | 11/11 | Complete | 2026-03-16 |
-| 27. Schema Foundation + Upsert Repair | v2.2 | 0/2 | Not started | - |
+| 27. Schema Foundation + Upsert Repair | 1/2 | In Progress|  | - |
 | 28. Scan Version Bracket | v2.2 | 0/2 | Not started | - |
 | 29. Cross-Project MCP Queries | v2.2 | 0/1 | Not started | - |

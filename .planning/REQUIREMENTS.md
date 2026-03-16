@@ -18,7 +18,7 @@ Requirements for scan data integrity and cross-repo MCP queries.
 
 ### Agent Naming
 
-- [ ] **SCAN-04**: Agent prompt enforces consistent service naming (lowercase-hyphenated, derived from package manifest name field)
+- [x] **SCAN-04**: Agent prompt enforces consistent service naming (lowercase-hyphenated, derived from package manifest name field)
 
 ### Cross-Repo MCP Queries
 
@@ -51,7 +51,7 @@ Requirements for scan data integrity and cross-repo MCP queries.
 | SCAN-01 | Phase 27 | Pending |
 | SCAN-02 | Phase 27 | Pending |
 | SCAN-03 | Phase 28 | Pending |
-| SCAN-04 | Phase 27 | Pending |
+| SCAN-04 | Phase 27 | Complete |
 | SCAN-05 | Phase 29 | Pending |
 
 **Coverage:**

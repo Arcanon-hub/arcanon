@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Scan Data Integrity
-status: ready_to_plan
-stopped_at: Roadmap created — Phase 27 ready to plan
-last_updated: "2026-03-16"
-last_activity: 2026-03-16 — v2.2 roadmap created (3 phases, 5 requirements mapped)
+status: planning
+stopped_at: Completed 27-02-PLAN.md
+last_updated: "2026-03-16T14:55:21.069Z"
+last_activity: 2026-03-16 — v2.2 roadmap created
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 5
+  completed_plans: 1
   percent: 0
 ---
 
@@ -47,6 +47,8 @@ Progress: [░░░░░░░░░░] 0%
 - [v2.1]: Graph dedup via MAX(id) GROUP BY name — workaround, scheduled for removal in Phase 27
 - [v2.2]: SCAN-01 + SCAN-02 must ship atomically — migration 004 + ON CONFLICT DO UPDATE together, or cascade-delete wipes child rows
 - [v2.2]: SCAN-04 (agent naming) grouped with Phase 27 — cheapest identity fix, no schema dependency
+- [Phase 27-02]: Naming convention enforced at agent prompt level (cheapest fix — no schema or code change required)
+- [Phase 27-02]: Disallowed names: server, worker, api, app, main, service, backend, frontend — disambiguation via directory/module path suffix
 
 ### Pending Todos
 
@@ -61,6 +63,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-16
-Stopped at: Roadmap written — ready to plan Phase 27
+Last session: 2026-03-16T14:55:21.066Z
+Stopped at: Completed 27-02-PLAN.md
 Resume file: None
