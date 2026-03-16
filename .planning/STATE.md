@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.2
 milestone_name: Scan Data Integrity
 status: planning
-stopped_at: Completed 27-01-PLAN.md — schema dedup and upsert repair complete
-last_updated: "2026-03-16T15:03:21.245Z"
+stopped_at: Completed 28-01-PLAN.md — scan version bracket schema and QueryEngine methods complete
+last_updated: "2026-03-16T15:09:19.522Z"
 last_activity: 2026-03-16 — v2.2 roadmap created
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -51,6 +51,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 27-02]: Disallowed names: server, worker, api, app, main, service, backend, frontend — disambiguation via directory/module path suffix
 - [Phase 27-01]: In-place dedup strategy: SQLite 3.51+ rewrites FK refs on ALTER TABLE RENAME even with legacy_alter_table=ON — in-place DELETE+CREATE UNIQUE INDEX avoids DROP TABLE FK failure inside transactions
 - [Phase 27-01]: Migration 004 + ON CONFLICT DO UPDATE shipped atomically — UNIQUE constraint alone with INSERT OR REPLACE causes cascade-delete of child rows
+- [Phase 28]: Migration 005 uses ALTER TABLE ADD COLUMN without DEFAULT — nullable FK, existing rows get NULL
+- [Phase 28]: endScan deletes connections before services (no CASCADE on FK in migration 001 services table)
 
 ### Pending Todos
 
@@ -65,6 +67,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-16T15:03:21.243Z
-Stopped at: Completed 27-01-PLAN.md — schema dedup and upsert repair complete
+Last session: 2026-03-16T15:09:19.520Z
+Stopped at: Completed 28-01-PLAN.md — scan version bracket schema and QueryEngine methods complete
 Resume file: None

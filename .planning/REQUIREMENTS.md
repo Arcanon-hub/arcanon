@@ -14,7 +14,7 @@ Requirements for scan data integrity and cross-repo MCP queries.
 
 ### Scan Versioning
 
-- [ ] **SCAN-03**: Each scan creates a version bracket (beginScan/endScan); stale rows from prior scans are cleaned up after successful persist
+- [x] **SCAN-03**: Each scan creates a version bracket (beginScan/endScan); stale rows from prior scans are cleaned up after successful persist
 
 ### Agent Naming
 
@@ -50,7 +50,7 @@ Requirements for scan data integrity and cross-repo MCP queries.
 |-------------|-------|--------|
 | SCAN-01 | Phase 27 | Complete |
 | SCAN-02 | Phase 27 | Complete |
-| SCAN-03 | Phase 28 | Pending |
+| SCAN-03 | Phase 28 | Complete |
 | SCAN-04 | Phase 27 | Complete |
 | SCAN-05 | Phase 29 | Pending |
 
