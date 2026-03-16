@@ -720,8 +720,9 @@ function showDetailPanel(node) {
           ${e.target_file ? `<div class="conn-file">${e.target_file}</div>` : ""}
           ${e.mismatch ? '<div class="conn-file" style="color:#fc8181">⚠ Endpoint handler not found in target</div>' : ""}
         </div>`;
+      }
+      html += `</div>`;
     }
-    html += `</div>`;
   }
 
   if (outgoing.length === 0 && incoming.length === 0) {
