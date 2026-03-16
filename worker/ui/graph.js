@@ -26,6 +26,8 @@ let _detailCloseWired = false;
  * @param {Function} fitToScreen - Callback to fit the loaded graph to screen.
  */
 export async function loadProject(hash, canvas, fitToScreen) {
+  // Allow canvas to be omitted (e.g. called from project-switcher) — fall back to DOM
+  if (!canvas) canvas = document.getElementById('graph-canvas');
   const projectParam = `?hash=${encodeURIComponent(hash)}`;
   state.currentProject = hash;
 
@@ -116,7 +118,7 @@ export async function loadProject(hash, canvas, fitToScreen) {
 
   setupInteractions(canvas);
   setupControls();
-  document.getElementById("fit-btn").addEventListener("click", fitToScreen);
+  if (fitToScreen) document.getElementById("fit-btn").addEventListener("click", fitToScreen);
 
   // Wire detail-close only once — addEventListener is idempotent for named
   // functions, but we use a flag to be explicit and avoid redundant calls.
