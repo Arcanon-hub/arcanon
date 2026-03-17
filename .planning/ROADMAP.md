@@ -82,10 +82,10 @@ Plans:
   1. A `GET /graph` response contains `"exposes": [{"kind": "...", "method": ..., "path": "..."}]` on each node that has stored endpoints, exports, or resources
   2. In browser devtools after `loadProject()`, `state.graphData.nodes` shows at least one node with a non-empty `exposes` array for a library or infra repo that has been scanned
   3. Service nodes with no stored exposes have `exposes: []` in the graph response (not `undefined` or absent)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 31-01: Extend `getGraph()` and `graph.js` `loadProject()` to attach and forward exposes data
+- [ ] 31-01-PLAN.md — Extend getGraph() and loadProject() to attach and forward exposes data
 
 ### Phase 32: UI Detail Panels
 **Goal**: Clicking a library node shows its exported types and interfaces with consumer services; clicking an infra node shows its managed resources and wired services; clicking a service node is unchanged
