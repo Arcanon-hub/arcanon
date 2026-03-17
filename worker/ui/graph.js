@@ -62,6 +62,7 @@ export async function loadProject(hash, canvas) {
       language: s.language,
       type: s.type || "service",
       repo_name: s.repo_name,
+      exposes: s.exposes || [],
     };
   });
 
