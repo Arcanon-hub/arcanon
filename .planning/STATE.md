@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Type-Specific Detail Panels
 status: planning
-stopped_at: Completed 31-api-surface-extension 31-01-PLAN.md
-last_updated: "2026-03-17T15:39:17.232Z"
+stopped_at: Completed 32-ui-detail-panels 32-01-PLAN.md
+last_updated: "2026-03-17T15:41:45.444Z"
 last_activity: 2026-03-17 — Roadmap created, Phase 30 ready to plan
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -44,6 +44,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 30-storage-correctness P30-01 | 2min | 1 tasks | 2 files |
 | Phase 30-storage-correctness P30-02 | 15min | 1 tasks | 3 files |
 | Phase 31 P31-01 | 2min | 2 tasks | 5 files |
+| Phase 32-ui-detail-panels P32-01 | 1min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -60,6 +61,8 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 31]: SELECT kind in exposed_endpoints query now so Phase 32 detail panels get all fields without another query change
 - [Phase 31]: try/catch guard on exposed_endpoints SELECT mirrors detectMismatches() pattern — returns exposes:[] when migration 007 not applied
 - [Phase 31]: exposes:s.exposes||[] in loadProject() node mapping ensures state nodes always have exposes array, never undefined
+- [Phase 32-ui-detail-panels]: infra guard in getNodeType() inserted before library/sdk check — nodes named 'k8s-infra-lib' with type='infra' correctly return 'infra'
+- [Phase 32-ui-detail-panels]: infra color is '#68d391' (green) in NODE_TYPE_COLORS, matching design spec
 
 ### Pending Todos
 
@@ -73,6 +76,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T15:37:00.683Z
-Stopped at: Completed 31-api-surface-extension 31-01-PLAN.md
+Last session: 2026-03-17T15:41:45.441Z
+Stopped at: Completed 32-ui-detail-panels 32-01-PLAN.md
 Resume file: None

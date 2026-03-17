@@ -20,7 +20,7 @@ Requirements for type-specific detail panels. Each maps to roadmap phases.
 
 ### Detail Panels
 
-- [ ] **PANEL-01**: `getNodeType()` in `utils.js` recognizes `infra` type and returns correct classification
+- [x] **PANEL-01**: `getNodeType()` in `utils.js` recognizes `infra` type and returns correct classification
 - [ ] **PANEL-02**: `showDetailPanel()` dispatch routes infra nodes to an infra-specific renderer instead of falling through to service renderer
 - [ ] **PANEL-03**: Library detail panel shows exported types/interfaces grouped by category (functions vs types) and lists which services consume the library
 - [ ] **PANEL-04**: Infra detail panel shows managed resources grouped by prefix (k8s:deployment, k8s:configmap, etc.) and lists which services are provisioned by this infra
@@ -50,7 +50,7 @@ Requirements for type-specific detail panels. Each maps to roadmap phases.
 | STORE-03 | Phase 30 | Complete |
 | API-01 | Phase 31 | Complete |
 | API-02 | Phase 31 | Complete |
-| PANEL-01 | Phase 32 | Pending |
+| PANEL-01 | Phase 32 | Complete |
 | PANEL-02 | Phase 32 | Pending |
 | PANEL-03 | Phase 32 | Pending |
 | PANEL-04 | Phase 32 | Pending |
