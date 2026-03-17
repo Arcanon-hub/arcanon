@@ -112,5 +112,5 @@ Plans:
 | 22-26 | v2.1 | 11/11 | Complete | 2026-03-16 |
 | 27-29 | v2.2 | 5/5 | Complete | 2026-03-16 |
 | 30. Storage Correctness | 2/2 | Complete    | 2026-03-17 | - |
-| 31. API Surface Extension | 1/1 | Complete   | 2026-03-17 | - |
+| 31. API Surface Extension | 1/1 | Complete    | 2026-03-17 | - |
 | 32. UI Detail Panels | v2.3 | 0/2 | Not started | - |

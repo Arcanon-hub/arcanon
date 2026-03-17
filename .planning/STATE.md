@@ -4,7 +4,7 @@ milestone: v2.3
 milestone_name: Type-Specific Detail Panels
 status: planning
 stopped_at: Completed 31-api-surface-extension 31-01-PLAN.md
-last_updated: "2026-03-17T15:37:00.686Z"
+last_updated: "2026-03-17T15:39:17.232Z"
 last_activity: 2026-03-17 — Roadmap created, Phase 30 ready to plan
 progress:
   total_phases: 3
