@@ -5,7 +5,10 @@
 **Phases completed:** 3 phases, 5 plans, 0 tasks
 
 **Key accomplishments:**
-- (none recorded)
+- UNIQUE(repo_id, name) constraint with in-place dedup + ON CONFLICT DO UPDATE upsert preserving row IDs across re-scans
+- Scan version bracket (beginScan/endScan) with atomic stale-row cleanup — failed scans leave prior data intact
+- Agent prompt service naming convention enforcing manifest-derived, lowercase-hyphenated names
+- Cross-project MCP queries via per-call resolveDb dispatching by path/hash/repo name
 
 ---
 
@@ -14,7 +17,10 @@
 **Phases completed:** 5 phases, 11 plans, 0 tasks
 
 **Key accomplishments:**
-- (none recorded)
+- HiDPI/Retina-crisp canvas rendering with devicePixelRatio scaling and smooth exponential zoom/pan
+- Shared structured logger with component tags across all worker modules (zero console.log in production code)
+- Collapsible log terminal with 2s polling, ring buffer, component filter, keyword search, and auto-scroll
+- Persistent project switcher with full event listener teardown and force worker termination between projects
 
 ---
 

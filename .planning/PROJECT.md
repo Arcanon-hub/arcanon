@@ -62,11 +62,11 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ## Context
 
-Shipped v2.1 with ~7,500 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 26 phases across 3 milestones, 47 plans. Plugin installed via marketplace and operational.
+Shipped v2.2 with ~8,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 29 phases across 4 milestones, 52 plans. Plugin installed via marketplace and operational.
 
-Architecture: commands/ for user-invoked features, skills/ for auto-invoked knowledge, hooks/ for formatting/linting/guarding, worker/ for Node.js daemon (db/, server/, scan/, mcp/, ui/ subdirectories), lib/ for shared bash/JS libraries.
+Architecture: commands/ for user-invoked features, skills/ for auto-invoked knowledge, hooks/ for formatting/linting/guarding, worker/ for Node.js daemon (db/, server/, scan/, mcp/, ui/ subdirectories), lib/ for shared bash/JS libraries. Agent scan prompts modularized into type-specific variants (service, library, infra) with shared common component.
 
-Known tech debt: scan data duplication on re-scan (workaround in place), no log rotation, db/database.js has console.log in script-mode guard.
+Known tech debt: setupControls() listener accumulation on project switch, no log rotation, db/database.js has console.log in script-mode guard, getQueryEngineByHash inline migration workaround.
 
 ## Constraints
 
@@ -100,4 +100,4 @@ Known tech debt: scan data duplication on re-scan (workaround in place), no log 
 | Per-call resolveDb in MCP server | Module-level DB resolution was wrong for cross-project queries | ✓ Good |
 
 ---
-*Last updated: 2026-03-16 after v2.2 milestone*
+*Last updated: 2026-03-17 after v2.2 milestone completion*

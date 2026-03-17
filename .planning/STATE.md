@@ -21,14 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-16)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** v2.2 Phase 28 — Scan Version Bracket (complete)
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 28 of 29 (Scan Version Bracket)
-Plan: 02 of 02 (complete)
-Status: Phase complete — all plans shipped
-Last activity: 2026-03-16 — Phase 28 complete (28-02: scanRepos bracket wiring)
+All milestones through v2.2 shipped.
+Last activity: 2026-03-17 — v2.1 + v2.2 milestone audit and completion
 
 Progress: [██████████] 100%
 
