@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.3
 milestone_name: Type-Specific Detail Panels
 status: planning
-stopped_at: Completed 30-storage-correctness 30-01-PLAN.md
-last_updated: "2026-03-17T15:23:23.635Z"
+stopped_at: Completed 30-storage-correctness 30-02-PLAN.md
+last_updated: "2026-03-17T15:29:38.915Z"
 last_activity: 2026-03-17 — Roadmap created, Phase 30 ready to plan
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -42,6 +42,7 @@ Progress: [░░░░░░░░░░] 0%
 |-------|------|----------|-------|-------|
 | 28 | 28-02 | 7min | 2 | 3 |
 | Phase 30-storage-correctness P30-01 | 2min | 1 tasks | 2 files |
+| Phase 30-storage-correctness P30-02 | 15min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -53,6 +54,8 @@ Progress: [░░░░░░░░░░] 0%
 - [v2.3]: utils.js infra guard must commit before detail-panel.js changes — prevents infra nodes falling through to service renderer during incremental work
 - [Phase 30-storage-correctness]: DELETE predicate confirmed: method IS NULL AND path NOT LIKE '/% correctly targets malformed library/infra rows while preserving valid null-method REST rows
 - [Phase 30-storage-correctness]: kind column is NOT NULL DEFAULT 'endpoint' — enforces discriminant on all future inserts, ALTER TABLE default backfills existing rows without an UPDATE sweep
+- [Phase 30-storage-correctness]: COALESCE(method, '') in UNIQUE index on exposed_endpoints — SQLite NULL != NULL in UNIQUE constraints requires COALESCE for library/infra row deduplication on re-scan
+- [Phase 30-storage-correctness]: Migration 007 table recreation to replace inline UNIQUE constraint — SQLite ALTER TABLE cannot drop constraints; recreate table to install COALESCE index
 
 ### Pending Todos
 
@@ -66,6 +69,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-17T15:23:23.632Z
-Stopped at: Completed 30-storage-correctness 30-01-PLAN.md
+Last session: 2026-03-17T15:29:38.912Z
+Stopped at: Completed 30-storage-correctness 30-02-PLAN.md
 Resume file: None

@@ -11,7 +11,7 @@ Requirements for type-specific detail panels. Each maps to roadmap phases.
 
 - [x] **STORE-01**: Migration 007 adds `kind` column to `exposed_endpoints` table with type-conditional values (endpoint, export, resource)
 - [x] **STORE-02**: Migration 007 purges malformed `exposed_endpoints` rows for non-service nodes so re-scan inserts correctly
-- [ ] **STORE-03**: `persistFindings()` uses type-conditional parsing — services parse "METHOD PATH", libraries store raw signature text, infra stores raw resource reference
+- [x] **STORE-03**: `persistFindings()` uses type-conditional parsing — services parse "METHOD PATH", libraries store raw signature text, infra stores raw resource reference
 
 ### API Surface
 
@@ -47,7 +47,7 @@ Requirements for type-specific detail panels. Each maps to roadmap phases.
 |-------------|-------|--------|
 | STORE-01 | Phase 30 | Complete |
 | STORE-02 | Phase 30 | Complete |
-| STORE-03 | Phase 30 | Pending |
+| STORE-03 | Phase 30 | Complete |
 | API-01 | Phase 31 | Pending |
 | API-02 | Phase 31 | Pending |
 | PANEL-01 | Phase 32 | Pending |
