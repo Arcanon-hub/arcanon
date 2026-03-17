@@ -45,21 +45,21 @@ Requirements for type-specific detail panels. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STORE-01 | - | Pending |
-| STORE-02 | - | Pending |
-| STORE-03 | - | Pending |
-| API-01 | - | Pending |
-| API-02 | - | Pending |
-| PANEL-01 | - | Pending |
-| PANEL-02 | - | Pending |
-| PANEL-03 | - | Pending |
-| PANEL-04 | - | Pending |
+| STORE-01 | Phase 30 | Pending |
+| STORE-02 | Phase 30 | Pending |
+| STORE-03 | Phase 30 | Pending |
+| API-01 | Phase 31 | Pending |
+| API-02 | Phase 31 | Pending |
+| PANEL-01 | Phase 32 | Pending |
+| PANEL-02 | Phase 32 | Pending |
+| PANEL-03 | Phase 32 | Pending |
+| PANEL-04 | Phase 32 | Pending |
 
 **Coverage:**
 - v2.3 requirements: 9 total
-- Mapped to phases: 0
-- Unmapped: 9 ⚠️
+- Mapped to phases: 9
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-17*
-*Last updated: 2026-03-17 after initial definition*
+*Last updated: 2026-03-17 after roadmap creation (all 9 requirements mapped)*

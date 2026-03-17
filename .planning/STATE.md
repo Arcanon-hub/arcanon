@@ -1,42 +1,42 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.2
-milestone_name: Scan Data Integrity
-status: completed
-stopped_at: Completed 28-02-PLAN.md — scanRepos beginScan/endScan bracket wiring
-last_updated: "2026-03-16T17:07:35.386Z"
-last_activity: "2026-03-16 — Phase 28 complete (28-02: scanRepos bracket wiring)"
+milestone: v2.3
+milestone_name: Type-Specific Detail Panels
+status: ready_to_plan
+stopped_at: Roadmap created — Phase 30 ready to plan
+last_updated: "2026-03-17T00:00:00.000Z"
+last_activity: "2026-03-17 — v2.3 roadmap created (3 phases: 30-32)"
 progress:
   total_phases: 3
-  completed_phases: 3
+  completed_phases: 0
   total_plans: 5
-  completed_plans: 5
-  percent: 100
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-16)
+See: .planning/PROJECT.md (updated 2026-03-17)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** v2.3 Type-Specific Detail Panels
+**Current focus:** v2.3 Type-Specific Detail Panels — Phase 30: Storage Correctness
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 30 of 32 (Storage Correctness)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-03-17 — Milestone v2.3 started
+Status: Ready to plan
+Last activity: 2026-03-17 — Roadmap created, Phase 30 ready to plan
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 47 (across v1.0–v2.1)
-- v2.2 plans completed: 5
+- Total plans completed: 52 (across v1.0–v2.2)
+- v2.3 plans completed: 0
 
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
@@ -46,21 +46,10 @@ Progress: [██████████] 100%
 
 ### Decisions
 
-- [v2.0]: Service is the unit, not repo — works for mono-repo and multi-repo
-- [v2.0]: SQLite primary, ChromaDB optional
-- [v2.1]: Graph dedup via MAX(id) GROUP BY name — workaround, scheduled for removal in Phase 27
-- [v2.2]: SCAN-01 + SCAN-02 must ship atomically — migration 004 + ON CONFLICT DO UPDATE together, or cascade-delete wipes child rows
-- [v2.2]: SCAN-04 (agent naming) grouped with Phase 27 — cheapest identity fix, no schema dependency
-- [Phase 27-02]: Naming convention enforced at agent prompt level (cheapest fix — no schema or code change required)
-- [Phase 27-02]: Disallowed names: server, worker, api, app, main, service, backend, frontend — disambiguation via directory/module path suffix
-- [Phase 27-01]: In-place dedup strategy: SQLite 3.51+ rewrites FK refs on ALTER TABLE RENAME even with legacy_alter_table=ON — in-place DELETE+CREATE UNIQUE INDEX avoids DROP TABLE FK failure inside transactions
-- [Phase 27-01]: Migration 004 + ON CONFLICT DO UPDATE shipped atomically — UNIQUE constraint alone with INSERT OR REPLACE causes cascade-delete of child rows
-- [Phase 28]: Migration 005 uses ALTER TABLE ADD COLUMN without DEFAULT — nullable FK, existing rows get NULL
-- [Phase 28]: endScan deletes connections before services (no CASCADE on FK in migration 001 services table)
-- [Phase 29-cross-project-mcp-queries]: resolveDb routing: absolute path → getQueryEngine; 12-char hex → getQueryEngineByHash; other string → getQueryEngineByRepo; undefined → ALLCLEAR_PROJECT_ROOT / cwd
-- [Phase 29-cross-project-mcp-queries]: Pool-owned connections: MCP tool handlers never call db.close() — pool.js owns connection lifetime via QueryEngine cache
-- [Phase 28-02]: persistFindings is called inside scanRepos (not by caller) — manager owns persistence end-to-end; /scan POST endpoint in http.js handles a separate call path for externally-submitted findings
-- [Phase 28-02]: beginScan is called even when agent parse later fails — scan started, but endScan omitted so prior data survives; scan_versions row remains incomplete
+- [v2.3]: kind discriminant column on existing `exposed_endpoints` table — avoids table rename, keeps all cross-cutting concerns (mismatch detection, FTS5, future reports) pointing at one table
+- [v2.3]: Embed exposes in /graph response — not a per-click fetch; avoids async rendering state and 20-200ms click latency
+- [v2.3]: Migration 007 must purge malformed rows before fixed parser lands — INSERT OR IGNORE silently blocks correct rows when malformed rows occupy the same UNIQUE key
+- [v2.3]: utils.js infra guard must commit before detail-panel.js changes — prevents infra nodes falling through to service renderer during incremental work
 
 ### Pending Todos
 
@@ -68,13 +57,12 @@ None.
 
 ### Blockers/Concerns
 
-- Phase 27: Migration 004 must be tested against a database with existing duplicate (repo_id, name) rows — clean fixture is insufficient
-- Phase 27: Audit actual service names in existing project DBs before finalizing generic name block-list
-- Phase 29: Decide allowed-roots policy for `projectRoot` validation (e.g., must be under HOME, must appear in ~/.allclear/projects/)
-- Phase 29: Confirm pool.js lines 178-202 inline migration workaround is safe to remove after migrations 004+005 land
+- Phase 30: Validate DELETE predicate for malformed-row purge against a real DB with pre-existing library/infra scans — `method IS NULL AND path NOT LIKE '/%'` is the proposed predicate; confirm at Phase 30 test time
+- Phase 30: Decide boundary_entry persistence (add to services table in migration 007 or defer to migration 008) — affects whether source file link is available in Phase 32 library panel
+- Phase 32: Audit all `${e.path}`, `${e.method}`, `${e.source_file}` template literal insertions in detail-panel.js for XSS — function signatures from scan results are user-controlled strings
 
 ## Session Continuity
 
-Last session: 2026-03-16T15:32:00Z
-Stopped at: Completed 28-02-PLAN.md — scanRepos beginScan/endScan bracket wiring
+Last session: 2026-03-17
+Stopped at: Roadmap created — Phase 30 ready to plan
 Resume file: None

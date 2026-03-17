@@ -6,6 +6,7 @@
 - ✅ **v2.0 Service Dependency Intelligence** — Phases 14-21 (shipped 2026-03-15)
 - ✅ **v2.1 UI Polish & Observability** — Phases 22-26 (shipped 2026-03-16)
 - ✅ **v2.2 Scan Data Integrity** — Phases 27-29 (shipped 2026-03-16)
+- 🚧 **v2.3 Type-Specific Detail Panels** — Phases 30-32 (in progress)
 
 ## Phases
 
@@ -47,6 +48,61 @@ Full details: `.planning/milestones/v2.2-ROADMAP.md`
 
 </details>
 
+### 🚧 v2.3 Type-Specific Detail Panels (In Progress)
+
+**Milestone Goal:** Make the graph detail panel show type-appropriate data for library and infrastructure nodes — exported types/interfaces for libraries, managed resources for infra — with correct data storage replacing the broken "METHOD PATH" parser.
+
+- [ ] **Phase 30: Storage Correctness** — Migration 007 adds `kind` column and purges malformed rows; `persistFindings()` dispatches on node type
+- [ ] **Phase 31: API Surface Extension** — `getGraph()` attaches `exposes` arrays to nodes; `graph.js` forwards data into `state.graphData`
+- [ ] **Phase 32: UI Detail Panels** — `utils.js` infra guard + three-way panel routing + library and infra renderers
+
+## Phase Details
+
+### Phase 30: Storage Correctness
+**Goal**: The `exposed_endpoints` table contains only well-formed rows classified by kind, and re-scanning a library or infra repo produces correct export/resource records
+**Depends on**: Nothing (first phase of v2.3)
+**Requirements**: STORE-01, STORE-02, STORE-03
+**Success Criteria** (what must be TRUE):
+  1. After running migration 007, `SELECT kind FROM exposed_endpoints LIMIT 1` returns a value (column exists with default `'endpoint'`)
+  2. After migration 007, `SELECT COUNT(*) FROM exposed_endpoints WHERE method IS NULL AND path NOT LIKE '/%'` returns 0 (malformed non-REST rows purged)
+  3. After re-scanning a library repo, `SELECT path, kind FROM exposed_endpoints WHERE service_id = <lib_id>` returns full function signatures (e.g., `"functionName(param: T): R"`) with `kind = 'export'` — not whitespace-split fragments
+  4. After re-scanning an infra repo, `SELECT path, kind FROM exposed_endpoints WHERE service_id = <infra_id>` returns full resource references (e.g., `"k8s:deployment/payment"`) with `kind = 'resource'`
+  5. Service node re-scan continues to produce REST-format rows (`method = 'GET'`, `path = '/orders'`) with `kind = 'endpoint'`
+**Plans**: TBD
+
+Plans:
+- [ ] 30-01: Migration 007 — add `kind` column and purge malformed rows
+- [ ] 30-02: Fix `persistFindings()` — type-conditional dispatch on `svc.type`
+
+### Phase 31: API Surface Extension
+**Goal**: The `/graph` HTTP response includes `exposes` arrays on each node and the browser graph state exposes them for click-time panel rendering
+**Depends on**: Phase 30
+**Requirements**: API-01, API-02
+**Success Criteria** (what must be TRUE):
+  1. A `GET /graph` response contains `"exposes": [{"kind": "...", "method": ..., "path": "..."}]` on each node that has stored endpoints, exports, or resources
+  2. In browser devtools after `loadProject()`, `state.graphData.nodes` shows at least one node with a non-empty `exposes` array for a library or infra repo that has been scanned
+  3. Service nodes with no stored exposes have `exposes: []` in the graph response (not `undefined` or absent)
+**Plans**: TBD
+
+Plans:
+- [ ] 31-01: Extend `getGraph()` and `graph.js` `loadProject()` to attach and forward exposes data
+
+### Phase 32: UI Detail Panels
+**Goal**: Clicking a library node shows its exported types and interfaces with consumer services; clicking an infra node shows its managed resources and wired services; clicking a service node is unchanged
+**Depends on**: Phase 31
+**Requirements**: PANEL-01, PANEL-02, PANEL-03, PANEL-04
+**Success Criteria** (what must be TRUE):
+  1. Clicking a library node opens a detail panel with an "Exports" section listing function signatures and type definitions, with functions and types grouped separately
+  2. The library panel shows a "Used by" section listing services that import from the library
+  3. Clicking an infra node opens a detail panel with a "Manages" section listing resources grouped by prefix (`k8s:`, `tf:`, `helm:`) with per-prefix counts
+  4. The infra panel shows a "Wires" section listing services connected to the infra node
+  5. Clicking a service node renders the existing service panel without any visual or behavioral change
+**Plans**: TBD
+
+Plans:
+- [ ] 32-01: Add `infra` guard to `getNodeType()` in `utils.js` and `getNodeColor()` in `state.js`
+- [ ] 32-02: Three-way routing in `showDetailPanel()` and implement `renderLibraryConnections()` and `renderInfraConnections()` in `detail-panel.js`
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -55,3 +111,6 @@ Full details: `.planning/milestones/v2.2-ROADMAP.md`
 | 14-21 | v2.0 | 19/19 | Complete | 2026-03-15 |
 | 22-26 | v2.1 | 11/11 | Complete | 2026-03-16 |
 | 27-29 | v2.2 | 5/5 | Complete | 2026-03-16 |
+| 30. Storage Correctness | v2.3 | 0/2 | Not started | - |
+| 31. API Surface Extension | v2.3 | 0/1 | Not started | - |
+| 32. UI Detail Panels | v2.3 | 0/2 | Not started | - |
