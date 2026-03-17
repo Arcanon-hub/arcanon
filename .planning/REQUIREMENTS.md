@@ -15,8 +15,8 @@ Requirements for type-specific detail panels. Each maps to roadmap phases.
 
 ### API Surface
 
-- [ ] **API-01**: `getGraph()` response includes `exposes` array on each service node containing its exposed endpoints/exports/resources
-- [ ] **API-02**: `graph.js` `loadProject()` forwards exposes data into `state.graphData.nodes[i].exposes`
+- [x] **API-01**: `getGraph()` response includes `exposes` array on each service node containing its exposed endpoints/exports/resources
+- [x] **API-02**: `graph.js` `loadProject()` forwards exposes data into `state.graphData.nodes[i].exposes`
 
 ### Detail Panels
 
@@ -48,8 +48,8 @@ Requirements for type-specific detail panels. Each maps to roadmap phases.
 | STORE-01 | Phase 30 | Complete |
 | STORE-02 | Phase 30 | Complete |
 | STORE-03 | Phase 30 | Complete |
-| API-01 | Phase 31 | Pending |
-| API-02 | Phase 31 | Pending |
+| API-01 | Phase 31 | Complete |
+| API-02 | Phase 31 | Complete |
 | PANEL-01 | Phase 32 | Pending |
 | PANEL-02 | Phase 32 | Pending |
 | PANEL-03 | Phase 32 | Pending |
