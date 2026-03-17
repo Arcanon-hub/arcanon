@@ -1,9 +1,14 @@
 /**
- * Detail panel — shows node info on click (services show calls, libraries show provides).
+ * Detail panel — shows node info on click (services show calls, libraries show exports, infra shows resources).
  */
 
 import { state } from "./state.js";
 import { getNodeType, getNodeColor } from "./utils.js";
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
 
 export function showDetailPanel(node) {
   const panel = document.getElementById("detail-panel");
@@ -40,15 +45,15 @@ export function showDetailPanel(node) {
     </div>`;
   }
 
-  const isLib = nodeType === "library" || nodeType === "sdk";
-
-  if (isLib) {
-    html += renderLibraryConnections(outgoing, incoming, nameById);
+  if (nodeType === 'infra') {
+    html += renderInfraConnections(node, outgoing, nameById);
+  } else if (nodeType === 'library' || nodeType === 'sdk') {
+    html += renderLibraryConnections(node, outgoing, incoming, nameById);
   } else {
     html += renderServiceConnections(outgoing, incoming, nameById);
   }
 
-  if (outgoing.length === 0 && incoming.length === 0) {
+  if (outgoing.length === 0 && incoming.length === 0 && (node.exposes || []).length === 0) {
     html += `<div class="detail-section">
       <div class="detail-value" style="color: #718096">No connections</div>
     </div>`;
@@ -58,20 +63,38 @@ export function showDetailPanel(node) {
   panel.style.display = "block";
 }
 
-function renderLibraryConnections(outgoing, incoming, nameById) {
+function renderLibraryConnections(node, outgoing, incoming, nameById) {
   let html = "";
 
-  if (outgoing.length > 0) {
+  const exports = (node.exposes || []).filter(
+    (ex) => ex.kind === 'export'
+  );
+
+  if (exports.length > 0) {
+    const functions = exports.filter((ex) => ex.path && ex.path.includes('('));
+    const types = exports.filter((ex) => !ex.path || !ex.path.includes('('));
+
     html += `<div class="detail-section">
-      <div class="detail-label">Provides (${outgoing.length})</div>`;
-    for (const e of outgoing) {
-      const target = nameById[e.target_service_id] || "?";
-      html += `<div class="connection-item">
-        <div><span class="conn-method">${e.method || "fn"}</span> <span class="conn-path">${e.path || ""}</span></div>
-        <div class="conn-direction">→ used by <span class="conn-target">${target}</span></div>
-        ${e.source_file ? `<div class="conn-file">${e.source_file}</div>` : ""}
-      </div>`;
+      <div class="detail-label">Exports (${exports.length})</div>`;
+
+    if (functions.length > 0) {
+      html += `<div class="detail-label" style="font-size:0.85em;margin-top:4px">Functions (${functions.length})</div>`;
+      for (const ex of functions) {
+        html += `<div class="connection-item">
+          <div class="conn-path">${escapeHtml(ex.path)}</div>
+        </div>`;
+      }
     }
+
+    if (types.length > 0) {
+      html += `<div class="detail-label" style="font-size:0.85em;margin-top:4px">Types (${types.length})</div>`;
+      for (const ex of types) {
+        html += `<div class="connection-item">
+          <div class="conn-path">${escapeHtml(ex.path)}</div>
+        </div>`;
+      }
+    }
+
     html += `</div>`;
   }
 
@@ -84,10 +107,58 @@ function renderLibraryConnections(outgoing, incoming, nameById) {
       if (!users.has(source)) {
         users.add(source);
         html += `<div class="connection-item">
-          <div><span class="conn-target">${source}</span></div>
-          ${e.source_file ? `<div class="conn-file">${e.source_file}</div>` : ""}
+          <div><span class="conn-target">${escapeHtml(source)}</span></div>
+          ${e.source_file ? `<div class="conn-file">${escapeHtml(e.source_file)}</div>` : ""}
         </div>`;
       }
+    }
+    html += `</div>`;
+  }
+
+  return html;
+}
+
+function renderInfraConnections(node, outgoing, nameById) {
+  let html = "";
+
+  const resources = (node.exposes || []).filter(
+    (r) => r.kind === 'resource'
+  );
+
+  if (resources.length > 0) {
+    // Group by prefix: r.path.split('/')[0]
+    const groups = {};
+    for (const r of resources) {
+      const prefix = r.path ? r.path.split('/')[0] : 'unknown';
+      if (!groups[prefix]) groups[prefix] = [];
+      groups[prefix].push(r);
+    }
+
+    html += `<div class="detail-section">
+      <div class="detail-label">Manages (${resources.length})</div>`;
+
+    for (const [prefix, items] of Object.entries(groups)) {
+      html += `<div class="detail-label" style="font-size:0.85em;margin-top:4px">${escapeHtml(prefix)} (${items.length})</div>`;
+      for (const r of items) {
+        html += `<div class="connection-item">
+          <div class="conn-path">${escapeHtml(r.path)}</div>
+        </div>`;
+      }
+    }
+
+    html += `</div>`;
+  }
+
+  if (outgoing.length > 0) {
+    html += `<div class="detail-section">
+      <div class="detail-label">Wires (${outgoing.length})</div>`;
+    for (const e of outgoing) {
+      const target = nameById[e.target_service_id] || "?";
+      html += `<div class="connection-item">
+        <div><span class="conn-method">${escapeHtml(e.method || e.protocol || '')}</span> <span class="conn-path">${escapeHtml(e.path || '')}</span></div>
+        <div class="conn-direction">→ <span class="conn-target">${escapeHtml(target)}</span></div>
+        ${e.source_file ? `<div class="conn-file">${escapeHtml(e.source_file)}</div>` : ""}
+      </div>`;
     }
     html += `</div>`;
   }
