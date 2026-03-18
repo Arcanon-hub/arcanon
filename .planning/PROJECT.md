@@ -54,7 +54,19 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ### Active
 
-(Defined per milestone — see current milestone below)
+## Current Milestone: v3.0 Layered Graph & Intelligence
+
+**Goal:** Replace force-directed graph with deterministic layered layout, surface external system actors, and enrich the data model for richer MCP impact responses.
+
+**Target features:**
+- Deterministic layered layout (services top, libraries middle, infra bottom, externals right)
+- External system actors detected from scan shown as distinct hexagon nodes
+- Visual boundary grouping within service layer (user-defined in config)
+- Different node shapes per type (circle, diamond, hexagon)
+- Minimal top bar with collapsible filter panel (protocol, layer, mismatch, boundary, language)
+- Metadata extension table (`node_metadata`) for future view data without schema rewrites
+- Richer ChromaDB embeddings with boundary context, actor relationships, connection metadata
+- Enriched MCP tool responses returning type-aware, boundary-aware impact context
 
 ### Out of Scope
 
@@ -109,4 +121,4 @@ Known tech debt: setupControls() listener accumulation on project switch, no log
 | Infra guard first in getNodeType() | Before name heuristics — node named 'k8s-infra-lib' correctly returns 'infra' | ✓ Good |
 
 ---
-*Last updated: 2026-03-18 after v2.3 milestone*
+*Last updated: 2026-03-18 after v3.0 milestone started*

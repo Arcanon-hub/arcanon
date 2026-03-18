@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.3
-milestone_name: Type-Specific Detail Panels
+milestone: v3.0
+milestone_name: Layered Graph & Intelligence
 status: planning
-stopped_at: Completed 32-ui-detail-panels 32-02-PLAN.md
-last_updated: "2026-03-18T15:58:05.597Z"
-last_activity: 2026-03-17 — Roadmap created, Phase 30 ready to plan
+stopped_at: null
+last_updated: "2026-03-18T18:30:00.000Z"
+last_activity: 2026-03-18 — Milestone v3.0 started
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
   percent: 0
 ---
 
@@ -18,53 +18,37 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-17)
+See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** Planning next milestone
+**Current focus:** Defining requirements for v3.0
 
 ## Current Position
 
-All milestones through v2.3 shipped.
-Last activity: 2026-03-18 — v2.3 milestone completed
-Last activity: 2026-03-17 — Roadmap created, Phase 30 ready to plan
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-18 — Milestone v3.0 started
 
 Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 52 (across v1.0–v2.2)
-- v2.3 plans completed: 0
-
-| Phase | Plan | Duration | Tasks | Files |
-|-------|------|----------|-------|-------|
-| 28 | 28-02 | 7min | 2 | 3 |
-| Phase 30-storage-correctness P30-01 | 2min | 1 tasks | 2 files |
-| Phase 30-storage-correctness P30-02 | 15min | 1 tasks | 3 files |
-| Phase 31 P31-01 | 2min | 2 tasks | 5 files |
-| Phase 32-ui-detail-panels P32-01 | 1min | 2 tasks | 3 files |
-| Phase 32-ui-detail-panels P32-02 | 2min | 2 tasks | 2 files |
+- Total plans completed: 57 (across v1.0–v2.3)
 
 ## Accumulated Context
 
 ### Decisions
 
-- [v2.3]: kind discriminant column on existing `exposed_endpoints` table — avoids table rename, keeps all cross-cutting concerns (mismatch detection, FTS5, future reports) pointing at one table
-- [v2.3]: Embed exposes in /graph response — not a per-click fetch; avoids async rendering state and 20-200ms click latency
-- [v2.3]: Migration 007 must purge malformed rows before fixed parser lands — INSERT OR IGNORE silently blocks correct rows when malformed rows occupy the same UNIQUE key
-- [v2.3]: utils.js infra guard must commit before detail-panel.js changes — prevents infra nodes falling through to service renderer during incremental work
-- [Phase 30-storage-correctness]: DELETE predicate confirmed: method IS NULL AND path NOT LIKE '/% correctly targets malformed library/infra rows while preserving valid null-method REST rows
-- [Phase 30-storage-correctness]: kind column is NOT NULL DEFAULT 'endpoint' — enforces discriminant on all future inserts, ALTER TABLE default backfills existing rows without an UPDATE sweep
-- [Phase 30-storage-correctness]: COALESCE(method, '') in UNIQUE index on exposed_endpoints — SQLite NULL != NULL in UNIQUE constraints requires COALESCE for library/infra row deduplication on re-scan
-- [Phase 30-storage-correctness]: Migration 007 table recreation to replace inline UNIQUE constraint — SQLite ALTER TABLE cannot drop constraints; recreate table to install COALESCE index
-- [Phase 31]: SELECT kind in exposed_endpoints query now so Phase 32 detail panels get all fields without another query change
-- [Phase 31]: try/catch guard on exposed_endpoints SELECT mirrors detectMismatches() pattern — returns exposes:[] when migration 007 not applied
-- [Phase 31]: exposes:s.exposes||[] in loadProject() node mapping ensures state nodes always have exposes array, never undefined
-- [Phase 32-ui-detail-panels]: infra guard in getNodeType() inserted before library/sdk check — nodes named 'k8s-infra-lib' with type='infra' correctly return 'infra'
-- [Phase 32-ui-detail-panels]: infra color is '#68d391' (green) in NODE_TYPE_COLORS, matching design spec
-- [Phase 32-ui-detail-panels]: escapeHtml applied to ALL user-controlled strings in new renderers to address XSS concern from STATE.md
-- [Phase 32-ui-detail-panels]: Library Exports section replaces old Provides section — actual export surface from node.exposes is more useful than outgoing edge list
+- [v3.0]: Services top, libraries middle, infra bottom — infra is the foundation services run on
+- [v3.0]: External actors on right side — outbound connections flow right, visually outside system boundary
+- [v3.0]: Minimal top bar with collapsible filter panel — Search + Project + Filters button; all toggles in dropdown
+- [v3.0]: Outbound external actors from scan only — no config-based or inferred inbound actors this milestone
+- [v3.0]: Custom grid layout over Dagre/ELK — simple row-based layout per type layer, pull in library only if needed
+- [v3.0]: node_metadata table for extensibility — avoids migration bloat when future views (STRIDE, vulns) add data
+- [v3.0]: Layered scanning approach — core scan unchanged, future views get their own optional scan passes
+- [v3.0]: Separate actors table over extending services — actors don't have repos, languages, or exposes; half the columns would be NULL
 
 ### Pending Todos
 
@@ -72,12 +56,12 @@ None.
 
 ### Blockers/Concerns
 
-- Phase 30: Validate DELETE predicate for malformed-row purge against a real DB with pre-existing library/infra scans — `method IS NULL AND path NOT LIKE '/%'` is the proposed predicate; confirm at Phase 30 test time
-- Phase 30: Decide boundary_entry persistence (add to services table in migration 007 or defer to migration 008) — affects whether source file link is available in Phase 32 library panel
-- Phase 32: Audit all `${e.path}`, `${e.method}`, `${e.source_file}` template literal insertions in detail-panel.js for XSS — function signatures from scan results are user-controlled strings
+- Boundary data must come from user config (allclear.config.json) — auto-inference deferred due to hallucination risk
+- External actor detection relies on `crossing: "external"` in scan output — verify current scan prompt captures this reliably
+- Layout engine complexity — start with custom grid, only pull in Dagre/ELK if edge routing within complex boundaries demands it
 
 ## Session Continuity
 
-Last session: 2026-03-17T15:44:43.157Z
-Stopped at: Completed 32-ui-detail-panels 32-02-PLAN.md
+Last session: 2026-03-18
+Stopped at: null
 Resume file: None
