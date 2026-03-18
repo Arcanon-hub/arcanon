@@ -109,7 +109,7 @@ async function createHttpServer(queryEngine, options = {}) {
         let projectRoot = request.query?.project || null;
         if (!projectRoot) {
           try {
-            const repos = qe.db.prepare("SELECT path FROM repos LIMIT 1").all();
+            const repos = qe._db.prepare("SELECT path FROM repos LIMIT 1").all();
             if (repos.length > 0) projectRoot = repos[0].path;
           } catch { /* pre-migration DB or no repos */ }
         }
