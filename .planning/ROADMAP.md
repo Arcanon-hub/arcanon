@@ -165,7 +165,7 @@ Plans:
 | 27-29 | v2.2 | 5/5 | Complete | 2026-03-16 |
 | 30-32 | v2.3 | 5/5 | Complete | 2026-03-18 |
 | 33. Data Model | 1/1 | Complete    | 2026-03-18 | - |
-| 34. Layout Engine & Node Rendering | 2/2 | Complete   | 2026-03-18 | - |
+| 34. Layout Engine & Node Rendering | 2/2 | Complete    | 2026-03-18 | - |
 | 35. External Actors | v3.0 | 0/2 | Not started | - |
 | 36. Edge Rendering | v3.0 | 0/1 | Not started | - |
 | 37. Controls & Filters | v3.0 | 0/3 | Not started | - |
