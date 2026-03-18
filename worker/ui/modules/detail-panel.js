@@ -14,6 +14,13 @@ export function showDetailPanel(node) {
   const panel = document.getElementById("detail-panel");
   const content = document.getElementById("detail-content");
 
+  // Actor detail panel — different data shape from services
+  if (node._isActor) {
+    content.innerHTML = renderActorDetail(node);
+    panel.style.display = "block";
+    return;
+  }
+
   const outgoing = state.graphData.edges.filter(
     (e) => e.source_service_id === node.id,
   );
@@ -203,6 +210,42 @@ function renderServiceConnections(outgoing, incoming, nameById) {
       </div>`;
     }
     html += `</div>`;
+  }
+
+  return html;
+}
+
+function renderActorDetail(node) {
+  const actor = node._actorData;
+  const typeColor = getNodeColor(node);
+
+  let html = `<h3>${escapeHtml(actor.name)}</h3>`;
+
+  html += `<div class="detail-section">
+    <div class="detail-label">Type</div>
+    <div class="detail-value" style="color:${typeColor}">External ${escapeHtml(actor.kind)}</div>
+  </div>`;
+
+  html += `<div class="detail-section">
+    <div class="detail-label">Direction</div>
+    <div class="detail-value">${escapeHtml(actor.direction)}</div>
+  </div>`;
+
+  const services = actor.connected_services || [];
+  if (services.length > 0) {
+    html += `<div class="detail-section">
+      <div class="detail-label">Connected Services (${services.length})</div>`;
+    for (const cs of services) {
+      html += `<div class="connection-item">
+        <div><span class="conn-method">${escapeHtml(cs.protocol || '')}</span> <span class="conn-path">${escapeHtml(cs.path || '')}</span></div>
+        <div class="conn-direction">&larr; <span class="conn-target">${escapeHtml(cs.service_name)}</span></div>
+      </div>`;
+    }
+    html += `</div>`;
+  } else {
+    html += `<div class="detail-section">
+      <div class="detail-value" style="color: #718096">No connected services</div>
+    </div>`;
   }
 
   return html;

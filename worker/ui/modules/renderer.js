@@ -197,7 +197,20 @@ export function render() {
 
     const nodeType = getNodeType(node);
     ctx.beginPath();
-    if (nodeType === "library" || nodeType === "sdk") {
+    if (nodeType === "actor") {
+      // Hexagon for external actors — pointy-top orientation
+      const r = NODE_RADIUS * 1.1;  // slightly larger for visibility
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i - Math.PI / 2;  // pointy-top (rotated 90deg from flat-top)
+        const hx = pos.x + r * Math.cos(angle);
+        const hy = pos.y + r * Math.sin(angle);
+        if (i === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+      ctx.fillStyle = nodeColor;
+      ctx.fill();
+    } else if (nodeType === "library" || nodeType === "sdk") {
       // Outline diamond for libraries/SDKs (stroke only, no nodeColor fill)
       const r = NODE_RADIUS * 1.2;
       ctx.moveTo(pos.x, pos.y - r);
