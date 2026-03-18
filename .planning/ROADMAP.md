@@ -169,4 +169,4 @@ Plans:
 | 35. External Actors | 2/2 | Complete    | 2026-03-18 | - |
 | 36. Edge Rendering | 1/1 | Complete    | 2026-03-18 | - |
 | 37. Controls & Filters | 3/3 | Complete    | 2026-03-18 | - |
-| 38. Intelligence | 2/2 | Complete   | 2026-03-18 | - |
+| 38. Intelligence | 2/2 | Complete    | 2026-03-18 | - |
