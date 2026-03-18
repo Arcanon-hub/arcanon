@@ -2,16 +2,14 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Layered Graph & Intelligence
-status: ready_to_plan
-stopped_at: null
-last_updated: "2026-03-18T18:30:00.000Z"
-last_activity: 2026-03-18 — Roadmap created for v3.0 (6 phases, 33 requirements)
+status: in_progress
+stopped_at: "Completed 33-data-model-01 — migration 008 actors/actor_connections/node_metadata"
+last_updated: "2026-03-18T19:50:45Z"
 progress:
   total_phases: 6
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  completed_phases: 1
+  total_plans: 11
+  completed_plans: 1
 ---
 
 # Project State
@@ -21,21 +19,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** Phase 33 — Data Model (ready to plan)
+**Current focus:** Phase 33 — data-model
 
 ## Current Position
 
-Phase: 33 of 38 (Data Model)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-03-18 — Roadmap created for v3.0
-
-Progress: [░░░░░░░░░░] 0%
+Phase: 33 (data-model) — COMPLETE
+Plan: 1 of 1 — DONE
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 57 (across v1.0–v2.3)
+
+- Total plans completed: 58 (across v1.0–v3.0)
+- Phase 33 plan 01: ~3 minutes, 2 tasks, 2 files created, 14 tests
 
 ## Accumulated Context
 
@@ -48,6 +44,8 @@ Progress: [░░░░░░░░░░] 0%
 - [v3.0]: Custom grid layout over Dagre/ELK — simple row-based layout per type layer, pull in library only if needed
 - [v3.0]: node_metadata table for extensibility — avoids migration bloat for future views (STRIDE, vulns)
 - [v3.0]: Separate actors table over extending services — actors have no repos, languages, or exposes
+- [33-01]: ALTER TABLE idempotency via PRAGMA table_info — SQLite has no ADD COLUMN IF NOT EXISTS
+- [33-01]: Population uses INSERT OR IGNORE so migration re-runs never create duplicate actor rows
 
 ### Pending Todos
 
@@ -62,5 +60,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-18
-Stopped at: Roadmap written — Phase 33 ready to plan
+Stopped at: Completed 33-data-model-01 — migration 008 actors/actor_connections/node_metadata
 Resume file: None

@@ -62,7 +62,7 @@ Full details: `.planning/milestones/v2.3-ROADMAP.md`
 
 **Milestone Goal:** Replace force-directed graph with deterministic layered layout, surface external system actors, and enrich the data model for richer MCP impact responses.
 
-- [ ] **Phase 33: Data Model** — actors table, actor_connections table, node_metadata table, migration from existing external connections
+- [x] **Phase 33: Data Model** — actors table, actor_connections table, node_metadata table, migration from existing external connections (completed 2026-03-18)
 - [ ] **Phase 34: Layout Engine & Node Rendering** — deterministic layered layout replacing force simulation, node shapes per type, boundary boxes
 - [ ] **Phase 35: External Actors** — external actor detection, storage, rendering as hexagons, detail panel
 - [ ] **Phase 36: Edge Rendering** — protocol-differentiated edge styles (solid, dashed, dotted), mismatch highlighting
@@ -80,7 +80,7 @@ Full details: `.planning/milestones/v2.3-ROADMAP.md`
   2. `actor_connections` table links actor rows to service rows with direction and protocol
   3. `node_metadata` table accepts arbitrary key/value pairs keyed by (service_id, view, key) without schema changes
   4. Running the migration against an existing database populates actor rows from connections where `crossing = 'external'`
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 33-01-PLAN.md — Migration 008: actors, actor_connections, node_metadata tables + tests
 
@@ -164,7 +164,7 @@ Plans:
 | 22-26 | v2.1 | 11/11 | Complete | 2026-03-16 |
 | 27-29 | v2.2 | 5/5 | Complete | 2026-03-16 |
 | 30-32 | v2.3 | 5/5 | Complete | 2026-03-18 |
-| 33. Data Model | v3.0 | 0/1 | In progress | - |
+| 33. Data Model | 1/1 | Complete   | 2026-03-18 | - |
 | 34. Layout Engine & Node Rendering | v3.0 | 0/2 | Not started | - |
 | 35. External Actors | v3.0 | 0/2 | Not started | - |
 | 36. Edge Rendering | v3.0 | 0/1 | Not started | - |

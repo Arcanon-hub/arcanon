@@ -42,10 +42,10 @@ Requirements for milestone v3.0 Layered Graph & Intelligence. Each maps to roadm
 
 ### Data Model
 
-- [ ] **DATA-01**: New `actors` table stores external system actors with name, kind, direction, source
-- [ ] **DATA-02**: New `actor_connections` table links actors to services with direction and protocol
-- [ ] **DATA-03**: New `node_metadata` table with (service_id, view, key, value, source) for extensible metadata
-- [ ] **DATA-04**: Migration populates actors from existing connections with `crossing = 'external'`
+- [x] **DATA-01**: New `actors` table stores external system actors with name, kind, direction, source
+- [x] **DATA-02**: New `actor_connections` table links actors to services with direction and protocol
+- [x] **DATA-03**: New `node_metadata` table with (service_id, view, key, value, source) for extensible metadata
+- [x] **DATA-04**: Migration populates actors from existing connections with `crossing = 'external'`
 
 ### Intelligence
 
@@ -101,10 +101,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DATA-01 | Phase 33 | Pending |
-| DATA-02 | Phase 33 | Pending |
-| DATA-03 | Phase 33 | Pending |
-| DATA-04 | Phase 33 | Pending |
+| DATA-01 | Phase 33 | Complete |
+| DATA-02 | Phase 33 | Complete |
+| DATA-03 | Phase 33 | Complete |
+| DATA-04 | Phase 33 | Complete |
 | LAYOUT-01 | Phase 34 | Pending |
 | LAYOUT-02 | Phase 34 | Pending |
 | LAYOUT-03 | Phase 34 | Pending |
