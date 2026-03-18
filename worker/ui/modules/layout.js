@@ -16,8 +16,9 @@ import { NODE_RADIUS } from "./state.js";
 export const ACTOR_COLUMN_RESERVE_RATIO = 0.18;
 
 const PADDING = 40;
-const BOX_PAD = 40;
-const LABEL_HEIGHT = 20;  // space above nodes for boundary label
+const BOX_PAD = 50;
+const LABEL_HEIGHT = 28;  // space above nodes for boundary label
+const NODE_LABEL_CLEARANCE = 24;  // space below nodes for name + type labels
 
 /**
  * Compute deterministic grid positions for all nodes.
@@ -142,24 +143,31 @@ export function computeLayout(nodes, boundaries, canvasW, canvasH) {
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
 
-    // Enforce minimum height for single-row boundaries (Research Pitfall 4)
-    // Add LABEL_HEIGHT to top so label sits above nodes, not overlapping
-    const boxH = Math.max(NODE_RADIUS * 2 + BOX_PAD * 2 + LABEL_HEIGHT, maxY - minY + BOX_PAD * 2 + LABEL_HEIGHT);
+    // Add LABEL_HEIGHT top + NODE_LABEL_CLEARANCE bottom for node names
+    const topExtra = LABEL_HEIGHT;
+    const bottomExtra = NODE_LABEL_CLEARANCE;
+    const boxH = Math.max(
+      NODE_RADIUS * 2 + BOX_PAD * 2 + topExtra + bottomExtra,
+      maxY - minY + BOX_PAD * 2 + topExtra + bottomExtra,
+    );
 
     boundaryBoxes.push({
       label: boundary.label || boundary.name,
       x: minX - BOX_PAD,
-      y: minY - BOX_PAD - LABEL_HEIGHT,
+      y: minY - BOX_PAD - topExtra,
       w: maxX - minX + BOX_PAD * 2,
       h: boxH,
     });
   }
 
   // ── 8. Compute layer boxes (always shown for non-empty layers) ──────────
+  // Skip the services layer box when boundaries exist — boundaries provide structure
   const LAYER_LABELS = { service: 'Services', library: 'Libraries', infra: 'Infrastructure' };
+  const hasBoundaries = boundaryBoxes.length > 0;
   const layerBoxes = [];
   for (const { name, nodes: layerNodes } of layers) {
     if (layerNodes.length === 0) continue;
+    if (name === 'service' && hasBoundaries) continue;  // boundaries replace the services layer box
     const ids = layerNodes.map(n => n.id);
     const xs = ids.map(id => positions[id]?.x).filter(v => v != null);
     const ys = ids.map(id => positions[id]?.y).filter(v => v != null);
@@ -170,12 +178,14 @@ export function computeLayout(nodes, boundaries, canvasW, canvasH) {
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
 
+    const topExtra = LABEL_HEIGHT;
+    const bottomExtra = NODE_LABEL_CLEARANCE;
     layerBoxes.push({
       label: LAYER_LABELS[name] || name,
       x: minX - BOX_PAD,
-      y: minY - BOX_PAD - LABEL_HEIGHT,
+      y: minY - BOX_PAD - topExtra,
       w: maxX - minX + BOX_PAD * 2,
-      h: Math.max(NODE_RADIUS * 2 + BOX_PAD * 2 + LABEL_HEIGHT, maxY - minY + BOX_PAD * 2 + LABEL_HEIGHT),
+      h: Math.max(NODE_RADIUS * 2 + BOX_PAD * 2 + topExtra + bottomExtra, maxY - minY + BOX_PAD * 2 + topExtra + bottomExtra),
     });
   }
 
