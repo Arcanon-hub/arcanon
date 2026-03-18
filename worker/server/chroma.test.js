@@ -225,6 +225,105 @@ describe("syncFindings", () => {
 });
 
 // ---------------------------------------------------------------------------
+// syncFindings — enrichment context (boundary + actors)
+// ---------------------------------------------------------------------------
+
+describe("syncFindings — enrichment context", () => {
+  async function setupMockCollection() {
+    let upsertCalledWith = null;
+    const mockCollection = {
+      upsert: async (args) => {
+        upsertCalledWith = args;
+      },
+      query: async () => ({
+        ids: [[]],
+        documents: [[]],
+        distances: [[]],
+        metadatas: [[]],
+      }),
+    };
+    const mockClient = {
+      heartbeat: async () => ({}),
+      getOrCreateCollection: async () => mockCollection,
+    };
+    await initChromaSync({ ALLCLEAR_CHROMA_MODE: "local" }, mockClient);
+    return { mockCollection, get upsertCalledWith() { return upsertCalledWith; } };
+  }
+
+  test("service document includes boundary and actors when enrichment provided", async () => {
+    const ctx = await setupMockCollection();
+
+    const boundaryMap = new Map([["payments-api", "payments"]]);
+    const actorMap = new Map([["payments-api", ["stripe"]]]);
+    const findings = {
+      services: [{ name: "payments-api", endpoints: [] }],
+    };
+
+    await syncFindings(findings, { boundaryMap, actorMap });
+
+    const metadatas = ctx.upsertCalledWith.metadatas;
+    assert.ok(metadatas, "upsert must have been called");
+    const svcMeta = metadatas.find((m) => m.type === "service" && m.name === "payments-api");
+    assert.ok(svcMeta, "service metadata must exist");
+    assert.equal(svcMeta.boundary, "payments", "boundary field must be set from boundaryMap");
+    assert.equal(svcMeta.actors, "stripe", "actors field must be comma-separated from actorMap");
+  });
+
+  test("service document has boundary='' and actors='' when no enrichment provided", async () => {
+    const ctx = await setupMockCollection();
+
+    const findings = {
+      services: [{ name: "payments-api", endpoints: [] }],
+    };
+
+    await syncFindings(findings);
+
+    const metadatas = ctx.upsertCalledWith.metadatas;
+    assert.ok(metadatas, "upsert must have been called");
+    const svcMeta = metadatas.find((m) => m.type === "service" && m.name === "payments-api");
+    assert.ok(svcMeta, "service metadata must exist");
+    assert.equal(svcMeta.boundary, "", "boundary must be empty string when no enrichment");
+    assert.equal(svcMeta.actors, "", "actors must be empty string when no enrichment");
+  });
+
+  test("partial enrichment — only boundaryMap — sets boundary but actors=''", async () => {
+    const ctx = await setupMockCollection();
+
+    const boundaryMap = new Map([["billing-service", "payments"]]);
+    const findings = {
+      services: [{ name: "billing-service", endpoints: [] }],
+    };
+
+    await syncFindings(findings, { boundaryMap });
+
+    const metadatas = ctx.upsertCalledWith.metadatas;
+    assert.ok(metadatas, "upsert must have been called");
+    const svcMeta = metadatas.find((m) => m.type === "service" && m.name === "billing-service");
+    assert.ok(svcMeta, "service metadata must exist");
+    assert.equal(svcMeta.boundary, "payments", "boundary must be set from boundaryMap");
+    assert.equal(svcMeta.actors, "", "actors must be empty string when actorMap absent");
+  });
+
+  test("endpoint documents are NOT given boundary or actors fields", async () => {
+    const ctx = await setupMockCollection();
+
+    const boundaryMap = new Map([["payments-api", "payments"]]);
+    const actorMap = new Map([["payments-api", ["stripe"]]]);
+    const findings = {
+      services: [{ name: "payments-api", endpoints: [{ path: "/api/charge" }] }],
+    };
+
+    await syncFindings(findings, { boundaryMap, actorMap });
+
+    const metadatas = ctx.upsertCalledWith.metadatas;
+    const epMeta = metadatas.find((m) => m.type === "endpoint");
+    assert.ok(epMeta, "endpoint metadata must exist");
+    assert.equal(epMeta.boundary, undefined, "endpoints must not have boundary field");
+    assert.equal(epMeta.actors, undefined, "endpoints must not have actors field");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // chromaSearch — throws when unavailable (triggers fallback in query-engine)
 // ---------------------------------------------------------------------------
 

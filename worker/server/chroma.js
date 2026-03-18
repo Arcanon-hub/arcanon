@@ -7,7 +7,7 @@
  *
  * Exports:
  *   initChromaSync(settings, [mockClient]) — initialize and health-check
- *   syncFindings(findings)                 — async upsert, fire-and-forget safe
+ *   syncFindings(findings, [enrichment])   — async upsert, fire-and-forget safe
  *   chromaSearch(query, limit)             — semantic search, throws when unavailable
  *   isChromaAvailable()                   — returns current availability flag
  *   _resetForTest()                       — reset module state (tests only)
@@ -117,16 +117,23 @@ export async function initChromaSync(settings = {}, mockClient = null, logger = 
  * Fire-and-forget safe — never rejects. Callers use .catch() for logging only.
  *
  * Pattern from db.js persist path:
- *   syncFindings(findings).catch(err => process.stderr.write('[chroma] ' + err.message + '\n'));
+ *   syncFindings(findings, enrichment).catch(err => process.stderr.write('[chroma] ' + err.message + '\n'));
  *
  * @param {{ services: Array<{ name: string, endpoints?: Array<{ path: string }> }> }} findings
+ * @param {{ boundaryMap?: Map<string,string>, actorMap?: Map<string,string[]> }} [enrichment]
+ *   Optional enrichment context. boundaryMap maps service name → boundary name.
+ *   actorMap maps service name → array of actor names.
+ *   Omitting enrichment (or passing undefined) produces boundary='' actors='' for all services.
  * @returns {Promise<void>}
  */
-export async function syncFindings(findings) {
+export async function syncFindings(findings, enrichment = {}) {
   // Guard: skip silently when ChromaDB is not available
   if (!_chromaAvailable || !_collection) {
     return;
   }
+
+  const boundaryMap = enrichment.boundaryMap || new Map();
+  const actorMap = enrichment.actorMap || new Map();
 
   try {
     const services = findings.services || [];
@@ -135,13 +142,18 @@ export async function syncFindings(findings) {
     const metadatas = [];
 
     for (const svc of services) {
-      // Add each service name as a document
+      // Add each service name as a document with enriched metadata
       const svcId = `svc:${svc.name}`;
       ids.push(svcId);
       documents.push(svc.name);
-      metadatas.push({ type: "service", name: svc.name });
+      metadatas.push({
+        type: "service",
+        name: svc.name,
+        boundary: boundaryMap.get(svc.name) || "",
+        actors: (actorMap.get(svc.name) || []).join(","),
+      });
 
-      // Add each endpoint path as a separate document
+      // Add each endpoint path as a separate document (no boundary/actor context)
       for (const endpoint of svc.endpoints || []) {
         const epId = `ep:${svc.name}:${endpoint.path}`;
         ids.push(epId);
