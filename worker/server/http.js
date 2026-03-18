@@ -105,8 +105,14 @@ async function createHttpServer(queryEngine, options = {}) {
       // Always returns boundaries: [] when config is missing or has no boundaries key.
       let boundaries = [];
       try {
-        const projectRoot = request.query?.project ||
-          (typeof qe.getProjectRoot === 'function' ? qe.getProjectRoot() : null);
+        // Resolve project root: explicit ?project= param, or first repo path from DB
+        let projectRoot = request.query?.project || null;
+        if (!projectRoot) {
+          try {
+            const repos = qe.db.prepare("SELECT path FROM repos LIMIT 1").all();
+            if (repos.length > 0) projectRoot = repos[0].path;
+          } catch { /* pre-migration DB or no repos */ }
+        }
         if (projectRoot) {
           const cfgPath = path.join(projectRoot, 'allclear.config.json');
           const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));

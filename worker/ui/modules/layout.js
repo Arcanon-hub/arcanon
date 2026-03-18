@@ -86,15 +86,26 @@ export function computeLayout(nodes, boundaries, canvasW, canvasH) {
     { name: 'infra',   nodes: infraNodes },
   ];
 
+  // Max nodes per row before wrapping — prevents extreme horizontal spread
+  const MAX_PER_ROW = 6;
+
   for (const { name, nodes: layerNodes } of layers) {
     const n = layerNodes.length;
     if (n === 0) continue;
     const { y: bandY, h: bandH } = bands[name];
-    const cellW = usableW / n;
+    const cols = Math.min(n, MAX_PER_ROW);
+    const rows = Math.ceil(n / cols);
+    const cellW = usableW / cols;
+    const rowH = bandH / rows;
     layerNodes.forEach((node, i) => {
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      // Center partial last row
+      const nodesInRow = (row < rows - 1) ? cols : n - row * cols;
+      const rowOffset = (usableW - nodesInRow * cellW) / 2;
       positions[node.id] = {
-        x: PADDING + cellW * i + cellW / 2,
-        y: bandY + bandH / 2,
+        x: PADDING + rowOffset + cellW * col + cellW / 2,
+        y: bandY + rowH * row + rowH / 2,
       };
     });
   }
