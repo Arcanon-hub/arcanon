@@ -47,17 +47,14 @@ Every edit is automatically formatted and linted, every quality check runs with 
 - ✓ Agent prompt service naming convention (lowercase-hyphenated from manifest) — v2.2
 - ✓ Cross-project MCP queries via repository name from any working directory — v2.2
 
+- ✓ Type-conditional exposed data storage with `kind` column (endpoint/export/resource) — v2.3
+- ✓ Library detail panel showing exported types/interfaces grouped by functions vs types, plus consumer services — v2.3
+- ✓ Infra detail panel showing managed resources grouped by prefix, plus wired services — v2.3
+- ✓ XSS-safe detail panel rendering with `escapeHtml()` on scan-derived strings — v2.3
+
 ### Active
 
-## Current Milestone: v2.3 Type-Specific Detail Panels
-
-**Goal:** Make the graph detail panel show type-appropriate data for library and infrastructure nodes — exported types/interfaces for libraries, managed resources for infra — with proper data storage replacing the broken "METHOD PATH" parser.
-
-**Target features:**
-- Type-conditional exposed data storage (library exports, infra resources stored correctly)
-- Library detail panel showing exported types/interfaces and consumer services
-- Infra detail panel showing managed resources and provisioned services
-- Service detail panel unchanged (already works)
+(Defined per milestone — see current milestone below)
 
 ### Out of Scope
 
@@ -70,11 +67,11 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ## Context
 
-Shipped v2.2 with ~8,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 29 phases across 4 milestones, 52 plans. Plugin installed via marketplace and operational.
+Shipped v2.3 with ~9,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 32 phases across 5 milestones, 57 plans. Plugin installed via marketplace and operational.
 
-Architecture: commands/ for user-invoked features, skills/ for auto-invoked knowledge, hooks/ for formatting/linting/guarding, worker/ for Node.js daemon (db/, server/, scan/, mcp/, ui/ subdirectories), lib/ for shared bash/JS libraries. Agent scan prompts modularized into type-specific variants (service, library, infra) with shared common component.
+Architecture: commands/ for user-invoked features, skills/ for auto-invoked knowledge, hooks/ for formatting/linting/guarding, worker/ for Node.js daemon (db/, server/, scan/, mcp/, ui/ subdirectories), lib/ for shared bash/JS libraries. Agent scan prompts modularized into type-specific variants (service, library, infra) with shared common component. Detail panel renders type-appropriate views per node type.
 
-Known tech debt: setupControls() listener accumulation on project switch, no log rotation, db/database.js has console.log in script-mode guard, getQueryEngineByHash inline migration workaround.
+Known tech debt: setupControls() listener accumulation on project switch, no log rotation, db/database.js has console.log in script-mode guard, getQueryEngineByHash inline migration workaround, renderLibraryConnections() unused `outgoing` parameter.
 
 ## Constraints
 
@@ -106,6 +103,10 @@ Known tech debt: setupControls() listener accumulation on project switch, no log
 | ON CONFLICT DO UPDATE over INSERT OR REPLACE | INSERT OR REPLACE cascade-deletes FK child rows; ON CONFLICT preserves row ID | ✓ Good |
 | Scan version bracket (beginScan/endScan) | Atomic stale-row cleanup; failed scans leave old data intact | ✓ Good |
 | Per-call resolveDb in MCP server | Module-level DB resolution was wrong for cross-project queries | ✓ Good |
+| kind column on exposed_endpoints | Single table with discriminant vs separate tables per type — simpler queries, mismatch detection unchanged | ✓ Good |
+| Embed exposes in /graph response | Single-load pattern avoids per-click API calls and async rendering complexity | ✓ Good |
+| escapeHtml on scan-derived strings | Function signatures contain angle brackets that would be interpreted as HTML | ✓ Good |
+| Infra guard first in getNodeType() | Before name heuristics — node named 'k8s-infra-lib' correctly returns 'infra' | ✓ Good |
 
 ---
-*Last updated: 2026-03-17 after v2.3 milestone start*
+*Last updated: 2026-03-18 after v2.3 milestone*

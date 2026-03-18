@@ -1,5 +1,18 @@
 # Milestones
 
+## v2.3 Type-Specific Detail Panels (Shipped: 2026-03-18)
+
+**Phases completed:** 3 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+- Migration 007 adds `kind` column to `exposed_endpoints` with COALESCE unique index for NULL-safe dedup
+- `persistFindings()` type-conditional dispatch: services split METHOD/PATH, libraries store raw signatures, infra stores raw resource refs
+- `getGraph()` attaches per-node `exposes` arrays with graceful pre-migration degradation
+- Three-way detail panel routing: library panel (Exports + Used by), infra panel (Manages + Wires), service panel unchanged
+- XSS-safe rendering with `escapeHtml()` on all scan-derived string insertions
+
+---
+
 ## v2.2 Scan Data Integrity (Shipped: 2026-03-16)
 
 **Phases completed:** 3 phases, 5 plans, 0 tasks

@@ -154,13 +154,48 @@
 
 ---
 
+## Milestone: v2.3 — Type-Specific Detail Panels
+
+**Shipped:** 2026-03-18
+**Phases:** 3 | **Plans:** 5
+
+### What Was Built
+- Migration 007: `kind` column on `exposed_endpoints` with COALESCE unique index for NULL-safe dedup
+- `persistFindings()` type-conditional dispatch: services split METHOD/PATH, libraries store raw signatures, infra stores raw resource refs
+- `getGraph()` attaches per-node `exposes` arrays with try/catch pre-migration guard
+- `getNodeType()` and `getNodeColor()` infra guard + NODE_TYPE_COLORS
+- Three-way `showDetailPanel()` dispatch: library Exports+Used by, infra Manages+Wires, service unchanged
+- `escapeHtml()` helper for XSS-safe rendering of scan-derived strings
+
+### What Worked
+- Investigation-first approach — mapped entire data flow before defining milestone, avoided wrong scope
+- Sequential phase dependencies (storage → API → UI) meant each phase built on verified foundations
+- TDD approach caught SQLite NULL dedup bug during Plan 30-02 GREEN phase
+- Source-inspection test pattern effective for browser UI code without jsdom
+
+### What Was Inefficient
+- SUMMARY frontmatter `requirements-completed` not consistently populated by executors
+- VALIDATION.md `nyquist_compliant` not updated to `true` post-execution
+
+### Patterns Established
+- `kind` discriminant column pattern for multi-type rows in a shared table
+- try/catch migration guard for backward-compatible query expansion
+- `escapeHtml()` for all user-controlled template literal insertions in UI code
+
+### Key Lessons
+- SQLite `UNIQUE` constraints treat `NULL != NULL` — must use COALESCE in unique index for nullable columns
+- Investigation before milestone definition prevents building the wrong thing (detail panel code was already type-aware; the real bug was in storage)
+- Embedding data in existing API responses is simpler than adding new per-click endpoints
+
+---
+
 ## Cross-Milestone Trends
 
-| Metric | v1.0 | v2.0 | v2.1 | v2.2 |
-|--------|------|------|------|------|
-| Phases | 13 | 8 | 5 | 3 |
-| Plans | 17 | 19 | 11 | 5 |
-| Requirements | 79 | 8 | 13 | 5 |
-| Tests | 150 | ~50 | ~20 | ~30 |
-| LOC | 4,323 | ~7,000 | ~7,500 | ~8,000 |
-| Timeline | 1 day | 1 day | 1 day | 1 day |
+| Metric | v1.0 | v2.0 | v2.1 | v2.2 | v2.3 |
+|--------|------|------|------|------|------|
+| Phases | 13 | 8 | 5 | 3 | 3 |
+| Plans | 17 | 19 | 11 | 5 | 5 |
+| Requirements | 79 | 8 | 13 | 5 | 9 |
+| Tests | 150 | ~50 | ~20 | ~30 | ~30 |
+| LOC | 4,323 | ~7,000 | ~7,500 | ~8,000 | ~9,000 |
+| Timeline | 1 day | 1 day | 1 day | 1 day | 1 day |

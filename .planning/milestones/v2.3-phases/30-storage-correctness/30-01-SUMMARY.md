@@ -90,3 +90,12 @@ None - no external service configuration required.
 ---
 *Phase: 30-storage-correctness*
 *Completed: 2026-03-17*
+
+## Self-Check: PASSED
+
+- FOUND: worker/db/migrations/007_expose_kind.js
+- FOUND: tests/storage/migration-007.test.js
+- FOUND: .planning/phases/30-storage-correctness/30-01-SUMMARY.md
+- FOUND commit: bb5f5da (test RED)
+- FOUND commit: 4f53fbe (feat GREEN)
+- FOUND commit: 650c12f (docs metadata)
