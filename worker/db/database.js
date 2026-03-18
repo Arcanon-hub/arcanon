@@ -209,9 +209,40 @@ export function writeScan(findings, queryEngine, repoId) {
     });
   }
 
-  // Fire-and-forget ChromaDB sync — NEVER await in persist path
+  // Build boundary map from allclear.config.json
+  // Gracefully skip when config is absent or has no boundaries key
+  const boundaryMap = new Map();
+  try {
+    const configPath = path.join(process.cwd(), "allclear.config.json");
+    const cfg = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    const boundaries = cfg.boundaries || {};
+    for (const [boundaryName, members] of Object.entries(boundaries)) {
+      for (const memberName of members) {
+        boundaryMap.set(memberName, boundaryName);
+      }
+    }
+  } catch { /* config absent or no boundaries key — boundaryMap stays empty */ }
+
+  // Build actor map from DB (actors + actor_connections tables)
+  // Gracefully skip if tables don't exist yet (Phase 33 migration may not have run)
+  const actorMap = new Map();
+  try {
+    const rows = queryEngine._db.prepare(`
+      SELECT s.name AS service_name, a.name AS actor_name
+      FROM actor_connections ac
+      JOIN actors a ON a.id = ac.actor_id
+      JOIN services s ON s.id = ac.service_id
+      WHERE s.repo_id = ?
+    `).all(repoId);
+    for (const row of rows) {
+      if (!actorMap.has(row.service_name)) actorMap.set(row.service_name, []);
+      actorMap.get(row.service_name).push(row.actor_name);
+    }
+  } catch { /* actors table not yet created — skip enrichment */ }
+
+  // Fire-and-forget ChromaDB sync with enrichment — NEVER await in persist path
   // A ChromaDB outage generates a stderr warning only — SQLite writes already committed
-  syncFindings(findings).catch((err) =>
+  syncFindings(findings, { boundaryMap, actorMap }).catch((err) =>
     process.stderr.write("[chroma] sync failed: " + err.message + "\n"),
   );
 }
