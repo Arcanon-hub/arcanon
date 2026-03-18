@@ -48,6 +48,34 @@ export function render() {
   ctx.translate(state.transform.x, state.transform.y);
   ctx.scale(state.transform.scale, state.transform.scale);
 
+  // Draw boundary boxes (behind edges and nodes)
+  for (const box of state.boundaryBoxes) {
+    ctx.save();
+    // Semi-transparent fill
+    ctx.globalAlpha = 0.08;
+    ctx.fillStyle = '#63b3ed';
+    ctx.beginPath();
+    ctx.roundRect(box.x, box.y, box.w, box.h, 8);
+    ctx.fill();
+
+    // Dashed border
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = '#63b3ed';
+    ctx.lineWidth = 1 / state.transform.scale;
+    ctx.setLineDash([6 / state.transform.scale, 4 / state.transform.scale]);
+    ctx.stroke();
+    ctx.setLineDash([]);  // CRITICAL: reset dash pattern
+
+    // Label at top-left
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = '#63b3ed';
+    ctx.font = `${Math.round(11 / state.transform.scale)}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(box.label, box.x + 6, box.y + 4);
+    ctx.restore();
+  }
+
   // Draw edges
   for (const edge of state.graphData.edges) {
     const src = edge.source_service_id;
@@ -170,30 +198,36 @@ export function render() {
     const nodeType = getNodeType(node);
     ctx.beginPath();
     if (nodeType === "library" || nodeType === "sdk") {
-      // Hexagon for libraries/SDKs
-      const r = NODE_RADIUS;
-      for (let i = 0; i < 6; i++) {
-        const angle = (Math.PI / 3) * i - Math.PI / 6;
-        const hx = pos.x + r * Math.cos(angle);
-        const hy = pos.y + r * Math.sin(angle);
-        if (i === 0) ctx.moveTo(hx, hy);
-        else ctx.lineTo(hx, hy);
-      }
+      // Outline diamond for libraries/SDKs (stroke only, no nodeColor fill)
+      const r = NODE_RADIUS * 1.2;
+      ctx.moveTo(pos.x, pos.y - r);
+      ctx.lineTo(pos.x + r, pos.y);
+      ctx.lineTo(pos.x, pos.y + r);
+      ctx.lineTo(pos.x - r, pos.y);
       ctx.closePath();
+      // Dark background fill to prevent edge bleed-through
+      ctx.fillStyle = '#0f1117';
+      ctx.fill();
+      // Outline stroke only — NOT filled with nodeColor
+      ctx.strokeStyle = nodeColor;
+      ctx.lineWidth = 1.5 / state.transform.scale;
+      ctx.stroke();
     } else if (nodeType === "infra") {
-      // Diamond for infrastructure
+      // Filled diamond for infrastructure
       const r = NODE_RADIUS * 1.1;
       ctx.moveTo(pos.x, pos.y - r);
       ctx.lineTo(pos.x + r, pos.y);
       ctx.lineTo(pos.x, pos.y + r);
       ctx.lineTo(pos.x - r, pos.y);
       ctx.closePath();
+      ctx.fillStyle = nodeColor;
+      ctx.fill();
     } else {
       // Circle for services (default)
       ctx.arc(pos.x, pos.y, NODE_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = nodeColor;
+      ctx.fill();
     }
-    ctx.fillStyle = nodeColor;
-    ctx.fill();
 
     if (isSelected || isBlastNode) {
       ctx.strokeStyle = "#fff";
