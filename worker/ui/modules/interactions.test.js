@@ -127,6 +127,23 @@ check(
   "state.positions[state.dragNodeId]"
 );
 
+// ── Part 4: Force Worker removal checks ───────────────────────────────────
+// (already present above as "Part 3" — this is the behavioral test section)
+
+// ── Part 5: Tooltip connection count (NODE-05) ────────────────────────────
+
+check(
+  src.includes('getConnectionCount'),
+  "tooltip uses getConnectionCount helper",
+  "getConnectionCount"
+);
+
+check(
+  src.includes('connection') && src.includes('count'),
+  "tooltip includes connection count text",
+  "connection count in tooltip"
+);
+
 // ── Part 4: Behavioral teardown test ──────────────────────────────────────
 // Uses a lightweight mock canvas (EventTarget) to confirm that after
 // teardownInteractions(canvas), a 'click' event does NOT invoke onClick.
