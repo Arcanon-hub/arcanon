@@ -18,7 +18,8 @@
  *   source_file: string|null,
  *   target_file?: string|null,
  *   confidence: string,
- *   evidence: string
+ *   evidence: string,
+ *   crossing?: string|null
  * }} Connection
  * @typedef {{
  *   service_name: string,
@@ -170,6 +171,17 @@ export function validateFindings(obj) {
     }
     if (typeof conn.evidence !== "string") {
       return err(`connection[${i}].evidence must be a string`);
+    }
+    // crossing is optional — but if present must be a valid value
+    const VALID_CROSSINGS = ["external", "sdk", "internal"];
+    if (
+      "crossing" in conn &&
+      conn.crossing !== null &&
+      !VALID_CROSSINGS.includes(conn.crossing)
+    ) {
+      return err(
+        `connection[${i}].crossing must be one of: ${VALID_CROSSINGS.join(", ")} (or absent/null)`,
+      );
     }
   }
 
