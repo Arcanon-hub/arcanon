@@ -108,7 +108,10 @@ Plans:
   2. External actor nodes render as hexagons in a dedicated column to the right of the system boundary
   3. Edges from services to external actors visually cross the system boundary line
   4. Clicking an external actor node opens a detail panel listing which services connect to it and via what protocol
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 35-01-PLAN.md — Actor persistence in scan pipeline, getGraph actors API
+- [ ] 35-02-PLAN.md — Actor layout, hexagon rendering, detail panel
 
 ### Phase 36: Edge Rendering
 **Goal**: Edge visual style communicates connection protocol at a glance
@@ -154,7 +157,7 @@ Plans:
 | 30-32 | v2.3 | 5/5 | Complete | 2026-03-18 |
 | 33. Data Model | v3.0 | 0/1 | In progress | - |
 | 34. Layout Engine & Node Rendering | v3.0 | 0/2 | Not started | - |
-| 35. External Actors | v3.0 | 0/? | Not started | - |
+| 35. External Actors | v3.0 | 0/2 | Not started | - |
 | 36. Edge Rendering | v3.0 | 0/? | Not started | - |
 | 37. Controls & Filters | v3.0 | 0/? | Not started | - |
 | 38. Intelligence | v3.0 | 0/? | Not started | - |
