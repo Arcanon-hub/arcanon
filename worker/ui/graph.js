@@ -81,6 +81,40 @@ export async function loadProject(hash, canvas) {
 
   state.graphData.mismatches = raw.mismatches || [];
 
+  // Store raw actors for detail panel
+  state.graphData.actors = raw.actors || [];
+
+  // Create synthetic nodes for actors with IDs that won't collide with service IDs.
+  // Use negative IDs: actor with DB id=1 becomes node id=-1, id=2 becomes -2, etc.
+  for (const actor of state.graphData.actors) {
+    const syntheticId = -actor.id;  // negative to avoid collision with service IDs
+    state.graphData.nodes.push({
+      id: syntheticId,
+      name: actor.name,
+      type: 'actor',
+      _isActor: true,
+      _actorData: actor,  // preserve full actor data for detail panel
+      language: null,
+      repo_name: null,
+      exposes: [],
+    });
+  }
+
+  // Create synthetic edges from source services to actor nodes
+  for (const actor of state.graphData.actors) {
+    const syntheticId = -actor.id;
+    for (const cs of actor.connected_services || []) {
+      state.graphData.edges.push({
+        source_service_id: cs.service_id,
+        target_service_id: syntheticId,
+        protocol: cs.protocol || 'rest',
+        method: null,
+        path: cs.path,
+        _isActorEdge: true,
+      });
+    }
+  }
+
   document.getElementById("node-info").textContent =
     `${state.graphData.nodes.length} services, ${state.graphData.edges.length} connections`;
 

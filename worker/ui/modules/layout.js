@@ -36,8 +36,14 @@ export function computeLayout(nodes, boundaries, canvasW, canvasH) {
   const serviceNodes = [];
   const libraryNodes = [];
   const infraNodes   = [];
+  const actorNodes   = [];
 
   for (const node of nodes) {
+    // Actor nodes go to the dedicated right column — skip regular layer logic
+    if (node._isActor || node.type === 'actor') {
+      actorNodes.push(node);
+      continue;
+    }
     const t = getNodeType(node);
     if (t === 'infra') {
       infraNodes.push(node);
@@ -93,7 +99,21 @@ export function computeLayout(nodes, boundaries, canvasW, canvasH) {
     });
   }
 
-  // ── 6. Compute boundary boxes ─────────────────────────────────────────
+  // ── 6. Position actor nodes in the reserved right column ─────────────
+  if (actorNodes.length > 0) {
+    // Center of the actor column: past usableW, centered in the reserved area
+    const actorColumnX = PADDING + usableW + Math.round(canvasW * ACTOR_COLUMN_RESERVE_RATIO) / 2;
+    const actorSpacingY = (canvasH - PADDING * 2) / Math.max(actorNodes.length, 1);
+
+    for (let i = 0; i < actorNodes.length; i++) {
+      positions[actorNodes[i].id] = {
+        x: actorColumnX,
+        y: PADDING + actorSpacingY * i + actorSpacingY / 2,
+      };
+    }
+  }
+
+  // ── 7. Compute boundary boxes ─────────────────────────────────────────
   const boundaryBoxes = [];
   for (const boundary of boundaryList) {
     const memberIds = nodes

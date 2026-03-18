@@ -3,7 +3,7 @@
  */
 
 export const state = {
-  graphData: { nodes: [], edges: [], mismatches: [] },
+  graphData: { nodes: [], edges: [], mismatches: [], actors: [] },
   positions: {},
   boundaryBoxes: [],
   selectedNodeId: null,
@@ -65,4 +65,5 @@ export const NODE_TYPE_COLORS = {
   frontend: "#f6ad55",
   service: "#4299e1",
   infra: '#68d391',
+  actor: '#e06060',    // coral — distinct from all other types
 };
