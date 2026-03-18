@@ -3,7 +3,7 @@
  */
 
 import { state, NODE_RADIUS } from "./state.js";
-import { hitTest, toWorld, fetchImpact, getNodeType } from "./utils.js";
+import { hitTest, toWorld, fetchImpact, getNodeType, getConnectionCount } from "./utils.js";
 import { render } from "./renderer.js";
 import { showDetailPanel, hideDetailPanel } from "./detail-panel.js";
 
@@ -43,8 +43,8 @@ function onMouseMove(e) {
     _tooltip.style.left = px + 12 + "px";
     _tooltip.style.top = py - 8 + "px";
     const tt = getNodeType(node);
-    _tooltip.textContent =
-      node.name + ` [${tt}]` + (node.language ? ` (${node.language})` : "");
+    const count = getConnectionCount(node.id);
+    _tooltip.textContent = `${node.name} [${tt}]${node.language ? ` (${node.language})` : ''} \u2022 ${count} connection${count !== 1 ? 's' : ''}`;
   } else {
     _canvas.style.cursor = state.isDragging ? "grabbing" : "grab";
     _tooltip.style.display = "none";

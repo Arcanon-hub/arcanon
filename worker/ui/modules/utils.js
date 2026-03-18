@@ -36,6 +36,14 @@ export function getNeighborIds(nodeId) {
   return ids;
 }
 
+export function getConnectionCount(nodeId) {
+  let count = 0;
+  for (const e of state.graphData.edges) {
+    if (e.source_service_id === nodeId || e.target_service_id === nodeId) count++;
+  }
+  return count;
+}
+
 export function getNodeType(node) {
   if (node.type === 'infra') return 'infra';
   if (node.type === "library" || node.type === "sdk") return node.type;
