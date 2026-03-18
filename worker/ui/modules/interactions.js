@@ -22,12 +22,7 @@ function onMouseMove(e) {
 
   if (state.isDragging && state.dragNodeId !== null) {
     const { x: wx, y: wy } = toWorld(px, py);
-    state.forceWorker.postMessage({
-      type: "drag",
-      nodeId: state.dragNodeId,
-      x: wx,
-      y: wy,
-    });
+    state.positions[state.dragNodeId] = { x: wx, y: wy };
     state.dragStarted = true;
     render();
     return;
@@ -74,14 +69,7 @@ function onMouseDown(e) {
 function onMouseUp(e) {
   if (state.isDragging && state.dragNodeId !== null && state.dragStarted) {
     const { x: wx, y: wy } = toWorld(e.offsetX, e.offsetY);
-    if (state.forceWorker) {
-      state.forceWorker.postMessage({
-        type: "drag",
-        nodeId: state.dragNodeId,
-        x: wx,
-        y: wy,
-      });
-    }
+    state.positions[state.dragNodeId] = { x: wx, y: wy };
   }
   state.isDragging = false;
   state.dragNodeId = null;

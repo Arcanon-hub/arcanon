@@ -5,13 +5,13 @@
 export const state = {
   graphData: { nodes: [], edges: [], mismatches: [] },
   positions: {},
+  boundaryBoxes: [],
   selectedNodeId: null,
   blastNodeId: null,
   blastSet: new Set(),
   blastCache: {},
   activeProtocols: new Set(["rest", "grpc", "events", "internal", "sdk"]),
   searchFilter: "",
-  forceWorker: null,
   currentProject: null,   // hash of currently loaded project
   isDragging: false,
   dragNodeId: null,

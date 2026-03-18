@@ -55,30 +55,24 @@ async function onProjectChange(e) {
 
   const canvas = document.getElementById('graph-canvas');
 
-  // 1. Terminate old force worker
-  if (state.forceWorker) {
-    state.forceWorker.postMessage({ type: 'stop' });
-    state.forceWorker.terminate();
-    state.forceWorker = null;
-  }
-
-  // 2. Remove all canvas event listeners
+  // 1. Remove all canvas event listeners
   if (canvas) teardownInteractions(canvas);
 
-  // 3. Reset graph state (keep transform — user may want same zoom level)
+  // 2. Reset graph state (keep transform — user may want same zoom level)
   state.graphData = { nodes: [], edges: [], mismatches: [] };
   state.positions = {};
+  state.boundaryBoxes = [];
   state.selectedNodeId = null;
   state.blastNodeId = null;
   state.blastSet = new Set();
   state.blastCache = {};
 
-  // 4. Update URL without page reload
+  // 3. Update URL without page reload
   const url = new URL(window.location);
   url.searchParams.set('hash', newHash);
   url.searchParams.delete('project');
   window.history.replaceState({}, '', url);
 
-  // 5. Load new project (re-attaches interactions internally via setupInteractions)
+  // 4. Load new project (re-attaches interactions internally via setupInteractions)
   await loadProject(newHash);
 }

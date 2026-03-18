@@ -7,6 +7,7 @@
 
 import { state } from "./modules/state.js";
 import { render } from "./modules/renderer.js";
+import { computeLayout } from "./modules/layout.js";
 import { setupInteractions, setupControls } from "./modules/interactions.js";
 import { hideDetailPanel } from "./modules/detail-panel.js";
 import { showProjectPicker } from "./modules/project-picker.js";
@@ -83,39 +84,18 @@ export async function loadProject(hash, canvas) {
   document.getElementById("node-info").textContent =
     `${state.graphData.nodes.length} services, ${state.graphData.edges.length} connections`;
 
-  // Initialize positions in CSS pixel space
+  // Compute deterministic grid positions (replaces random init + force Worker)
   const cssBoundsW = Math.round(canvas.width / (window.devicePixelRatio || 1));
   const cssBoundsH = Math.round(canvas.height / (window.devicePixelRatio || 1));
-  state.graphData.nodes.forEach((n) => {
-    state.positions[n.id] = {
-      x: Math.random() * cssBoundsW,
-      y: Math.random() * cssBoundsH,
-    };
-  });
-
-  // Start force simulation
-  state.forceWorker = new Worker("./force-worker.js", { type: "module" });
-  state.forceWorker.onmessage = ({ data }) => {
-    if (data.type === "tick") {
-      data.nodes.forEach(({ id, x, y }) => {
-        state.positions[id] = { x, y };
-      });
-      render();
-    }
-  };
-  state.forceWorker.postMessage({
-    type: "init",
-    nodes: state.graphData.nodes.map((n) => ({
-      id: n.id,
-      ...state.positions[n.id],
-    })),
-    links: state.graphData.edges.map((e) => ({
-      source: e.source_service_id,
-      target: e.target_service_id,
-    })),
-    width: Math.round(canvas.width / (window.devicePixelRatio || 1)),
-    height: Math.round(canvas.height / (window.devicePixelRatio || 1)),
-  });
+  const { positions, boundaryBoxes } = computeLayout(
+    state.graphData.nodes,
+    raw.boundaries || [],
+    cssBoundsW,
+    cssBoundsH,
+  );
+  Object.assign(state.positions, positions);
+  state.boundaryBoxes = boundaryBoxes;
+  render();
 
   setupInteractions(canvas);
   setupControls();
