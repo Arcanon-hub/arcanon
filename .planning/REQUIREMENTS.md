@@ -32,13 +32,13 @@ Requirements for milestone v3.0 Layered Graph & Intelligence. Each maps to roadm
 
 ### Controls & Filters
 
-- [ ] **CTRL-01**: Top bar shows only Search, Project selector, and Filters button
-- [ ] **CTRL-02**: Collapsible filter panel with protocol toggles (REST, gRPC, Events, SDK, Internal)
-- [ ] **CTRL-03**: Layer toggles in filter panel (Services, Libraries, Infra, External)
-- [ ] **CTRL-04**: "Mismatches only" toggle to show only edges with detected mismatches
-- [ ] **CTRL-05**: "Hide isolated nodes" toggle to hide nodes with zero connections
-- [ ] **CTRL-06**: Boundary dropdown filter (when boundaries defined)
-- [ ] **CTRL-07**: Language dropdown filter
+- [x] **CTRL-01**: Top bar shows only Search, Project selector, and Filters button
+- [x] **CTRL-02**: Collapsible filter panel with protocol toggles (REST, gRPC, Events, SDK, Internal)
+- [x] **CTRL-03**: Layer toggles in filter panel (Services, Libraries, Infra, External)
+- [x] **CTRL-04**: "Mismatches only" toggle to show only edges with detected mismatches
+- [x] **CTRL-05**: "Hide isolated nodes" toggle to hide nodes with zero connections
+- [x] **CTRL-06**: Boundary dropdown filter (when boundaries defined)
+- [x] **CTRL-07**: Language dropdown filter
 
 ### Data Model
 
@@ -124,13 +124,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EDGE-03 | Phase 36 | Complete |
 | EDGE-04 | Phase 36 | Complete |
 | EDGE-05 | Phase 36 | Complete |
-| CTRL-01 | Phase 37 | Pending |
-| CTRL-02 | Phase 37 | Pending |
-| CTRL-03 | Phase 37 | Pending |
-| CTRL-04 | Phase 37 | Pending |
-| CTRL-05 | Phase 37 | Pending |
-| CTRL-06 | Phase 37 | Pending |
-| CTRL-07 | Phase 37 | Pending |
+| CTRL-01 | Phase 37 | Complete |
+| CTRL-02 | Phase 37 | Complete |
+| CTRL-03 | Phase 37 | Complete |
+| CTRL-04 | Phase 37 | Complete |
+| CTRL-05 | Phase 37 | Complete |
+| CTRL-06 | Phase 37 | Complete |
+| CTRL-07 | Phase 37 | Complete |
 | INTEL-01 | Phase 38 | Pending |
 | INTEL-02 | Phase 38 | Pending |
 | INTEL-03 | Phase 38 | Pending |

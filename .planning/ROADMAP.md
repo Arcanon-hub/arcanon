@@ -136,7 +136,7 @@ Plans:
   4. Enabling "Mismatches only" hides all edges except those with detected mismatches
   5. Enabling "Hide isolated nodes" removes nodes with zero connections from the canvas
   6. Boundary and Language dropdowns filter to nodes in the selected boundary or written in the selected language
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
 - [ ] 37-01-PLAN.md — State extensions + HTML/CSS minimal top bar and filter panel shell
 - [ ] 37-02-PLAN.md — filter-panel.js module: wire all controls to state + render
@@ -168,5 +168,5 @@ Plans:
 | 34. Layout Engine & Node Rendering | 2/2 | Complete    | 2026-03-18 | - |
 | 35. External Actors | 2/2 | Complete    | 2026-03-18 | - |
 | 36. Edge Rendering | 1/1 | Complete   | 2026-03-18 | - |
-| 37. Controls & Filters | v3.0 | 0/3 | Not started | - |
+| 37. Controls & Filters | 1/3 | In Progress|  | - |
 | 38. Intelligence | v3.0 | 0/2 | Not started | - |

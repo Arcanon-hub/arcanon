@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Layered Graph & Intelligence
 status: unknown
-stopped_at: Completed 36-01-PLAN.md
-last_updated: "2026-03-18T20:21:48.509Z"
+stopped_at: Completed 37-01-PLAN.md
+last_updated: "2026-03-18T20:52:18.587Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 11
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** Phase 36 complete — edge-rendering done
+**Current focus:** Phase 37 — controls-filters
 
 ## Current Position
 
-Phase: 36 (edge-rendering) — COMPLETE
-Plan: 1 of 1 (all complete)
+Phase: 37 (controls-filters) — EXECUTING
+Plan: 1 of 3
 
 ## Performance Metrics
 
@@ -57,6 +57,8 @@ Plan: 1 of 1 (all complete)
 - [Phase 35-02]: Pointy-top hexagon for actors, _isActor flag for fast type detection
 - [Phase 36-edge-rendering]: PROTOCOL_LINE_DASH values are logical pixels; caller divides by transform.scale at render time
 - [Phase 36-edge-rendering]: sdk/import map to [] (solid) — corrects prior incorrect [4,4] dashed pattern
+- [Phase 37-01]: Keep #fit-btn in toolbar between project-select and filters-btn — zoom utility separate from filters
+- [Phase 37-01]: Filter panel HTML shell in index.html now, wired by filter-panel.js in plan 02 — avoids JS-create-DOM pattern
 
 ### Pending Todos
 
@@ -70,6 +72,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-18T20:20:24.536Z
-Stopped at: Completed 36-01-PLAN.md
+Last session: 2026-03-18T20:52:18.584Z
+Stopped at: Completed 37-01-PLAN.md
 Resume file: None
