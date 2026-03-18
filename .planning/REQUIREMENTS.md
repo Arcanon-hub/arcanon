@@ -49,7 +49,7 @@ Requirements for milestone v3.0 Layered Graph & Intelligence. Each maps to roadm
 
 ### Intelligence
 
-- [ ] **INTEL-01**: ChromaDB embeddings include boundary context and actor relationships alongside graph data
+- [x] **INTEL-01**: ChromaDB embeddings include boundary context and actor relationships alongside graph data
 - [ ] **INTEL-02**: MCP impact_query responses include type-aware context (e.g., "library used by 3 services in payments boundary")
 - [ ] **INTEL-03**: MCP impact_search responses include actor relationships (e.g., "payments-api connects to external Stripe via REST")
 
@@ -131,7 +131,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CTRL-05 | Phase 37 | Complete |
 | CTRL-06 | Phase 37 | Complete |
 | CTRL-07 | Phase 37 | Complete |
-| INTEL-01 | Phase 38 | Pending |
+| INTEL-01 | Phase 38 | Complete |
 | INTEL-02 | Phase 38 | Pending |
 | INTEL-03 | Phase 38 | Pending |
 

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Layered Graph & Intelligence
 status: unknown
-stopped_at: Completed 37-03-PLAN.md
-last_updated: "2026-03-18T20:59:36.135Z"
+stopped_at: Completed 38-01-PLAN.md
+last_updated: "2026-03-18T21:02:53.099Z"
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-18)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** Phase 37 — controls-filters
+**Current focus:** Phase 38 — intelligence
 
 ## Current Position
 
-Phase: 37 (controls-filters) — EXECUTING
-Plan: 2 of 3
+Phase: 38 (intelligence) — EXECUTING
+Plan: 1 of 2
 
 ## Performance Metrics
 
@@ -63,6 +63,8 @@ Plan: 2 of 3
 - [Phase 37-02]: populateFilterDropdowns() called after mismatches assignment — services node array complete at that point
 - [Phase 37-controls-filters]: nodeLayer() helper defined at module scope to avoid per-frame re-creation in render()
 - [Phase 37-controls-filters]: hideIsolated post-filter honors mismatchesOnly in its edge-counting pass — consistent with what's drawn
+- [Phase 38-intelligence]: Enrichment maps default to empty Map — calling syncFindings(findings) with no second arg produces boundary='' actors='' with zero crashes
+- [Phase 38-intelligence]: Actors DB query wrapped in try/catch — Phase 38 may execute before Phase 33 migration 008 is deployed on a given DB
 
 ### Pending Todos
 
@@ -76,6 +78,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-18T20:58:57.048Z
-Stopped at: Completed 37-03-PLAN.md
+Last session: 2026-03-18T21:02:39.506Z
+Stopped at: Completed 38-01-PLAN.md
 Resume file: None
