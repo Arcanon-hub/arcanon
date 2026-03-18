@@ -94,7 +94,10 @@ Plans:
   3. Nodes within each layer are evenly spaced using grid-based positioning
   4. Services belonging to a user-defined boundary in `allclear.config.json` are enclosed by a dashed rounded rectangle with semi-transparent fill and a label
   5. Hovering any node shows a tooltip displaying its type and connection count
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 34-01-PLAN.md — Layout engine, force worker removal, boundary API
+- [ ] 34-02-PLAN.md — Node shapes, boundary box rendering, tooltip upgrade
 
 ### Phase 35: External Actors
 **Goal**: External systems detected during scan are visible as distinct actor nodes outside the system boundary
@@ -150,7 +153,7 @@ Plans:
 | 27-29 | v2.2 | 5/5 | Complete | 2026-03-16 |
 | 30-32 | v2.3 | 5/5 | Complete | 2026-03-18 |
 | 33. Data Model | v3.0 | 0/1 | In progress | - |
-| 34. Layout Engine & Node Rendering | v3.0 | 0/? | Not started | - |
+| 34. Layout Engine & Node Rendering | v3.0 | 0/2 | Not started | - |
 | 35. External Actors | v3.0 | 0/? | Not started | - |
 | 36. Edge Rendering | v3.0 | 0/? | Not started | - |
 | 37. Controls & Filters | v3.0 | 0/? | Not started | - |
