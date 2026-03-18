@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Layered Graph & Intelligence
 status: unknown
-stopped_at: Completed 35-01 — actor persistence in persistFindings, actors in getGraph
-last_updated: "2026-03-18T20:12:41.419Z"
+stopped_at: Completed 35-02-PLAN.md
+last_updated: "2026-03-18T20:17:24.978Z"
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-18)
 
 ## Current Position
 
-Phase: 35 (external-actors) — EXECUTING
-Plan: 1 of 2
+Phase: 35 (external-actors) — COMPLETE
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -53,6 +53,8 @@ Plan: 1 of 2
 - [34-02]: NODE-03 test slice uses 400 chars (ctx.fill() is 308 chars past infra match point)
 - [Phase 35-01]: Wrap _stmtUpsertConnection in try/catch for crossing column backward compat — pre-migration-008 DBs fall back to old statement
 - [Phase 35-01]: Actor detection uses conn.target as actorName — external target service name becomes actor name, consistent with migration 008
+- [Phase 35-02]: Synthetic negative IDs (-actor.id) for actor nodes to avoid collision with service IDs
+- [Phase 35-02]: Pointy-top hexagon for actors, _isActor flag for fast type detection
 
 ### Pending Todos
 
@@ -66,6 +68,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-18T20:12:41.416Z
-Stopped at: Completed 35-01 — actor persistence in persistFindings, actors in getGraph
+Last session: 2026-03-18T20:17:24.974Z
+Stopped at: Completed 35-02-PLAN.md
 Resume file: None

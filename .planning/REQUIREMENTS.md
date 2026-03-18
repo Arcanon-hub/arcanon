@@ -20,15 +20,15 @@ Requirements for milestone v3.0 Layered Graph & Intelligence. Each maps to roadm
 - [x] **NODE-01**: Services render as filled circles
 - [x] **NODE-02**: Libraries/SDKs render as outline diamonds
 - [x] **NODE-03**: Infrastructure nodes render as filled diamonds
-- [ ] **NODE-04**: External system actors render as hexagons on the right side, outside the system boundary
+- [x] **NODE-04**: External system actors render as hexagons on the right side, outside the system boundary
 - [x] **NODE-05**: Hovering a node shows tooltip with type and connection count
 
 ### External Actors
 
 - [x] **ACTOR-01**: Outbound external connections from scan are stored as external actor nodes (separate `actors` table)
-- [ ] **ACTOR-02**: External actors display in a dedicated column to the right of the system boundary
-- [ ] **ACTOR-03**: Edges from services to external actors cross the system boundary visually
-- [ ] **ACTOR-04**: Detail panel for external actors shows which services connect to them and via what protocol
+- [x] **ACTOR-02**: External actors display in a dedicated column to the right of the system boundary
+- [x] **ACTOR-03**: Edges from services to external actors cross the system boundary visually
+- [x] **ACTOR-04**: Detail panel for external actors shows which services connect to them and via what protocol
 
 ### Controls & Filters
 
@@ -115,10 +115,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NODE-03 | Phase 34 | Complete |
 | NODE-05 | Phase 34 | Complete |
 | ACTOR-01 | Phase 35 | Complete |
-| ACTOR-02 | Phase 35 | Pending |
-| ACTOR-03 | Phase 35 | Pending |
-| ACTOR-04 | Phase 35 | Pending |
-| NODE-04 | Phase 35 | Pending |
+| ACTOR-02 | Phase 35 | Complete |
+| ACTOR-03 | Phase 35 | Complete |
+| ACTOR-04 | Phase 35 | Complete |
+| NODE-04 | Phase 35 | Complete |
 | EDGE-01 | Phase 36 | Pending |
 | EDGE-02 | Phase 36 | Pending |
 | EDGE-03 | Phase 36 | Pending |
