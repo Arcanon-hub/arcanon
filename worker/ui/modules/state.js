@@ -11,6 +11,12 @@ export const state = {
   blastSet: new Set(),
   blastCache: {},
   activeProtocols: new Set(["rest", "grpc", "events", "internal", "sdk"]),
+  activeLayers: new Set(["services", "libraries", "infra", "external"]),
+  mismatchesOnly: false,
+  hideIsolated: false,
+  boundaryFilter: null,      // string boundary name or null (All)
+  languageFilter: null,      // string language name or null (All)
+  filterPanelOpen: false,
   searchFilter: "",
   currentProject: null,   // hash of currently loaded project
   isDragging: false,
