@@ -101,13 +101,45 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated by roadmapper) | | |
+| DATA-01 | Phase 33 | Pending |
+| DATA-02 | Phase 33 | Pending |
+| DATA-03 | Phase 33 | Pending |
+| DATA-04 | Phase 33 | Pending |
+| LAYOUT-01 | Phase 34 | Pending |
+| LAYOUT-02 | Phase 34 | Pending |
+| LAYOUT-03 | Phase 34 | Pending |
+| LAYOUT-04 | Phase 34 | Pending |
+| LAYOUT-05 | Phase 34 | Pending |
+| NODE-01 | Phase 34 | Pending |
+| NODE-02 | Phase 34 | Pending |
+| NODE-03 | Phase 34 | Pending |
+| NODE-05 | Phase 34 | Pending |
+| ACTOR-01 | Phase 35 | Pending |
+| ACTOR-02 | Phase 35 | Pending |
+| ACTOR-03 | Phase 35 | Pending |
+| ACTOR-04 | Phase 35 | Pending |
+| NODE-04 | Phase 35 | Pending |
+| EDGE-01 | Phase 36 | Pending |
+| EDGE-02 | Phase 36 | Pending |
+| EDGE-03 | Phase 36 | Pending |
+| EDGE-04 | Phase 36 | Pending |
+| EDGE-05 | Phase 36 | Pending |
+| CTRL-01 | Phase 37 | Pending |
+| CTRL-02 | Phase 37 | Pending |
+| CTRL-03 | Phase 37 | Pending |
+| CTRL-04 | Phase 37 | Pending |
+| CTRL-05 | Phase 37 | Pending |
+| CTRL-06 | Phase 37 | Pending |
+| CTRL-07 | Phase 37 | Pending |
+| INTEL-01 | Phase 38 | Pending |
+| INTEL-02 | Phase 38 | Pending |
+| INTEL-03 | Phase 38 | Pending |
 
 **Coverage:**
-- v3.0 requirements: 28 total
-- Mapped to phases: 0
-- Unmapped: 28 ⚠️
+- v3.0 requirements: 33 total
+- Mapped to phases: 33
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-18*
-*Last updated: 2026-03-18 after initial definition*
+*Last updated: 2026-03-18 after roadmap creation*

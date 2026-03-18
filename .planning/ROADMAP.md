@@ -7,6 +7,7 @@
 - ✅ **v2.1 UI Polish & Observability** — Phases 22-26 (shipped 2026-03-16)
 - ✅ **v2.2 Scan Data Integrity** — Phases 27-29 (shipped 2026-03-16)
 - ✅ **v2.3 Type-Specific Detail Panels** — Phases 30-32 (shipped 2026-03-18)
+- 🚧 **v3.0 Layered Graph & Intelligence** — Phases 33-38 (in progress)
 
 ## Phases
 
@@ -57,6 +58,86 @@ Full details: `.planning/milestones/v2.3-ROADMAP.md`
 
 </details>
 
+### 🚧 v3.0 Layered Graph & Intelligence (In Progress)
+
+**Milestone Goal:** Replace force-directed graph with deterministic layered layout, surface external system actors, and enrich the data model for richer MCP impact responses.
+
+- [ ] **Phase 33: Data Model** — actors table, actor_connections table, node_metadata table, migration from existing external connections
+- [ ] **Phase 34: Layout Engine & Node Rendering** — deterministic layered layout replacing force simulation, node shapes per type, boundary boxes
+- [ ] **Phase 35: External Actors** — external actor detection, storage, rendering as hexagons, detail panel
+- [ ] **Phase 36: Edge Rendering** — protocol-differentiated edge styles (solid, dashed, dotted), mismatch highlighting
+- [ ] **Phase 37: Controls & Filters** — minimal top bar, collapsible filter panel with all toggles
+- [ ] **Phase 38: Intelligence** — enriched ChromaDB embeddings, boundary-aware and actor-aware MCP responses
+
+## Phase Details
+
+### Phase 33: Data Model
+**Goal**: The database schema supports external actors and extensible node metadata before any UI changes land
+**Depends on**: Phase 32
+**Requirements**: DATA-01, DATA-02, DATA-03, DATA-04
+**Success Criteria** (what must be TRUE):
+  1. `actors` table exists with name, kind, direction, and source columns; rows survive re-scan via upsert
+  2. `actor_connections` table links actor rows to service rows with direction and protocol
+  3. `node_metadata` table accepts arbitrary key/value pairs keyed by (service_id, view, key) without schema changes
+  4. Running the migration against an existing database populates actor rows from connections where `crossing = 'external'`
+**Plans**: TBD
+
+### Phase 34: Layout Engine & Node Rendering
+**Goal**: The graph renders with a deterministic, stable layered layout and distinct node shapes per type
+**Depends on**: Phase 33
+**Requirements**: LAYOUT-01, LAYOUT-02, LAYOUT-03, LAYOUT-04, LAYOUT-05, NODE-01, NODE-02, NODE-03, NODE-05
+**Success Criteria** (what must be TRUE):
+  1. Reloading the page shows nodes in identical positions — no randomness or force simulation drift
+  2. Services appear in the top row, libraries in the middle row, infrastructure in the bottom row
+  3. Nodes within each layer are evenly spaced using grid-based positioning
+  4. Services belonging to a user-defined boundary in `allclear.config.json` are enclosed by a dashed rounded rectangle with semi-transparent fill and a label
+  5. Hovering any node shows a tooltip displaying its type and connection count
+**Plans**: TBD
+
+### Phase 35: External Actors
+**Goal**: External systems detected during scan are visible as distinct actor nodes outside the system boundary
+**Depends on**: Phase 34
+**Requirements**: ACTOR-01, ACTOR-02, ACTOR-03, ACTOR-04, NODE-04
+**Success Criteria** (what must be TRUE):
+  1. Scanning a repo with outbound external connections creates rows in the `actors` table (verifiable via `/allclear:map`)
+  2. External actor nodes render as hexagons in a dedicated column to the right of the system boundary
+  3. Edges from services to external actors visually cross the system boundary line
+  4. Clicking an external actor node opens a detail panel listing which services connect to it and via what protocol
+**Plans**: TBD
+
+### Phase 36: Edge Rendering
+**Goal**: Edge visual style communicates connection protocol at a glance
+**Depends on**: Phase 34
+**Requirements**: EDGE-01, EDGE-02, EDGE-03, EDGE-04, EDGE-05
+**Success Criteria** (what must be TRUE):
+  1. REST edges render as solid lines; gRPC edges render as dashed lines; event/messaging edges render as dotted lines
+  2. SDK/import edges render as solid lines with arrowheads indicating direction
+  3. Edges flagged as mismatches render in red, visually distinct from healthy edges
+**Plans**: TBD
+
+### Phase 37: Controls & Filters
+**Goal**: Users can filter the graph to the nodes and edges they care about through a minimal, uncluttered UI
+**Depends on**: Phase 34, Phase 35, Phase 36
+**Requirements**: CTRL-01, CTRL-02, CTRL-03, CTRL-04, CTRL-05, CTRL-06, CTRL-07
+**Success Criteria** (what must be TRUE):
+  1. The top bar shows only Search, Project selector, and a Filters button — no other persistent controls
+  2. Clicking Filters opens a collapsible panel with protocol toggles (REST, gRPC, Events, SDK, Internal) that show/hide matching edges
+  3. Layer toggles in the filter panel show/hide entire layers (Services, Libraries, Infra, External)
+  4. Enabling "Mismatches only" hides all edges except those with detected mismatches
+  5. Enabling "Hide isolated nodes" removes nodes with zero connections from the canvas
+  6. Boundary and Language dropdowns filter to nodes in the selected boundary or written in the selected language
+**Plans**: TBD
+
+### Phase 38: Intelligence
+**Goal**: ChromaDB embeddings and MCP tool responses carry boundary and actor context so agents receive richer impact answers
+**Depends on**: Phase 33, Phase 35
+**Requirements**: INTEL-01, INTEL-02, INTEL-03
+**Success Criteria** (what must be TRUE):
+  1. After a scan, ChromaDB document payloads include boundary name (if configured) and actor relationships alongside existing graph data
+  2. `impact_query` MCP responses include type-aware phrasing — e.g., "library used by 3 services in the payments boundary"
+  3. `impact_search` MCP responses include actor relationships — e.g., "payments-api connects to external Stripe via REST"
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -66,3 +147,9 @@ Full details: `.planning/milestones/v2.3-ROADMAP.md`
 | 22-26 | v2.1 | 11/11 | Complete | 2026-03-16 |
 | 27-29 | v2.2 | 5/5 | Complete | 2026-03-16 |
 | 30-32 | v2.3 | 5/5 | Complete | 2026-03-18 |
+| 33. Data Model | v3.0 | 0/? | Not started | - |
+| 34. Layout Engine & Node Rendering | v3.0 | 0/? | Not started | - |
+| 35. External Actors | v3.0 | 0/? | Not started | - |
+| 36. Edge Rendering | v3.0 | 0/? | Not started | - |
+| 37. Controls & Filters | v3.0 | 0/? | Not started | - |
+| 38. Intelligence | v3.0 | 0/? | Not started | - |
