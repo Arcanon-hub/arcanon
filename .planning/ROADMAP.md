@@ -77,13 +77,13 @@ Full details: `.planning/milestones/v3.0-ROADMAP.md`
 
 **Milestone Goal:** Rename the plugin from "allclear" to "ligamen" across all code, configuration, environment variables, data paths, documentation, UI, slash commands, MCP server, and tests. Clean break — no backwards compatibility.
 
-- [ ] **Phase 39: Identity** - Rename package, plugin manifest, Makefile, and config filename
-- [ ] **Phase 40: Environment & Paths** - Rename all env vars, data directory, and temp file paths
-- [ ] **Phase 41: Commands & MCP** - Rename all slash commands, MCP server, ChromaDB collection, and skill descriptions
-- [ ] **Phase 42: Source Code** - Update shell script and JavaScript internal references and headers
-- [ ] **Phase 43: Tests** - Update bats tests, JS tests, and test fixtures
-- [ ] **Phase 44: Documentation** - Update README, docs/ files, and planning references
-- [ ] **Phase 45: UI** - Update graph UI title and worker HTML branding
+- [x] **Phase 39: Identity** - Rename package, plugin manifest, Makefile, and config filename
+- [x] **Phase 40: Environment & Paths** - Rename all env vars, data directory, and temp file paths
+- [x] **Phase 41: Commands & MCP** - Rename all slash commands, MCP server, ChromaDB collection, and skill descriptions
+- [x] **Phase 42: Source Code** - Update shell script and JavaScript internal references and headers
+- [x] **Phase 43: Tests** - Update bats tests, JS tests, and test fixtures
+- [x] **Phase 44: Documentation** - Update README, docs/ files, and planning references
+- [x] **Phase 45: UI** - Update graph UI title and worker HTML branding
 
 ## Phase Details
 
