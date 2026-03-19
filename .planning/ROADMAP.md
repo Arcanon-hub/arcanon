@@ -125,8 +125,8 @@ Plans:
   4. Skill files reference `ligamen` in their descriptions so agent auto-invocation prompts show the new name
 **Plans**: 2 plans
 Plans:
-- [ ] 44-01-PLAN.md — Rename AllClear to Ligamen in README.md (install, commands, config, env vars)
-- [ ] 44-02-PLAN.md — Rename AllClear to Ligamen in all docs/ files and planning docs
+- [ ] 41-01-PLAN.md — Rename /allclear:* to /ligamen:* in all 6 command files and both skill descriptions
+- [ ] 41-02-PLAN.md — Rename MCP server to ligamen-impact in .mcp.json and server.js, rename ChromaDB collection in chroma.js
 
 ### Phase 42: Source Code
 **Goal**: All internal implementation files — shell scripts and JavaScript modules — carry ligamen branding in headers, comments, and user-visible output strings
@@ -192,7 +192,7 @@ Plans:
 | 33-38 | v3.0 | 11/11 | Complete | 2026-03-18 |
 | 39. Identity | v4.0 | 0/TBD | Not started | - |
 | 40. Environment & Paths | v4.0 | 0/TBD | Not started | - |
-| 41. Commands & MCP | v4.0 | 0/TBD | Not started | - |
+| 41. Commands & MCP | v4.0 | 0/2 | Not started | - |
 | 42. Source Code | v4.0 | 0/TBD | Not started | - |
 | 43. Tests | v4.0 | 0/TBD | Not started | - |
 | 44. Documentation | v4.0 | 0/TBD | Not started | - |
