@@ -146,10 +146,7 @@ Plans:
   1. Running the bats test suite passes with zero failures — all env var references, config filename assertions, and temp path checks use `LIGAMEN_*` and `/tmp/ligamen_*`
   2. Running `node --test` on the JS test suite passes with zero failures — all path and reference assertions use ligamen names
   3. Test fixture config files are named `ligamen.config.json` and contain no allclear references
-**Plans**: 2 plans
-Plans:
-- [ ] 44-01-PLAN.md — Rename AllClear to Ligamen in README.md (install, commands, config, env vars)
-- [ ] 44-02-PLAN.md — Rename AllClear to Ligamen in all docs/ files and planning docs
+**Plans**: TBD
 
 ### Phase 44: Documentation
 **Goal**: All user-facing documentation consistently describes the plugin as Ligamen with correct install instructions and command references
