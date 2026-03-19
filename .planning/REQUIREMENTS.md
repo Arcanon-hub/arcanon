@@ -69,34 +69,34 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| IDENT-01 | — | Pending |
-| IDENT-02 | — | Pending |
-| IDENT-03 | — | Pending |
-| IDENT-04 | — | Pending |
-| CMD-01 | — | Pending |
-| CMD-02 | — | Pending |
-| CMD-03 | — | Pending |
-| CMD-04 | — | Pending |
-| ENV-01 | — | Pending |
-| ENV-02 | — | Pending |
-| ENV-03 | — | Pending |
-| CODE-01 | — | Pending |
-| CODE-02 | — | Pending |
-| CODE-03 | — | Pending |
-| DOCS-01 | — | Pending |
-| DOCS-02 | — | Pending |
-| DOCS-03 | — | Pending |
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
-| TEST-03 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
+| IDENT-01 | Phase 39 | Pending |
+| IDENT-02 | Phase 39 | Pending |
+| IDENT-03 | Phase 39 | Pending |
+| IDENT-04 | Phase 39 | Pending |
+| ENV-01 | Phase 40 | Pending |
+| ENV-02 | Phase 40 | Pending |
+| ENV-03 | Phase 40 | Pending |
+| CMD-01 | Phase 41 | Pending |
+| CMD-02 | Phase 41 | Pending |
+| CMD-03 | Phase 41 | Pending |
+| CMD-04 | Phase 41 | Pending |
+| CODE-01 | Phase 42 | Pending |
+| CODE-02 | Phase 42 | Pending |
+| CODE-03 | Phase 42 | Pending |
+| TEST-01 | Phase 43 | Pending |
+| TEST-02 | Phase 43 | Pending |
+| TEST-03 | Phase 43 | Pending |
+| DOCS-01 | Phase 44 | Pending |
+| DOCS-02 | Phase 44 | Pending |
+| DOCS-03 | Phase 44 | Pending |
+| UI-01 | Phase 45 | Pending |
+| UI-02 | Phase 45 | Pending |
 
 **Coverage:**
 - v4.0 requirements: 22 total
-- Mapped to phases: 0
-- Unmapped: 22 ⚠️
+- Mapped to phases: 22
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-19 after initial definition*
+*Last updated: 2026-03-19 after roadmap creation*

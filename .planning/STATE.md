@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Ligamen Rebrand
-status: defining-requirements
+status: ready-to-plan
 stopped_at: null
-last_updated: "2026-03-19T05:07:00.000Z"
-last_activity: 2026-03-19 — Milestone v4.0 started
+last_updated: "2026-03-19T00:00:00.000Z"
+last_activity: 2026-03-19 — Roadmap created for v4.0 (7 phases, 22 requirements)
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** Defining requirements for v4.0 Ligamen Rebrand
+**Current focus:** Phase 39 — Identity (ready to plan)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 39 of 45 (Identity)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-03-19 — Milestone v4.0 started
+Status: Ready to plan
+Last activity: 2026-03-19 — Roadmap created, 7 phases mapped, 22 requirements covered
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -36,12 +36,15 @@ Progress: [░░░░░░░░░░] 0%
 
 **Velocity:**
 - Total plans completed: 68 (across v1.0–v3.0)
+- v4.0 plans completed: 0
 
 ## Accumulated Context
 
 ### Decisions
 
-(Cleared at milestone boundary — see PROJECT.md Key Decisions for full history)
+- Clean break: no backwards compatibility with `~/.allclear/` or `ALLCLEAR_*` env vars
+- Dependency order: Identity → Env/Paths → Commands/MCP → Source → Tests → Docs → UI
+- Tests phase (43) depends on Source (42) — test assertions must match renamed code
 
 ### Pending Todos
 
@@ -54,5 +57,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-19
-Stopped at: null
+Stopped at: Roadmap created — ready to plan Phase 39
 Resume file: None
