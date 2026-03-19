@@ -66,6 +66,10 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 (Defined per milestone — see current milestone below)
 
+## Current Milestone: v4.0 Ligamen Rebrand
+
+**Goal:** Rename the plugin from "allclear" to "ligamen" across all code, configuration, environment variables, data paths, documentation, UI, slash commands, MCP server, and tests — with backwards compatibility for existing `~/.allclear/` data directories.
+
 ### Out of Scope
 
 - Linear issue enrichment — other plugins cover this; no external service dependencies
@@ -128,4 +132,4 @@ Known tech debt: no log rotation, db/database.js has console.log in script-mode 
 | Boundary config in allclear.config.json | User-defined grouping avoids hallucination from auto-inference | ✓ Good |
 
 ---
-*Last updated: 2026-03-18 after v3.0 milestone*
+*Last updated: 2026-03-19 after v4.0 milestone start*
