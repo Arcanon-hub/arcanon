@@ -61,14 +61,14 @@ setup() {
   assert [ ! -d ".claude-plugin/hooks" ]
 }
 
-@test "all five command files exist" {
-  for cmd in quality-gate cross-impact drift pulse deploy-verify; do
+@test "all command files exist" {
+  for cmd in quality-gate cross-impact drift; do
     assert [ -f "commands/$cmd.md" ]
   done
 }
 
 @test "all command files have valid frontmatter" {
-  for cmd in quality-gate cross-impact drift pulse deploy-verify; do
+  for cmd in quality-gate cross-impact drift; do
     run grep -c "^description:" "commands/$cmd.md"
     assert_success
   done
