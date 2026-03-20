@@ -46,20 +46,3 @@ When a dependency map exists, queries the service graph for transitive impact wi
 /ligamen:drift --all          # include INFO-level findings
 ```
 
-## `/ligamen:pulse` — Service Health
-
-```
-/ligamen:pulse                     # all deployments in current context
-/ligamen:pulse staging api         # specific service in staging
-```
-
-Requires `kubectl` configured with cluster access.
-
-## `/ligamen:deploy-verify` — Deploy Verification
-
-```
-/ligamen:deploy-verify                    # check production
-/ligamen:deploy-verify staging --diff     # staging with full diff
-```
-
-Requires `kubectl` with read permissions.

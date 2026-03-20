@@ -15,8 +15,6 @@ Every edit is automatically formatted and linted, every quality check runs with 
 - ✓ Universal quality gate command (`/ligamen:quality-gate`) with auto-detection of project type — v1.0
 - ✓ Cross-repo impact scanning (`/ligamen:cross-impact`) — v1.0
 - ✓ Cross-repo consistency checking (`/ligamen:drift`) — v1.0
-- ✓ Live service health checking (`/ligamen:pulse`) — v1.0
-- ✓ Deploy state verification (`/ligamen:deploy-verify`) — v1.0
 - ✓ Auto-format hook on edit (PostToolUse) — v1.0
 - ✓ Auto-lint hook on edit (PostToolUse) — v1.0
 - ✓ Sensitive file guard hook (PreToolUse) — v1.0
@@ -72,11 +70,10 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ## Current Milestone: v4.1 Command Cleanup
 
-**Goal:** Remove Kubernetes-specific commands (pulse, deploy-verify) that don't fit the plugin's core focus on code quality and cross-repo intelligence.
+**Goal:** Remove Kubernetes-specific commands that don't fit the plugin's core focus on code quality and cross-repo intelligence.
 
 **Target features:**
-- Remove `/ligamen:pulse` command and supporting scripts
-- Remove `/ligamen:deploy-verify` command
+- Remove Kubernetes cluster health and deploy-verification commands and supporting scripts
 - Update README and documentation to reflect removed commands
 - Clean up any related test fixtures
 
