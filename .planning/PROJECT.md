@@ -75,7 +75,16 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ### Active
 
-(Defined per milestone — see REQUIREMENTS.md when next milestone starts)
+## Current Milestone: v5.0 Marketplace Restructure
+
+**Goal:** Restructure the repo as a proper Claude Code marketplace so end users can install via `claude plugin marketplace add` + `claude plugin install` without cloning.
+
+**Target features:**
+- Move plugin files (commands/, hooks/, scripts/, worker/, lib/, skills/, .claude-plugin/) into `plugins/ligamen/`
+- Keep repo-level files (README, LICENSE, docs, tests, .planning, Makefile) at root
+- Update all internal paths, imports, and references
+- Update README installation instructions
+- Ensure Makefile, tests, and CI still work with the new layout
 
 ### Out of Scope
 
@@ -145,4 +154,4 @@ Known tech debt: no log rotation, db/database.js has console.log in script-mode 
 | Filesystem queries at call time (no new DB tables) | Drift data changes too frequently to persist; repos table has paths as anchors | ✓ Good |
 
 ---
-*Last updated: 2026-03-20 after v4.1 milestone*
+*Last updated: 2026-03-20 after v5.0 milestone started*
