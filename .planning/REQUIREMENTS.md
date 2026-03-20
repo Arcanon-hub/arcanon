@@ -9,8 +9,8 @@ Requirements for v4.1 Command Cleanup. Each maps to roadmap phases.
 
 ### Removal
 
-- [ ] **REM-01**: Remove `/ligamen:pulse` command and `scripts/pulse-check.sh`
-- [ ] **REM-02**: Remove `/ligamen:deploy-verify` command
+- [x] **REM-01**: Remove `/ligamen:pulse` command and `scripts/pulse-check.sh`
+- [x] **REM-02**: Remove `/ligamen:deploy-verify` command
 - [ ] **REM-03**: Remove pulse and deploy-verify from README, docs, and validated requirements
 
 ### MCP Drift
@@ -39,8 +39,8 @@ None deferred.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REM-01 | Phase 46 | Pending |
-| REM-02 | Phase 46 | Pending |
+| REM-01 | Phase 46 | Complete |
+| REM-02 | Phase 46 | Complete |
 | REM-03 | Phase 46 | Pending |
 | MCP-01 | Phase 48 | Pending |
 | MCP-02 | Phase 48 | Pending |
