@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: null
-milestone_name: null
-status: idle
+milestone: v4.1
+milestone_name: Command Cleanup
+status: defining_requirements
 stopped_at: null
-last_updated: "2026-03-20T17:58:00.000Z"
-last_activity: 2026-03-20 — v4.0 Ligamen Rebrand milestone archived
+last_updated: "2026-03-20T18:30:00.000Z"
+last_activity: 2026-03-20 — Milestone v4.1 started
 progress:
   total_phases: 0
   completed_phases: 0
@@ -21,16 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** Planning next milestone
+**Current focus:** v4.1 Command Cleanup
 
 ## Current Position
 
-Phase: —
+Phase: Not started (defining requirements)
 Plan: —
-Status: Idle (between milestones)
-Last activity: 2026-03-20 — v4.0 Ligamen Rebrand archived
-
-Progress: No active milestone
+Status: Defining requirements
+Last activity: 2026-03-20 — Milestone v4.1 started
 
 ## Performance Metrics
 
@@ -43,7 +41,7 @@ Progress: No active milestone
 
 ### Decisions
 
-(Cleared — see PROJECT.md Key Decisions for historical record)
+- Remove pulse and deploy-verify commands — Kubernetes-specific, doesn't fit core plugin focus
 
 ### Pending Todos
 

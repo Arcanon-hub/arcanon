@@ -70,7 +70,15 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ### Active
 
-(Defined per milestone — see REQUIREMENTS.md when next milestone starts)
+## Current Milestone: v4.1 Command Cleanup
+
+**Goal:** Remove Kubernetes-specific commands (pulse, deploy-verify) that don't fit the plugin's core focus on code quality and cross-repo intelligence.
+
+**Target features:**
+- Remove `/ligamen:pulse` command and supporting scripts
+- Remove `/ligamen:deploy-verify` command
+- Update README and documentation to reflect removed commands
+- Clean up any related test fixtures
 
 ### Out of Scope
 
@@ -137,4 +145,4 @@ Known tech debt: no log rotation, db/database.js has console.log in script-mode 
 | Parallel phase execution for rename | All 7 phases independent for string replacement; 2-day turnaround | ✓ Good |
 
 ---
-*Last updated: 2026-03-20 after v4.0 milestone*
+*Last updated: 2026-03-20 after v4.1 milestone started*
