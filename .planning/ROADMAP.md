@@ -123,12 +123,12 @@ Plans:
   2. An agent calling `drift_types` via MCP receives a structured list of shared type/struct/interface mismatches across repos
   3. An agent calling `drift_openapi` via MCP receives a structured list of OpenAPI spec breaking changes across repos
   4. All three tools are registered in the MCP server manifest and appear in `impact_tools` alongside existing tools
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 48-01: Implement drift_versions MCP tool with query logic and registration
-- [ ] 48-02: Implement drift_types MCP tool with query logic and registration
-- [ ] 48-03: Implement drift_openapi MCP tool with query logic and registration
+- [ ] 48-01-PLAN.md — Test scaffold + queryDriftVersions + drift_versions tool registration
+- [ ] 48-02-PLAN.md — queryDriftTypes + drift_types tool registration
+- [ ] 48-03-PLAN.md — queryDriftOpenapi + drift_openapi tool registration
 
 ## Progress
 
