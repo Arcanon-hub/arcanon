@@ -15,7 +15,7 @@ Requirements for v4.1 Command Cleanup. Each maps to roadmap phases.
 
 ### MCP Drift
 
-- [ ] **MCP-01**: Add `drift_versions` MCP tool — query dependency version mismatches across scanned repos
+- [x] **MCP-01**: Add `drift_versions` MCP tool — query dependency version mismatches across scanned repos
 - [ ] **MCP-02**: Add `drift_types` MCP tool — query shared type/struct/interface mismatches across repos
 - [ ] **MCP-03**: Add `drift_openapi` MCP tool — query OpenAPI spec breaking changes across repos
 
@@ -42,7 +42,7 @@ None deferred.
 | REM-01 | Phase 46 | Complete |
 | REM-02 | Phase 46 | Complete |
 | REM-03 | Phase 46 | Complete |
-| MCP-01 | Phase 48 | Pending |
+| MCP-01 | Phase 48 | Complete |
 | MCP-02 | Phase 48 | Pending |
 | MCP-03 | Phase 48 | Pending |
 | CLN-01 | Phase 47 | Pending |
