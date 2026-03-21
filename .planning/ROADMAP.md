@@ -119,7 +119,10 @@ Full details: `.planning/milestones/v5.0-ROADMAP.md`
   2. Pressing Esc closes the detail panel and deselects any selected node
   3. Pressing / moves keyboard focus to the search input field immediately
   4. Clicking the export button downloads a PNG file of the current canvas view including all visible nodes and edges
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 52-01-PLAN.md — keyboard.js: F/Esc/slash shortcut handler wired into graph.js
+- [ ] 52-02-PLAN.md — export.js + Export PNG button in toolbar wired into graph.js
 
 ### Phase 53: Clickable Detail Panel Targets
 **Goal**: Users can navigate directly to a connected node from the detail panel without manually finding it
@@ -202,7 +205,7 @@ Phases execute in numeric order: 52 → 53 → 54 → 55 → 56 → 57 → 58
 | 39-45 | v4.0 | 14/14 | Complete | 2026-03-20 |
 | 46-48 | v4.1 | 6/6 | Complete | 2026-03-20 |
 | 49-51 | v5.0 | 5/5 | Complete | 2026-03-21 |
-| 52. Keyboard Shortcuts & PNG Export | v5.1 | 0/TBD | Not started | - |
+| 52. Keyboard Shortcuts & PNG Export | v5.1 | 0/2 | Not started | - |
 | 53. Clickable Detail Panel Targets | v5.1 | 0/1 | Not started | - |
 | 54. Subgraph Isolation | v5.1 | 0/TBD | Not started | - |
 | 55. Scan Version API | v5.1 | 0/TBD | Not started | - |
