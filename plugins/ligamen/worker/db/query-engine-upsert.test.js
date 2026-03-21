@@ -154,14 +154,36 @@ async function buildDb() {
   db.exec(`INSERT INTO schema_versions(version) VALUES(3);`);
 
   // Migration 004 — apply via the actual migration module
-  const { up } = await import("./migrations/004_dedup_constraints.js");
-  const runMigration = db.transaction(() => {
-    up(db);
+  const { up: up004 } = await import("./migrations/004_dedup_constraints.js");
+  db.transaction(() => {
+    up004(db);
     db.prepare("INSERT INTO schema_versions(version) VALUES(?)").run(4);
-  });
-  runMigration();
+  })();
+
+  // Migration 005 — scan_versions table + scan_version_id FK columns
+  const { up: up005 } = await import("./migrations/005_scan_versions.js");
+  db.transaction(() => {
+    up005(db);
+    db.prepare("INSERT INTO schema_versions(version) VALUES(?)").run(5);
+  })();
+
+  // Migration 006 — UNIQUE(path) on repos (required for ON CONFLICT(path) in QueryEngine)
+  const { up: up006 } = await import("./migrations/006_dedup_repos.js");
+  db.transaction(() => {
+    up006(db);
+    db.prepare("INSERT INTO schema_versions(version) VALUES(?)").run(6);
+  })();
 
   return db;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: build a DB with scan_versions support (alias of buildDb — migrations
+// 001-006 already included above, which adds the scan_versions table)
+// ---------------------------------------------------------------------------
+
+async function buildDbWithScanVersions() {
+  return buildDb();
 }
 
 // ---------------------------------------------------------------------------
@@ -297,6 +319,121 @@ console.log("Test 5: query-engine.js has no INSERT OR REPLACE for services (ON C
     !src.includes("SELECT MAX(id) FROM services GROUP BY name"),
     "query-engine.js must NOT contain MAX(id) GROUP BY name workaround in getGraph()",
   );
+}
+console.log("  PASS");
+
+// ---------------------------------------------------------------------------
+// Test A: endScan() removes a service with scan_version_id IS NULL for the scanned repo
+// ---------------------------------------------------------------------------
+console.log("Test A: endScan() removes legacy NULL scan_version_id service for the scanned repo");
+{
+  const db = await buildDbWithScanVersions();
+  const { QueryEngine } = await import("./query-engine.js?v=A");
+  const qe = new QueryEngine(db);
+
+  const repoId = db
+    .prepare("INSERT INTO repos(path, name, type) VALUES(?,?,?)")
+    .run("/tmp/rA", "repoA", "single").lastInsertRowid;
+
+  // Insert a legacy service row with scan_version_id = NULL
+  db.prepare("INSERT INTO services(repo_id, name, root_path, language, type, scan_version_id) VALUES (?,?,?,?,?,?)")
+    .run(repoId, "legacy-svc", "/tmp", "node", "service", null);
+
+  // Verify the NULL row exists before endScan
+  const beforeCount = db
+    .prepare("SELECT COUNT(*) FROM services WHERE repo_id = ? AND scan_version_id IS NULL")
+    .pluck()
+    .get(repoId);
+  assert.strictEqual(beforeCount, 1, `Expected 1 NULL row before endScan, got ${beforeCount}`);
+
+  // Run a scan bracket
+  const scanId = qe.beginScan(repoId);
+  qe.endScan(repoId, scanId);
+
+  // NULL row should be gone
+  const afterCount = db
+    .prepare("SELECT COUNT(*) FROM services WHERE repo_id = ? AND scan_version_id IS NULL")
+    .pluck()
+    .get(repoId);
+  assert.strictEqual(afterCount, 0, `Expected 0 NULL rows after endScan, got ${afterCount}`);
+  db.close();
+}
+console.log("  PASS");
+
+// ---------------------------------------------------------------------------
+// Test B: endScan() removes a connection referencing NULL-versioned services
+// ---------------------------------------------------------------------------
+console.log("Test B: endScan() removes connections referencing NULL scan_version_id services");
+{
+  const db = await buildDbWithScanVersions();
+  const { QueryEngine } = await import("./query-engine.js?v=B");
+  const qe = new QueryEngine(db);
+
+  const repoId = db
+    .prepare("INSERT INTO repos(path, name, type) VALUES(?,?,?)")
+    .run("/tmp/rB", "repoB", "single").lastInsertRowid;
+
+  // Insert two legacy services with scan_version_id = NULL
+  const svc1Id = db
+    .prepare("INSERT INTO services(repo_id, name, root_path, language, type, scan_version_id) VALUES (?,?,?,?,?,?)")
+    .run(repoId, "legacy-src", "/tmp", "node", "service", null).lastInsertRowid;
+  const svc2Id = db
+    .prepare("INSERT INTO services(repo_id, name, root_path, language, type, scan_version_id) VALUES (?,?,?,?,?,?)")
+    .run(repoId, "legacy-tgt", "/tmp", "go", "service", null).lastInsertRowid;
+
+  // Insert a legacy connection between them
+  db.prepare("INSERT INTO connections(source_service_id, target_service_id, protocol, scan_version_id) VALUES (?,?,?,?)")
+    .run(svc1Id, svc2Id, "http", null);
+
+  // Run a scan bracket
+  const scanId = qe.beginScan(repoId);
+  qe.endScan(repoId, scanId);
+
+  // Connection should be deleted (connections first, FK order)
+  const connCount = db.prepare("SELECT COUNT(*) FROM connections").pluck().get();
+  assert.strictEqual(connCount, 0, `Expected 0 connections after endScan, got ${connCount}`);
+
+  // NULL services should also be deleted
+  const svcNullCount = db
+    .prepare("SELECT COUNT(*) FROM services WHERE scan_version_id IS NULL")
+    .pluck()
+    .get();
+  assert.strictEqual(svcNullCount, 0, `Expected 0 NULL services after endScan, got ${svcNullCount}`);
+  db.close();
+}
+console.log("  PASS");
+
+// ---------------------------------------------------------------------------
+// Test C: endScan() on repo A does NOT delete NULL rows for repo B
+// ---------------------------------------------------------------------------
+console.log("Test C: endScan() on repo A does not delete NULL rows for repo B");
+{
+  const db = await buildDbWithScanVersions();
+  const { QueryEngine } = await import("./query-engine.js?v=C");
+  const qe = new QueryEngine(db);
+
+  const repoAId = db
+    .prepare("INSERT INTO repos(path, name, type) VALUES(?,?,?)")
+    .run("/tmp/rC-A", "repoC-A", "single").lastInsertRowid;
+  const repoBId = db
+    .prepare("INSERT INTO repos(path, name, type) VALUES(?,?,?)")
+    .run("/tmp/rC-B", "repoC-B", "single").lastInsertRowid;
+
+  // Insert a legacy service with scan_version_id = NULL for repo B
+  db.prepare("INSERT INTO services(repo_id, name, root_path, language, type, scan_version_id) VALUES (?,?,?,?,?,?)")
+    .run(repoBId, "legacy-svc-b", "/tmp", "python", "service", null);
+
+  // Run a scan bracket on repo A only
+  const scanId = qe.beginScan(repoAId);
+  qe.endScan(repoAId, scanId);
+
+  // Repo B's NULL row should be untouched
+  const repoBNullCount = db
+    .prepare("SELECT COUNT(*) FROM services WHERE repo_id = ? AND scan_version_id IS NULL")
+    .pluck()
+    .get(repoBId);
+  assert.strictEqual(repoBNullCount, 1, `Expected 1 NULL row for repo B to survive, got ${repoBNullCount}`);
+  db.close();
 }
 console.log("  PASS");
 
