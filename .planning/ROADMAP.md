@@ -145,7 +145,10 @@ Plans:
   2. Pressing 2 expands isolation to show all nodes and edges within 2 hops of the originally selected node
   3. Pressing 3 expands isolation to show all nodes and edges within 3 hops of the originally selected node
   4. Pressing Esc (or I again) exits isolation mode and restores the full graph view
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 54-01-PLAN.md — Add isolation state fields and getNeighborIdsNHop BFS utility
+- [ ] 54-02-PLAN.md — Wire isolation filter into renderer and add I/2/3/Esc keyboard handlers
 
 ### Phase 55: Scan Version API
 **Goal**: The /graph API response carries scan_version_id on every service and connection so the frontend can compare recency
@@ -155,7 +158,7 @@ Plans:
   1. Each service object in the /graph response includes a `scan_version_id` field with the ID of the scan that last updated it
   2. Each connection object in the /graph response includes a `scan_version_id` field with the ID of the scan that created it
   3. The maximum scan_version_id across all services represents the latest scan and is included in the response metadata
-**Plans**: TBD
+**Plans**: 2 plans
 
 ### Phase 56: What-Changed Overlay
 **Goal**: Nodes and edges introduced or modified in the latest scan are visually distinct so users can spot recent changes at a glance
@@ -166,7 +169,11 @@ Plans:
   2. Edges that were created in the most recent scan are visually distinguished from unchanged edges
   3. The visual distinction is visible without selecting the node — it appears in the default graph view
   4. Unchanged nodes and edges render identically to how they did before this feature (no visual regression)
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 56-01-PLAN.md — State layer: extract scan_version_id from /graph response, add latestScanVersionId + showChanges to state
+- [ ] 56-02-PLAN.md — Render layer: glow ring for new nodes, bright edge for new edges, Changes toggle button
 
 ### Phase 57: Edge Bundling
 **Goal**: Multiple parallel connections between the same source-target pair collapse into one weighted edge, reducing visual clutter
@@ -177,7 +184,7 @@ Plans:
   2. The bundled edge color/style reflects the dominant or most severe protocol type among the bundled connections
   3. Clicking a bundled edge opens the detail panel listing all individual connections within the bundle (protocol, kind, endpoint)
   4. Unbundled (unique) edges render and behave identically to pre-bundling behavior
-**Plans**: TBD
+**Plans**: 2 plans
 
 ### Phase 58: Documentation
 **Goal**: README and commands reference are updated to accurately describe all v5.1 graph capabilities
@@ -187,7 +194,7 @@ Plans:
   1. README contains a keyboard shortcut reference table listing F, Esc, /, I, 2, 3 with their actions
   2. README describes the PNG export button, subgraph isolation, what-changed overlay, and edge bundling in the graph UI section
   3. docs/commands.md graph UI section reflects all new interactive capabilities introduced in v5.1
-**Plans**: TBD
+**Plans**: 2 plans
 
 ## Progress
 
@@ -207,7 +214,7 @@ Phases execute in numeric order: 52 → 53 → 54 → 55 → 56 → 57 → 58
 | 49-51 | v5.0 | 5/5 | Complete | 2026-03-21 |
 | 52. Keyboard Shortcuts & PNG Export | v5.1 | 0/2 | Not started | - |
 | 53. Clickable Detail Panel Targets | v5.1 | 0/1 | Not started | - |
-| 54. Subgraph Isolation | v5.1 | 0/TBD | Not started | - |
+| 54. Subgraph Isolation | v5.1 | 0/2 | Not started | - |
 | 55. Scan Version API | v5.1 | 0/TBD | Not started | - |
 | 56. What-Changed Overlay | v5.1 | 0/TBD | Not started | - |
 | 57. Edge Bundling | v5.1 | 0/TBD | Not started | - |
