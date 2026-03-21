@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.2.1
-milestone_name: Scan Data Integrity
-status: roadmap_created
-stopped_at: null
-last_updated: "2026-03-21"
+milestone: v1.0
+milestone_name: milestone
+status: unknown
+stopped_at: Completed 63-01-PLAN.md
+last_updated: "2026-03-21T19:22:20.437Z"
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 7
+  completed_plans: 1
 ---
 
 # Project State
@@ -19,18 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-21)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** v5.2.1 Scan Data Integrity — roadmap created, ready for phase planning
+**Current focus:** Phase 63 — Scan Bracket Integrity
 
 ## Current Position
 
-Phase: 63 (not started)
-Plan: —
-Status: Roadmap created — ready to plan Phase 63
-Last activity: 2026-03-21 — v5.2.1 roadmap written (4 phases, 7 requirements)
-
-```
-Progress: [          ] 0/4 phases
-```
+Phase: 63 (Scan Bracket Integrity) — EXECUTING
+Plan: 1 of 2
 
 ## Performance Metrics
 
@@ -50,6 +44,8 @@ Progress: [          ] 0/4 phases
 - v5.2.1: THE-932 (SVCR-01) is independent — service ID collision fix (Phase 65)
 - v5.2.1: THE-934 (CONF-01) and THE-933 (SREL-01) grouped into Phase 66 — both are agent interaction fixes
 - v5.2.1: Phase 64 and Phase 65 can execute in parallel after Phase 63
+- [Phase 63-scan-bracket-integrity]: endScan called only on success path — failed scans leave bracket open rather than triggering stale-row deletion
+- [Phase 63-scan-bracket-integrity]: scanVersionId threaded through persistFindings as 4th arg so every row is stamped with non-null scan_version_id (fixes root cause of endScan never deleting stale rows)
 
 ### Pending Todos
 
@@ -61,7 +57,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21
-Stopped at: null
+Last session: 2026-03-21T19:22:20.434Z
+Stopped at: Completed 63-01-PLAN.md
 Resume file: None
 Next action: `/gsd:plan-phase 63`
