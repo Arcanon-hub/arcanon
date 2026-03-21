@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 59-02-PLAN.md (mcp-wrapper.sh self-healing + bats tests)
-last_updated: "2026-03-21T17:47:35.913Z"
+stopped_at: Completed 59-01-PLAN.md
+last_updated: "2026-03-21T17:47:47.900Z"
 progress:
   total_phases: 3
   completed_phases: 1
@@ -44,6 +44,8 @@ Plan: 2 of 2
 - v5.2.0: Self-healing MCP wrapper covers first-session race (MCP server starts before SessionStart hook finishes)
 - [Phase 059]: Use temp log file to capture npm exit code before pipe to head in mcp-wrapper.sh — preserves $? without set -o pipefail
 - [Phase 059]: Updated .mcp.json in Plan 02 (not Phase 60) — self-healing wrapper is useless unless .mcp.json invokes it
+- [Phase 59]: Install deps into CLAUDE_PLUGIN_ROOT via npm install --prefix with diff-based sentinel idempotency in CLAUDE_PLUGIN_DATA
+- [Phase 59]: Double-check guard: sentinel match AND better-sqlite3 dir presence required to skip install
 
 ### Pending Todos
 
@@ -57,6 +59,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T17:47:18.762Z
-Stopped at: Completed 59-02-PLAN.md (mcp-wrapper.sh self-healing + bats tests)
+Last session: 2026-03-21T17:47:47.897Z
+Stopped at: Completed 59-01-PLAN.md
 Resume file: None

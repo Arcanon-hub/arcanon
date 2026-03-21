@@ -9,10 +9,10 @@ Requirements for Plugin Distribution Fix milestone. Each maps to roadmap phases.
 
 ### Runtime Dependency Installation
 
-- [ ] **DEPS-01**: SessionStart hook installs runtime deps into ${CLAUDE_PLUGIN_ROOT} via npm install
-- [ ] **DEPS-02**: Install uses diff-based idempotency — skips if runtime-deps.json unchanged
-- [ ] **DEPS-03**: Hook timeout is 120s+ to accommodate better-sqlite3 native compilation
-- [ ] **DEPS-04**: Install runs before SESSION_ID dedup guard in session-start.sh
+- [x] **DEPS-01**: SessionStart hook installs runtime deps into ${CLAUDE_PLUGIN_ROOT} via npm install
+- [x] **DEPS-02**: Install uses diff-based idempotency — skips if runtime-deps.json unchanged
+- [x] **DEPS-03**: Hook timeout is 120s+ to accommodate better-sqlite3 native compilation
+- [x] **DEPS-04**: Install runs before SESSION_ID dedup guard in session-start.sh
 
 ### MCP Server Distribution
 
@@ -63,10 +63,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEPS-01 | Phase 59 | Pending |
-| DEPS-02 | Phase 59 | Pending |
-| DEPS-03 | Phase 59 | Pending |
-| DEPS-04 | Phase 59 | Pending |
+| DEPS-01 | Phase 59 | Complete |
+| DEPS-02 | Phase 59 | Complete |
+| DEPS-03 | Phase 59 | Complete |
+| DEPS-04 | Phase 59 | Complete |
 | MCP-02 | Phase 59 | Complete |
 | MCP-01 | Phase 60 | Pending |
 | MCP-03 | Phase 60 | Pending |
