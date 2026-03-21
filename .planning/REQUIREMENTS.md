@@ -13,15 +13,15 @@ Requirements for Graph Interactivity milestone. Each maps to roadmap phases.
 - [x] **NAV-02**: User can press Esc to deselect current node and close detail panel
 - [x] **NAV-03**: User can press / to focus the search input
 - [x] **NAV-04**: User can click a service name in the detail panel connections list to select and pan to that node
-- [ ] **NAV-05**: User can press I on a selected node to isolate its subgraph (1-hop default)
-- [ ] **NAV-06**: User can press 2/3 to expand isolation to 2-hop or 3-hop depth
+- [x] **NAV-05**: User can press I on a selected node to isolate its subgraph (1-hop default)
+- [x] **NAV-06**: User can press 2/3 to expand isolation to 2-hop or 3-hop depth
 
 ### Graph Display
 
 - [ ] **GRAPH-01**: Parallel edges between the same source→target pair are bundled into a single thick edge with count badge
 - [ ] **GRAPH-02**: User can click a bundled edge to expand individual connections in the detail panel
 - [ ] **GRAPH-03**: Nodes and edges from the latest scan are visually highlighted (glow or "NEW" badge)
-- [ ] **GRAPH-04**: /graph API endpoint includes scan_version_id per service and connection
+- [x] **GRAPH-04**: /graph API endpoint includes scan_version_id per service and connection
 
 ### Export
 
@@ -68,12 +68,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NAV-02 | Phase 52 | Complete |
 | NAV-03 | Phase 52 | Complete |
 | NAV-04 | Phase 53 | Complete |
-| NAV-05 | Phase 54 | Pending |
-| NAV-06 | Phase 54 | Pending |
+| NAV-05 | Phase 54 | Complete |
+| NAV-06 | Phase 54 | Complete |
 | GRAPH-01 | Phase 57 | Pending |
 | GRAPH-02 | Phase 57 | Pending |
 | GRAPH-03 | Phase 56 | Pending |
-| GRAPH-04 | Phase 55 | Pending |
+| GRAPH-04 | Phase 55 | Complete |
 | EXP-01 | Phase 52 | Complete |
 | DOC-01 | Phase 58 | Pending |
 | DOC-02 | Phase 58 | Pending |

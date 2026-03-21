@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v5.1
 milestone_name: Graph Interactivity
 status: unknown
-stopped_at: Completed 53-01-PLAN.md
-last_updated: "2026-03-21T11:24:00Z"
+stopped_at: Completed 54-01-PLAN.md
+last_updated: "2026-03-21T11:19:40.253Z"
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
-  completed_plans: 3
+  completed_plans: 5
 ---
 
 # Project State
@@ -49,6 +49,10 @@ Plan: 1 of 1 — COMPLETE
 - [Phase 53-01]: 53-01: Pass node IDs via data-node-id on spans at render time — no reverse name-to-id lookup needed
 - [Phase 53-01]: 53-01: selectAndPanToNode not exported — internal helper accessed exclusively via click delegation
 - [Phase 53-01]: 53-01: Preserve current zoom scale when panning — only update transform.x/y to center target node
+- [Phase 55-01]: 55-01: http.js required no changes — plain spread passes latest_scan_version_id automatically
+- [Phase 55-01]: 55-01: latest_scan_version_id computed in getGraph() at DB layer, not HTTP layer — single source of truth
+- [Phase 54-subgraph-isolation]: 54-01: getNeighborIdsNHop placed immediately after getNeighborIds in utils.js — natural adjacency, same edge traversal pattern
+- [Phase 54-subgraph-isolation]: 54-01: isolatedNodeId and isolationDepth placed after blastCache cluster — blast and isolation are parallel mode concerns
 
 ### Pending Todos
 
@@ -60,6 +64,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T11:24:00Z
-Stopped at: Completed 53-01-PLAN.md
+Last session: 2026-03-21T11:19:40.249Z
+Stopped at: Completed 54-01-PLAN.md
 Resume file: None
