@@ -111,6 +111,43 @@ check(
   "node.exposes"
 );
 
+// ── NAV-04: Clickable connection targets ──────────────────────────────────
+
+// data-node-id attribute emitted on .conn-target spans
+check(
+  src.includes("data-node-id"),
+  "NAV-04: data-node-id attribute present on .conn-target spans",
+  "data-node-id"
+);
+
+// selectAndPanToNode function defined
+check(
+  src.includes("selectAndPanToNode"),
+  "NAV-04: selectAndPanToNode function defined",
+  "selectAndPanToNode"
+);
+
+// event delegation on [data-node-id] wired in panel
+check(
+  src.includes("closest") && src.includes("data-node-id"),
+  "NAV-04: event delegation via closest('[data-node-id]') wired",
+  "closest + data-node-id"
+);
+
+// render() imported (needed for selectAndPanToNode to redraw)
+check(
+  src.includes('from "./renderer.js"') || src.includes("from './renderer.js'"),
+  "NAV-04: render imported from renderer.js",
+  'from "./renderer.js"'
+);
+
+// no-op guard for missing position
+check(
+  src.includes("state.positions[nodeId]") || src.includes("state.positions["),
+  "NAV-04: no-op guard checks state.positions before pan",
+  "state.positions[nodeId]"
+);
+
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);
