@@ -3,27 +3,28 @@
 **Defined:** 2026-03-21
 **Core Value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
 
-## v5.2.0 Requirements
+## v5.2.1 Requirements
 
-Requirements for Plugin Distribution Fix milestone. Each maps to roadmap phases.
+Requirements for Scan Data Integrity patch. Each maps to roadmap phases.
 
-### Runtime Dependency Installation
+### Scan Bracket Integrity
 
-- [x] **DEPS-01**: SessionStart hook installs runtime deps into ${CLAUDE_PLUGIN_ROOT} via npm install
-- [x] **DEPS-02**: Install uses diff-based idempotency — skips if runtime-deps.json unchanged
-- [x] **DEPS-03**: Hook timeout is 120s+ to accommodate better-sqlite3 native compilation
-- [x] **DEPS-04**: Install runs before SESSION_ID dedup guard in session-start.sh
+- [ ] **SCAN-01**: POST /scan endpoint uses beginScan/endScan bracket for stale data cleanup (THE-930)
+- [ ] **SCAN-02**: Legacy NULL scan_version_id rows cleaned up after successful full scan (THE-931)
 
-### MCP Server Distribution
+### Service Resolution
 
-- [x] **MCP-01**: MCP server starts successfully from marketplace-installed plugin
-- [x] **MCP-02**: Self-healing MCP wrapper installs deps if missing before server exec
-- [x] **MCP-03**: .mcp.json works without NODE_PATH (ESM-compatible resolution)
+- [ ] **SVCR-01**: Cross-repo service ID resolution scoped to avoid name collisions (THE-932)
 
-### Version Sync
+### Scan Reliability
 
-- [x] **VER-01**: All 5 manifest files bumped to 5.2.0 (root marketplace.json, plugin marketplace.json, plugin.json, package.json, runtime-deps.json)
-- [x] **VER-02**: Root .mcp.json is empty (dev repo, not consumer)
+- [ ] **SREL-01**: Incremental scan prompt constrains agent to changed files (THE-933)
+- [ ] **SREL-02**: upsertService/upsertConnection sanitize undefined values to null before SQLite binding (THE-935)
+- [ ] **SREL-03**: CLI fallback scan passes explicit project root to openDb, not process.cwd() (THE-936)
+
+### Confirmation UX
+
+- [ ] **CONF-01**: Confirmation flow accepts common synonyms (sure, yep, looks good → yes) and re-prompts on ambiguous input instead of silently ignoring (THE-934)
 
 ## Future Requirements
 
@@ -39,45 +40,37 @@ Deferred to future milestones. Tracked but not in current roadmap.
 - **VIZ-01**: Minimap overview showing full graph with viewport indicator
 - **VIZ-02**: On-canvas legend showing node shape → type mapping
 - **VIZ-03**: Zoom level indicator with reset-to-100% click
-- **VIZ-04**: URL state persistence for bookmarkable views (zoom, position, filters, selected node)
+- **VIZ-04**: URL state persistence for bookmarkable views
 
 ### Release Tooling
 
 - **REL-01**: Automated bump-version.sh script for all manifest files
-- **REL-02**: make check validation that all version files match
+- **REL-02**: make check version validation that all version files match
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| esbuild bundling of MCP server | Adds build step complexity; install-at-runtime is simpler and officially documented |
-| Committing node_modules | Bloats repo, ABI version fragility across platforms |
-| npx-based MCP launch | Splits distribution across marketplace + npm registry |
-| WASM SQLite replacement | 65+ call sites to migrate, doesn't solve chromadb native dep |
-| SVG export | Canvas-to-SVG re-rendering is high effort; PNG covers the use case |
-| Touch/mobile support | Single-developer desktop tool |
+| Structured numbered-options confirmation UI | THE-934 suggests it but tolerant parsing is sufficient for v5.2.1 |
+| Full rewrite of scan manager | These are targeted fixes, not an overhaul |
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEPS-01 | Phase 59 | Complete |
-| DEPS-02 | Phase 59 | Complete |
-| DEPS-03 | Phase 59 | Complete |
-| DEPS-04 | Phase 59 | Complete |
-| MCP-02 | Phase 59 | Complete |
-| MCP-01 | Phase 60 | Complete |
-| MCP-03 | Phase 60 | Complete |
-| VER-01 | Phase 61 | Complete |
-| VER-02 | Phase 61 | Complete |
+| SCAN-01 | — | Pending |
+| SCAN-02 | — | Pending |
+| SVCR-01 | — | Pending |
+| SREL-01 | — | Pending |
+| SREL-02 | — | Pending |
+| SREL-03 | — | Pending |
+| CONF-01 | — | Pending |
 
 **Coverage:**
-- v5.2.0 requirements: 9 total
-- Mapped to phases: 9
-- Unmapped: 0 ✓
+- v5.2.1 requirements: 7 total
+- Mapped to phases: 0
+- Unmapped: 7 ⚠️
 
 ---
 *Requirements defined: 2026-03-21*
-*Last updated: 2026-03-21 after roadmap creation (traceability complete)*
+*Last updated: 2026-03-21 after initial definition*
