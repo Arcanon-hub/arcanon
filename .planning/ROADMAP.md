@@ -106,7 +106,7 @@ Full details: `.planning/milestones/v5.0-ROADMAP.md`
 - [x] **Phase 55: Scan Version API** - /graph API exposes scan_version_id per service and connection (completed 2026-03-21)
 - [x] **Phase 56: What-Changed Overlay** - New/modified nodes and edges from the latest scan are visually highlighted (completed 2026-03-21)
 - [x] **Phase 57: Edge Bundling** - Parallel edges between same node pair collapse into single weighted edge with expand-in-panel (completed 2026-03-21)
-- [ ] **Phase 58: Documentation** - README and docs/commands.md updated with all v5.1 features
+- [x] **Phase 58: Documentation** - README and docs/commands.md updated with all v5.1 features (completed 2026-03-21)
 
 ## Phase Details
 
@@ -223,4 +223,4 @@ Phases execute in numeric order: 52 → 53 → 54 → 55 → 56 → 57 → 58
 | 55. Scan Version API | 1/1 | Complete   | 2026-03-21 | - |
 | 56. What-Changed Overlay | 2/2 | Complete   | 2026-03-21 | - |
 | 57. Edge Bundling | 2/2 | Complete   | 2026-03-21 | - |
-| 58. Documentation | v5.1 | 0/TBD | Not started | - |
+| 58. Documentation | 1/1 | Complete   | 2026-03-21 | - |

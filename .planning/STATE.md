@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v5.1
 milestone_name: Graph Interactivity
-status: active
-stopped_at: Completed 57-02-PLAN.md
-last_updated: "2026-03-21T11:33:00Z"
+status: complete
+stopped_at: Completed 58-01-PLAN.md
+last_updated: "2026-03-21T11:36:22.688Z"
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 11
-  completed_plans: 10
+  completed_plans: 11
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-21)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** Phase 57 — Edge Bundling
+**Current focus:** Phase 58 — Documentation
 
 ## Current Position
 
-Phase: 57 (Edge Bundling) — COMPLETE
-Plan: 2 of 2 (complete)
+Phase: 58 (Documentation) — COMPLETE
+Plan: 1 of 1 (all complete)
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Plan: 2 of 2 (complete)
 - [Phase 57-edge-bundling]: 57-02: edgeHitTest placed after computeEdgeBundles in utils.js — natural adjacency, same data
 - [Phase 57-edge-bundling]: 57-02: HIT_RADIUS=10 logical pixels — coordinate space matches computeEdgeBundles, independent of zoom
 - [Phase 57-edge-bundling]: 57-02: onClick else-branch uses nested if/else so hideDetailPanel only fires when neither node nor bundle was hit
+- [Phase 58-documentation]: 58-01: Keyboard shortcut table placed immediately after Graph UI bullet list in README; docs/commands.md uses subsections per feature group
 
 ### Pending Todos
 
@@ -78,6 +79,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T11:31:15.144Z
-Stopped at: Completed 57-01-PLAN.md
+Last session: 2026-03-21T11:36:22.684Z
+Stopped at: Completed 58-01-PLAN.md
 Resume file: None

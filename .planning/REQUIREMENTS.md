@@ -29,8 +29,8 @@ Requirements for Graph Interactivity milestone. Each maps to roadmap phases.
 
 ### Documentation
 
-- [ ] **DOC-01**: README updated with v5.1 feature descriptions and keyboard shortcut reference
-- [ ] **DOC-02**: docs/commands.md updated with new graph UI capabilities
+- [x] **DOC-01**: README updated with v5.1 feature descriptions and keyboard shortcut reference
+- [x] **DOC-02**: docs/commands.md updated with new graph UI capabilities
 
 ## Future Requirements
 
@@ -75,8 +75,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GRAPH-03 | Phase 56 | Complete |
 | GRAPH-04 | Phase 55 | Complete |
 | EXP-01 | Phase 52 | Complete |
-| DOC-01 | Phase 58 | Pending |
-| DOC-02 | Phase 58 | Pending |
+| DOC-01 | Phase 58 | Complete |
+| DOC-02 | Phase 58 | Complete |
 
 **Coverage:**
 - v5.1 requirements: 13 total
