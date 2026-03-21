@@ -222,7 +222,10 @@ Plans:
   3. If npm install fails mid-way, the next session retries from scratch rather than using a partial node_modules
   4. The existing session-start.sh session dedup logic is unaffected — dep install runs before SESSION_ID check
   5. The MCP wrapper script attempts self-healing dep install before exec'ing server.js, covering the first-session race
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 59-01-PLAN.md — install-deps.sh with diff-based idempotency + hooks.json wiring + bats tests
+- [ ] 59-02-PLAN.md — Self-healing mcp-wrapper.sh extension + .mcp.json wiring + bats tests
 
 ### Phase 60: MCP Server Launch Verification
 **Goal**: The MCP server starts correctly from a marketplace-simulated install environment, with ESM resolution working without NODE_PATH and ChromaDB degrading gracefully when absent
@@ -263,6 +266,6 @@ Phases execute in numeric order: 59 → 60 → 61
 | 46-48 | v4.1 | 6/6 | Complete | 2026-03-20 |
 | 49-51 | v5.0 | 5/5 | Complete | 2026-03-21 |
 | 52-58 | v5.1 | 11/11 | Complete | 2026-03-21 |
-| 59. Runtime Dependency Installation | v5.2.0 | 0/TBD | Not started | - |
+| 59. Runtime Dependency Installation | v5.2.0 | 0/2 | Not started | - |
 | 60. MCP Server Launch Verification | v5.2.0 | 0/TBD | Not started | - |
 | 61. Version Sync | v5.2.0 | 0/TBD | Not started | - |
