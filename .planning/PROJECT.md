@@ -80,7 +80,17 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ### Active
 
-(Defined per milestone — see REQUIREMENTS.md when next milestone starts)
+## Current Milestone: v5.1 Graph Interactivity
+
+**Goal:** Make the graph visualization useful for daily debugging with keyboard-driven navigation, subgraph isolation, change detection, and edge bundling.
+
+**Target features:**
+- Keyboard shortcuts for common actions (fit, deselect, search focus, filter toggles)
+- Clickable connection targets in the detail panel for graph navigation
+- Subgraph isolation to focus on N-hop neighborhoods of a selected node
+- "What changed" overlay highlighting new/modified nodes from the latest scan
+- Edge bundling to collapse dense parallel connections into single weighted edges
+- PNG export for pasting architecture diagrams into PRs and docs
 
 ### Out of Scope
 
@@ -152,4 +162,4 @@ Known tech debt: no log rotation, db/database.js has console.log in script-mode 
 | marketplace.json at repo root | Required for marketplace discovery; points to ./plugins/ligamen as plugin source | ✓ Good |
 
 ---
-*Last updated: 2026-03-21 after v5.0 milestone*
+*Last updated: 2026-03-21 after v5.1 milestone start*
