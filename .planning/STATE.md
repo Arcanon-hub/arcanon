@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v5.1
 milestone_name: Graph Interactivity
 status: unknown
-stopped_at: Completed 56-01-PLAN.md
-last_updated: "2026-03-21T11:24:19.838Z"
+stopped_at: Completed 56-02-PLAN.md
+last_updated: "2026-03-21T11:27:38.796Z"
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 11
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -58,6 +58,9 @@ Plan: 2 of 2
 - [Phase 54-subgraph-isolation]: 54-02: I handler uses case 'i'/'I' pattern matching Phase 52 F handler convention
 - [Phase 56]: latestScanVersionId and showChanges placed after currentProject — logically adjacent scan-awareness fields
 - [Phase 56]: scan_version_id uses nullish coalescing (?? null) — preserves 0 as a valid version ID
+- [Phase 56-02]: 56-02: Glow ring placed after selection border and before label — visible above node but below text
+- [Phase 56-02]: 56-02: isNewEdge block placed after mismatch override so mismatch red wins over yellow
+- [Phase 56-02]: 56-02: cloneNode pattern used for changes-btn listener — consistent with fit-btn convention
 
 ### Pending Todos
 
@@ -69,6 +72,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T11:24:19.835Z
-Stopped at: Completed 56-01-PLAN.md
+Last session: 2026-03-21T11:27:38.793Z
+Stopped at: Completed 56-02-PLAN.md
 Resume file: None

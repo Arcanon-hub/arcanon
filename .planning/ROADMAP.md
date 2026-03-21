@@ -104,7 +104,7 @@ Full details: `.planning/milestones/v5.0-ROADMAP.md`
 - [x] **Phase 53: Clickable Detail Panel Targets** - Service names in connections list navigate to that node on click (completed 2026-03-21)
 - [x] **Phase 54: Subgraph Isolation** - I key isolates selected node's N-hop neighborhood; 2/3 keys expand depth (completed 2026-03-21)
 - [x] **Phase 55: Scan Version API** - /graph API exposes scan_version_id per service and connection (completed 2026-03-21)
-- [ ] **Phase 56: What-Changed Overlay** - New/modified nodes and edges from the latest scan are visually highlighted
+- [x] **Phase 56: What-Changed Overlay** - New/modified nodes and edges from the latest scan are visually highlighted (completed 2026-03-21)
 - [ ] **Phase 57: Edge Bundling** - Parallel edges between same node pair collapse into single weighted edge with expand-in-panel
 - [ ] **Phase 58: Documentation** - README and docs/commands.md updated with all v5.1 features
 
@@ -221,6 +221,6 @@ Phases execute in numeric order: 52 → 53 → 54 → 55 → 56 → 57 → 58
 | 53. Clickable Detail Panel Targets | 1/1 | Complete   | 2026-03-21 | - |
 | 54. Subgraph Isolation | 2/2 | Complete   | 2026-03-21 | - |
 | 55. Scan Version API | 1/1 | Complete   | 2026-03-21 | - |
-| 56. What-Changed Overlay | 1/2 | In Progress|  | - |
+| 56. What-Changed Overlay | 2/2 | Complete   | 2026-03-21 | - |
 | 57. Edge Bundling | v5.1 | 0/TBD | Not started | - |
 | 58. Documentation | v5.1 | 0/TBD | Not started | - |
