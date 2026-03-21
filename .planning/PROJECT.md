@@ -78,19 +78,17 @@ Every edit is automatically formatted and linted, every quality check runs with 
 - ✓ All internal paths (shell, JS, hooks, Makefile) updated for new layout — v5.0
 - ✓ 173/173 bats tests passing with restructured paths — v5.0
 
+- ✓ Keyboard shortcuts (F=fit, Esc=deselect, /=search, I=isolate, 2/3=expand depth) — v5.1
+- ✓ Clickable service names in detail panel connections list for graph navigation — v5.1
+- ✓ Subgraph isolation with N-hop BFS neighborhood focus — v5.1
+- ✓ scan_version_id exposed in /graph API for change detection — v5.1
+- ✓ What-changed overlay with yellow glow ring on new/modified nodes and edges — v5.1
+- ✓ Edge bundling collapsing parallel edges into weighted edges with count badge — v5.1
+- ✓ PNG export via canvas.toDataURL for one-click architecture screenshots — v5.1
+
 ### Active
 
-## Current Milestone: v5.1 Graph Interactivity
-
-**Goal:** Make the graph visualization useful for daily debugging with keyboard-driven navigation, subgraph isolation, change detection, and edge bundling.
-
-**Target features:**
-- Keyboard shortcuts for common actions (fit, deselect, search focus, filter toggles)
-- Clickable connection targets in the detail panel for graph navigation
-- Subgraph isolation to focus on N-hop neighborhoods of a selected node
-- "What changed" overlay highlighting new/modified nodes from the latest scan
-- Edge bundling to collapse dense parallel connections into single weighted edges
-- PNG export for pasting architecture diagrams into PRs and docs
+(Defined per milestone — see REQUIREMENTS.md when next milestone starts)
 
 ### Out of Scope
 
@@ -104,7 +102,7 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ## Context
 
-Shipped v5.0 with ~42,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 51 phases across 9 milestones, 93 plans. Repo restructured as Claude Code marketplace — plugin source lives under `plugins/ligamen/`, installable via `claude plugin marketplace add` + `claude plugin install`. MCP server has 8 tools (5 impact + 3 drift).
+Shipped v5.1 with ~43,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 58 phases across 10 milestones, 104 plans. Repo restructured as Claude Code marketplace — plugin source lives under `plugins/ligamen/`, installable via `claude plugin marketplace add` + `claude plugin install`. MCP server has 8 tools (5 impact + 3 drift).
 
 Architecture: commands/ for user-invoked features, skills/ for auto-invoked knowledge, hooks/ for formatting/linting/guarding, worker/ for Node.js daemon (db/, server/, scan/, mcp/, ui/ subdirectories), lib/ for shared bash/JS libraries. Agent scan prompts modularized into type-specific variants (service, library, infra) with shared common component. Graph UI uses deterministic layered layout with boundary grouping, external actor hexagons, and protocol-differentiated edges. Filter panel provides protocol, layer, boundary, language, mismatch, and isolated-node toggles.
 
@@ -162,4 +160,4 @@ Known tech debt: no log rotation, db/database.js has console.log in script-mode 
 | marketplace.json at repo root | Required for marketplace discovery; points to ./plugins/ligamen as plugin source | ✓ Good |
 
 ---
-*Last updated: 2026-03-21 after v5.1 milestone start*
+*Last updated: 2026-03-21 after v5.1 milestone*

@@ -1,5 +1,22 @@
 # Milestones
 
+## v5.1 Graph Interactivity (Shipped: 2026-03-21)
+
+**Phases completed:** 7 phases, 11 plans, 2 tasks
+
+**Key accomplishments:**
+
+- Keyboard shortcuts module (F=fit, Esc=deselect, /=search, I=isolate, 2/3=expand depth) with input guard for typing contexts
+- Clickable service names in detail panel — click-to-navigate with pan-to-center and panel replacement
+- Subgraph isolation via N-hop BFS — press I to focus on neighborhood, 2/3 to expand, Esc to exit
+- scan_version_id exposed in /graph API with latest_scan_version_id MAX computation for change detection
+- What-changed overlay with yellow glow ring on new/modified nodes and edges, toggleable via toolbar button
+- Edge bundling collapsing parallel edges into weighted edges with count badge, click-to-expand in detail panel
+- PNG export via canvas.toDataURL — one-click download of current graph view
+- 798 insertions across 14 files, 173/173 bats tests passing, zero regressions
+
+---
+
 ## v5.0 Marketplace Restructure (Shipped: 2026-03-21)
 
 **Phases completed:** 3 phases, 5 plans, 0 tasks
