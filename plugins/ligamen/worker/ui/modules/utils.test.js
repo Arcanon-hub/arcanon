@@ -62,6 +62,78 @@ check(
   "infra:"
 );
 
+// ── Check 5: getNeighborIdsNHop is exported ───────────────────────────────
+
+check(
+  src.includes("export function getNeighborIdsNHop"),
+  "getNeighborIdsNHop is exported from utils.js",
+  "export function getNeighborIdsNHop"
+);
+
+// ── Check 6: getNeighborIdsNHop has correct signature ─────────────────────
+
+check(
+  src.includes("getNeighborIdsNHop(nodeId, depth)"),
+  "getNeighborIdsNHop has (nodeId, depth) signature",
+  "getNeighborIdsNHop(nodeId, depth)"
+);
+
+// ── Check 7: BFS loop pattern present ─────────────────────────────────────
+
+check(
+  src.includes("for (let hop = 0; hop < depth"),
+  "BFS loop pattern present in getNeighborIdsNHop",
+  "for (let hop = 0; hop < depth"
+);
+
+// ── Check 8: visited set prevents cycles ──────────────────────────────────
+
+check(
+  src.includes("visited") && src.includes("new Set([nodeId])"),
+  "visited Set initialized with nodeId for cycle safety",
+  "new Set([nodeId])"
+);
+
+// ── Check 9: bidirectional edge traversal ─────────────────────────────────
+
+check(
+  src.includes("e.source_service_id") && src.includes("e.target_service_id"),
+  "bidirectional edge traversal (source_service_id and target_service_id)",
+  "source_service_id / target_service_id"
+);
+
+// ── Check 10: original getNeighborIds still present ───────────────────────
+
+check(
+  src.includes("export function getNeighborIds("),
+  "original getNeighborIds function still present (not removed)",
+  "export function getNeighborIds("
+);
+
+// ── Check 11: JSDoc @param nodeId documented ──────────────────────────────
+
+check(
+  src.includes("@param {number} nodeId"),
+  "JSDoc @param nodeId documented on getNeighborIdsNHop",
+  "@param {number} nodeId"
+);
+
+// ── Check 12: JSDoc @param depth documented ───────────────────────────────
+
+check(
+  src.includes("@param {number} depth"),
+  "JSDoc @param depth documented on getNeighborIdsNHop",
+  "@param {number} depth"
+);
+
+// ── Check 13: JSDoc @returns documented ───────────────────────────────────
+
+check(
+  src.includes("@returns {Set<number>}"),
+  "JSDoc @returns Set<number> documented on getNeighborIdsNHop",
+  "@returns {Set<number>}"
+);
+
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);
