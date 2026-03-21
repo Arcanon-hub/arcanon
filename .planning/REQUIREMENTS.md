@@ -1,30 +1,54 @@
 # Requirements: Ligamen
 
-**Defined:** 2026-03-21
+**Defined:** 2026-03-22
 **Core Value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
 
-## v5.2.1 Requirements
+## v5.3.0 Requirements
 
-Requirements for Scan Data Integrity patch. Each maps to roadmap phases.
+Requirements for Scan Intelligence & Enrichment milestone. Each maps to roadmap phases.
 
-### Scan Bracket Integrity
+### Quality Gate Spinout
 
-- [x] **SCAN-01**: POST /scan endpoint uses beginScan/endScan bracket for stale data cleanup (THE-930)
-- [x] **SCAN-02**: Legacy NULL scan_version_id rows cleaned up after successful full scan (THE-931)
+- [ ] **QGATE-01**: Quality-gate command and skill extracted to standalone plugin (THE-937)
 
-### Service Resolution
+### Schema Surfacing
 
-- [x] **SVCR-01**: Cross-repo service ID resolution scoped to avoid name collisions (THE-932)
+- [ ] **SCHEMA-01**: Schema/field data displayed in detail panel when connection selected (THE-938)
+- [ ] **SCHEMA-02**: MCP impact tools include field-level severity in responses (THE-938)
 
-### Scan Reliability
+### Confidence & Evidence
 
-- [x] **SREL-01**: Incremental scan prompt constrains agent to changed files (THE-933)
-- [x] **SREL-02**: upsertService/upsertConnection sanitize undefined values to null before SQLite binding (THE-935)
-- [x] **SREL-03**: CLI fallback scan passes explicit project root to openDb, not process.cwd() (THE-936)
+- [ ] **CONF-01**: Confidence column persisted on services and connections via migration 009 (THE-939)
+- [ ] **CONF-02**: Evidence snippets persisted on connections (THE-939)
+- [ ] **CONF-03**: Confidence badge visible on nodes/edges in graph UI (THE-939)
 
-### Confirmation UX
+### Team Ownership
 
-- [x] **CONF-01**: Confirmation flow accepts common synonyms (sure, yep, looks good → yes) and re-prompts on ambiguous input instead of silently ignoring (THE-934)
+- [ ] **OWN-01**: CODEOWNERS parsed and team ownership stored in node_metadata (THE-940)
+- [ ] **OWN-02**: Owner displayed in detail panel (THE-940)
+- [ ] **OWN-03**: Owner included in MCP impact_query/impact_changed responses (THE-940)
+
+### Enrichment Architecture
+
+- [ ] **ENRICH-01**: Enrichment pass framework runs after core scan, before graph display (THE-941)
+- [ ] **ENRICH-02**: Each pass writes to node_metadata with distinct view key (THE-941)
+- [ ] **ENRICH-03**: Pass failures logged and skipped — never abort the scan (THE-941)
+
+### Agent Data Quality
+
+- [ ] **AGENT-01**: Agent prompt makes source_file required on connections (THE-942)
+- [ ] **AGENT-02**: Validation warns when source_file missing on connections (THE-942)
+- [ ] **AGENT-03**: File paths displayed in detail panel connections list (THE-942)
+
+### Auth & DB Extraction
+
+- [ ] **AUTHDB-01**: Auth mechanism extracted per service via enrichment pass (THE-943)
+- [ ] **AUTHDB-02**: Database backend extracted per service via enrichment pass (THE-943)
+- [ ] **AUTHDB-03**: Auth and DB info included in MCP impact responses (THE-943)
+
+### Unknown State Display
+
+- [ ] **UNK-01**: Missing metadata fields show "unknown" in detail panel instead of being hidden (THE-944)
 
 ## Future Requirements
 
@@ -33,7 +57,7 @@ Deferred to future milestones. Tracked but not in current roadmap.
 ### Context Menu
 
 - **CTX-01**: User can right-click a node to access actions (copy name, show blast, open repo)
-- **CTX-02**: Context menu adapts options based on node type (service vs library vs infra)
+- **CTX-02**: Context menu adapts options based on node type
 
 ### Advanced Visualization
 
@@ -45,32 +69,47 @@ Deferred to future milestones. Tracked but not in current roadmap.
 ### Release Tooling
 
 - **REL-01**: Automated bump-version.sh script for all manifest files
-- **REL-02**: make check version validation that all version files match
+- **REL-02**: make check version validation
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Structured numbered-options confirmation UI | THE-934 suggests it but tolerant parsing is sufficient for v5.2.1 |
-| Full rewrite of scan manager | These are targeted fixes, not an overhaul |
+| Security audit dashboard | Auth data serves Claude's coding workflow, not compliance reporting |
+| Team-based graph filtering | Filtering by owner is service catalog territory (Backstage, Cortex) |
+| Structured numbered confirmation UI | Tolerant synonym parsing from v5.2.1 is sufficient |
+| Schema diff viewer | Show data shape only; diff is future scope |
+| Deployment status/cost/SLA | Platform tool features, not coding plugin |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCAN-01 | Phase 63 | Complete |
-| SCAN-02 | Phase 63 | Complete |
-| SREL-02 | Phase 64 | Complete |
-| SREL-03 | Phase 64 | Complete |
-| SVCR-01 | Phase 65 | Complete |
-| CONF-01 | Phase 66 | Complete |
-| SREL-01 | Phase 66 | Complete |
+| QGATE-01 | — | Pending |
+| SCHEMA-01 | — | Pending |
+| SCHEMA-02 | — | Pending |
+| CONF-01 | — | Pending |
+| CONF-02 | — | Pending |
+| CONF-03 | — | Pending |
+| OWN-01 | — | Pending |
+| OWN-02 | — | Pending |
+| OWN-03 | — | Pending |
+| ENRICH-01 | — | Pending |
+| ENRICH-02 | — | Pending |
+| ENRICH-03 | — | Pending |
+| AGENT-01 | — | Pending |
+| AGENT-02 | — | Pending |
+| AGENT-03 | — | Pending |
+| AUTHDB-01 | — | Pending |
+| AUTHDB-02 | — | Pending |
+| AUTHDB-03 | — | Pending |
+| UNK-01 | — | Pending |
 
 **Coverage:**
-- v5.2.1 requirements: 7 total
-- Mapped to phases: 7
-- Unmapped: 0 ✓
+- v5.3.0 requirements: 19 total
+- Mapped to phases: 0
+- Unmapped: 19 ⚠️
 
 ---
-*Requirements defined: 2026-03-21*
-*Last updated: 2026-03-21 after roadmap creation — all 7 requirements mapped*
+*Requirements defined: 2026-03-22*
+*Last updated: 2026-03-22 after initial definition*
