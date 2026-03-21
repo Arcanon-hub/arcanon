@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v5.1
 milestone_name: Graph Interactivity
-status: unknown
-stopped_at: Completed 57-01-PLAN.md
-last_updated: "2026-03-21T11:31:15.148Z"
+status: active
+stopped_at: Completed 57-02-PLAN.md
+last_updated: "2026-03-21T11:33:00Z"
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-21)
 
 ## Current Position
 
-Phase: 57 (Edge Bundling) — EXECUTING
-Plan: 2 of 2
+Phase: 57 (Edge Bundling) — COMPLETE
+Plan: 2 of 2 (complete)
 
 ## Performance Metrics
 
@@ -64,6 +64,9 @@ Plan: 2 of 2
 - [Phase 57-edge-bundling]: 57-01: Bundle fresh per frame inside render() — not from state.edgeBundles cache — avoids stale state bugs
 - [Phase 57-edge-bundling]: 57-01: Count badge offset 12px perpendicular to edge so it does not obscure the mismatch cross at midpoint
 - [Phase 57-edge-bundling]: 57-01: Bundles with count === 1 follow same code path — no regression branch needed
+- [Phase 57-edge-bundling]: 57-02: edgeHitTest placed after computeEdgeBundles in utils.js — natural adjacency, same data
+- [Phase 57-edge-bundling]: 57-02: HIT_RADIUS=10 logical pixels — coordinate space matches computeEdgeBundles, independent of zoom
+- [Phase 57-edge-bundling]: 57-02: onClick else-branch uses nested if/else so hideDetailPanel only fires when neither node nor bundle was hit
 
 ### Pending Todos
 
