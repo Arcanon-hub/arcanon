@@ -86,18 +86,15 @@ Every edit is automatically formatted and linted, every quality check runs with 
 - ✓ Edge bundling collapsing parallel edges into weighted edges with count badge — v5.1
 - ✓ PNG export via canvas.toDataURL for one-click architecture screenshots — v5.1
 
+- ✓ SessionStart hook installs runtime deps into ${CLAUDE_PLUGIN_ROOT} with diff-based idempotency — v5.2.0
+- ✓ Self-healing MCP wrapper installs deps if missing before server exec — v5.2.0
+- ✓ MCP server starts from marketplace install without NODE_PATH (ESM-compatible) — v5.2.0
+- ✓ All 5 manifest files version-synced to 5.2.0 — v5.2.0
+- ✓ Plugin directory cleanup: README, LICENSE, .gitignore, source guards — v5.2.0
+
 ### Active
 
-## Current Milestone: v5.2.0 Plugin Distribution Fix
-
-**Goal:** Make the MCP server work when the plugin is installed from marketplace by implementing runtime dependency installation.
-
-**Target features:**
-- SessionStart hook to install runtime deps into `${CLAUDE_PLUGIN_DATA}`
-- `.mcp.json` with `NODE_PATH` pointing to installed deps
-- Runtime deps manifest for MCP server dependencies
-- Version sync across all manifest files (marketplace.json, plugin.json, package.json)
-- Clean up root `.mcp.json` (dev repo, not consumer)
+(Defined per milestone — see REQUIREMENTS.md when next milestone starts)
 
 ### Out of Scope
 
@@ -111,7 +108,7 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ## Context
 
-Shipped v5.1 with ~43,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 58 phases across 10 milestones, 104 plans. Repo restructured as Claude Code marketplace — plugin source lives under `plugins/ligamen/`, installable via `claude plugin marketplace add` + `claude plugin install`. MCP server has 8 tools (5 impact + 3 drift).
+Shipped v5.2.0 with ~43,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 62 phases across 11 milestones, 109 plans. Repo restructured as Claude Code marketplace — plugin source lives under `plugins/ligamen/`, installable via `claude plugin marketplace add` + `claude plugin install`. MCP server has 8 tools (5 impact + 3 drift). Runtime deps installed automatically on first session via SessionStart hook + self-healing MCP wrapper.
 
 Architecture: commands/ for user-invoked features, skills/ for auto-invoked knowledge, hooks/ for formatting/linting/guarding, worker/ for Node.js daemon (db/, server/, scan/, mcp/, ui/ subdirectories), lib/ for shared bash/JS libraries. Agent scan prompts modularized into type-specific variants (service, library, infra) with shared common component. Graph UI uses deterministic layered layout with boundary grouping, external actor hexagons, and protocol-differentiated edges. Filter panel provides protocol, layer, boundary, language, mismatch, and isolated-node toggles.
 
@@ -167,6 +164,11 @@ Known tech debt: no log rotation, db/database.js has console.log in script-mode 
 | Filesystem queries at call time (no new DB tables) | Drift data changes too frequently to persist; repos table has paths as anchors | ✓ Good |
 | Marketplace structure with plugins/ligamen/ | Matches official Claude Code marketplace format; enables `claude plugin marketplace add` | ✓ Good |
 | marketplace.json at repo root | Required for marketplace discovery; points to ./plugins/ligamen as plugin source | ✓ Good |
+| Install into CLAUDE_PLUGIN_ROOT not CLAUDE_PLUGIN_DATA | ESM ignores NODE_PATH; directory-walk finds node_modules next to server.js | ✓ Good |
+| Diff sentinel in CLAUDE_PLUGIN_DATA | Persists across plugin updates; double-check with node_modules existence | ✓ Good |
+| Self-healing MCP wrapper over hook-only approach | Covers first-session race where MCP starts before SessionStart hook completes | ✓ Good |
+| Separate install-deps.sh script (not inline in session-start.sh) | Clean separation; different timeout requirements (120s vs 10s) | ✓ Good |
+| .mcp.json points to wrapper script not node directly | Enables self-healing path; wrapper handles dep check before exec | ✓ Good |
 
 ---
-*Last updated: 2026-03-21 after v5.2.0 milestone started*
+*Last updated: 2026-03-21 after v5.2.0 milestone*

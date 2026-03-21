@@ -1,5 +1,15 @@
 # Milestones
 
+## v5.2.0 Plugin Distribution Fix (Shipped: 2026-03-21)
+
+**Phases completed:** 4 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- (none recorded)
+
+---
+
 ## v5.1 Graph Interactivity (Shipped: 2026-03-21)
 
 **Phases completed:** 7 phases, 11 plans, 2 tasks

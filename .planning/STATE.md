@@ -4,11 +4,11 @@ milestone: v1.0
 milestone_name: milestone
 status: unknown
 stopped_at: Completed 61-01-PLAN.md
-last_updated: "2026-03-21T17:54:28.141Z"
+last_updated: "2026-03-21T18:42:58.881Z"
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 3
-  total_plans: 4
+  total_plans: 5
   completed_plans: 4
 ---
 
@@ -19,11 +19,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-21)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** Phase 61 — Version Sync
+**Current focus:** Phase 62 — Plugin Cleanup
 
 ## Current Position
 
-Phase: 61 (Version Sync) — EXECUTING
+Phase: 62 (Plugin Cleanup) — EXECUTING
 Plan: 1 of 1
 
 ## Performance Metrics
@@ -49,6 +49,10 @@ Plan: 1 of 1
 - [Phase 60]: MCP tools/call response wraps results in escaped JSON text content — bats assertions should use partial 'results' not '"results"'
 - [Phase 60]: @chroma-core/default-embed is an optionalDependency not installed in dev; tests prove server operates without it trivially
 - [Phase 061-version-sync]: v5.2.0: All five manifest files bumped simultaneously to 5.2.0 for consistent marketplace detection and install-deps.sh diff sentinel
+
+### Roadmap Evolution
+
+- Phase 62 added: Plugin cleanup — add README, LICENSE, .gitignore, remove vestigial lint.json, add source guard to worker-client.sh
 
 ### Pending Todos
 
