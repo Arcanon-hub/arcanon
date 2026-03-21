@@ -412,3 +412,152 @@ describe("scanRepos", () => {
     cleanupDir(repo2.dir);
   });
 });
+
+// ---------------------------------------------------------------------------
+// scanRepos — incremental prompt constraint (THE-933 / SREL-01)
+// ---------------------------------------------------------------------------
+
+describe("scanRepos — incremental prompt constraint", () => {
+  let repoDir;
+  let firstCommit;
+
+  before(() => {
+    // Create a repo with an initial commit so we have a base
+    const { dir, head } = makeTempRepo();
+    repoDir = dir;
+    firstCommit = head;
+
+    // Add a file and make a second commit — the diff between firstCommit and
+    // HEAD will contain "the_changed_file.ts" as a modified file
+    writeFileSync(join(dir, "the_changed_file.ts"), "export const x = 1;");
+    execSync("git add the_changed_file.ts", { cwd: dir, stdio: "pipe" });
+    execSync('git commit -m "add the_changed_file.ts"', {
+      cwd: dir,
+      stdio: "pipe",
+    });
+  });
+
+  after(() => cleanupDir(repoDir));
+
+  beforeEach(() => {
+    setAgentRunner(null);
+  });
+
+  /**
+   * queryEngine where getRepoState returns lastCommit as last_scanned_commit.
+   * buildScanContext will see HEAD !== lastCommit and produce mode="incremental".
+   */
+  function makeIncrementalQE(lastCommit) {
+    return {
+      upsertRepo: (_repoData) => ({ id: 99 }),
+      getRepoState: (_id) => ({
+        last_scanned_commit: lastCommit,
+        last_scanned_at: null,
+      }),
+      beginScan: (_repoId) => 7,
+      persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
+      endScan: (_repoId, _scanVersionId) => {},
+    };
+  }
+
+  const validFindings = JSON.stringify({
+    service_name: "test-svc",
+    confidence: "high",
+    services: [
+      {
+        name: "test-svc",
+        root_path: ".",
+        language: "typescript",
+        confidence: "high",
+      },
+    ],
+    connections: [],
+    schemas: [],
+  });
+
+  test("incremental scan prompt contains INCREMENTAL_CONSTRAINT heading and changed filename", async () => {
+    const qe = makeIncrementalQE(firstCommit);
+
+    let capturedPrompt = null;
+    setAgentRunner(async (prompt, _repoPath) => {
+      capturedPrompt = prompt;
+      return `\`\`\`json\n${validFindings}\n\`\`\``;
+    });
+
+    const results = await scanRepos([repoDir], {}, qe);
+
+    assert.ok(
+      capturedPrompt !== null,
+      "agentRunner should have been called",
+    );
+    assert.match(
+      capturedPrompt,
+      /INCREMENTAL SCAN/i,
+      "prompt must contain INCREMENTAL SCAN heading",
+    );
+    assert.match(
+      capturedPrompt,
+      /changed files/i,
+      "prompt must mention changed files",
+    );
+    assert.match(
+      capturedPrompt,
+      /the_changed_file\.ts/,
+      "prompt must list the changed filename",
+    );
+    assert.match(
+      capturedPrompt,
+      /You MUST only examine/,
+      "prompt must use strong directive language",
+    );
+
+    assert.equal(results.length, 1);
+    assert.equal(results[0].mode, "incremental");
+  });
+
+  test("incremental scan with no changed files produces incremental-noop, agentRunner not called, beginScan not called", async () => {
+    // Make a repo with two empty commits so diff between them is empty
+    const { dir: noopRepo } = makeTempRepo();
+    // HEAD from makeTempRepo is an empty commit
+    const firstEmptyCommit = execSync("git rev-parse HEAD", {
+      cwd: noopRepo,
+      encoding: "utf8",
+    }).trim();
+    // Make another empty commit — diff between them will have modified=[]
+    execSync('git commit --allow-empty -m "second empty commit"', {
+      cwd: noopRepo,
+      stdio: "pipe",
+    });
+
+    let beginScanCallCount = 0;
+    const qe = {
+      upsertRepo: (_repoData) => ({ id: 100 }),
+      getRepoState: (_id) => ({
+        last_scanned_commit: firstEmptyCommit,
+        last_scanned_at: null,
+      }),
+      beginScan: (_repoId) => {
+        beginScanCallCount++;
+        return 8;
+      },
+      persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
+      endScan: (_repoId, _scanVersionId) => {},
+    };
+
+    let agentCallCount = 0;
+    setAgentRunner(async (_prompt, _repoPath) => {
+      agentCallCount++;
+      return "";
+    });
+
+    const results = await scanRepos([noopRepo], {}, qe);
+
+    assert.equal(agentCallCount, 0, "agentRunner must NOT be called for incremental-noop");
+    assert.equal(beginScanCallCount, 0, "beginScan must NOT be called for incremental-noop");
+    assert.equal(results.length, 1);
+    assert.equal(results[0].mode, "incremental-noop");
+    assert.equal(results[0].findings, null);
+
+    cleanupDir(noopRepo);
+  });
+});
