@@ -111,7 +111,7 @@ Full details: see Phase Details below (archived)
 **Milestone Goal:** Make the MCP server work when the plugin is installed from the marketplace by implementing runtime dependency installation and confirming correct ESM module resolution.
 
 - [ ] **Phase 59: Runtime Dependency Installation** - SessionStart hook installs MCP runtime deps into ${CLAUDE_PLUGIN_ROOT} with idempotency guard and self-healing MCP wrapper
-- [ ] **Phase 60: MCP Server Launch Verification** - Confirm end-to-end MCP server startup from a marketplace-simulated install with ESM resolution working correctly
+- [x] **Phase 60: MCP Server Launch Verification** - Confirm end-to-end MCP server startup from a marketplace-simulated install with ESM resolution working correctly
 - [ ] **Phase 61: Version Sync** - All five manifest files bumped to 5.2.0 with automated bump script and root .mcp.json cleaned up
 
 ## Phase Details
@@ -238,7 +238,7 @@ Plans:
   4. The root dev-repo .mcp.json is confirmed as {"mcpServers": {}} and does not interfere with the plugin's .mcp.json
 **Plans**: 1 plan
 Plans:
-- [ ] 60-01-PLAN.md — MCP launch verification + ChromaDB fallback + root .mcp.json validation bats tests
+- [x] 60-01-PLAN.md — MCP launch verification + ChromaDB fallback + root .mcp.json validation bats tests
 
 ### Phase 61: Version Sync
 **Goal**: All five manifest files are at version 5.2.0 and a bump script prevents future version drift
@@ -271,5 +271,5 @@ Phases execute in numeric order: 59 → 60 → 61
 | 49-51 | v5.0 | 5/5 | Complete | 2026-03-21 |
 | 52-58 | v5.1 | 11/11 | Complete | 2026-03-21 |
 | 59. Runtime Dependency Installation | v5.2.0 | 0/2 | Not started | - |
-| 60. MCP Server Launch Verification | v5.2.0 | 0/1 | Not started | - |
+| 60. MCP Server Launch Verification | v5.2.0 | 1/1 | Complete | 2026-03-21 |
 | 61. Version Sync | v5.2.0 | 0/TBD | Not started | - |
