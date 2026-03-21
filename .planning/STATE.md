@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 63-01-PLAN.md
-last_updated: "2026-03-21T19:22:20.437Z"
+stopped_at: Completed 63-02-PLAN.md
+last_updated: "2026-03-21T19:42:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 7
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-21)
 ## Current Position
 
 Phase: 63 (Scan Bracket Integrity) — EXECUTING
-Plan: 1 of 2
+Plan: 2 of 2 (COMPLETE)
 
 ## Performance Metrics
 
@@ -32,7 +32,7 @@ Plan: 1 of 2
 
 - Total plans completed: 109 (across v1.0–v5.2.0)
 - Total milestones shipped: 11
-- v5.2.1 plans completed: 0/TBD
+- v5.2.1 plans completed: 2/TBD
 
 ## Accumulated Context
 
@@ -46,6 +46,8 @@ Plan: 1 of 2
 - v5.2.1: Phase 64 and Phase 65 can execute in parallel after Phase 63
 - [Phase 63-scan-bracket-integrity]: endScan called only on success path — failed scans leave bracket open rather than triggering stale-row deletion
 - [Phase 63-scan-bracket-integrity]: scanVersionId threaded through persistFindings as 4th arg so every row is stamped with non-null scan_version_id (fixes root cause of endScan never deleting stale rows)
+- [Phase 63-scan-bracket-integrity]: endScan() now GC-deletes NULL scan_version_id connections+services after successful scan — connections deleted before services (FK order, no CASCADE)
+- [Phase 63-scan-bracket-integrity]: buildDb() test helper extended to apply migrations 005+006 — without 006, QueryEngine ON CONFLICT(path) for repos fails
 
 ### Pending Todos
 
@@ -57,7 +59,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T19:22:20.434Z
-Stopped at: Completed 63-01-PLAN.md
+Last session: 2026-03-21T19:42:00.000Z
+Stopped at: Completed 63-02-PLAN.md
 Resume file: None
-Next action: `/gsd:plan-phase 63`
+Next action: Phase 63 complete — proceed to Phase 64 / 65 (parallel)

@@ -10,7 +10,7 @@ Requirements for Scan Data Integrity patch. Each maps to roadmap phases.
 ### Scan Bracket Integrity
 
 - [x] **SCAN-01**: POST /scan endpoint uses beginScan/endScan bracket for stale data cleanup (THE-930)
-- [ ] **SCAN-02**: Legacy NULL scan_version_id rows cleaned up after successful full scan (THE-931)
+- [x] **SCAN-02**: Legacy NULL scan_version_id rows cleaned up after successful full scan (THE-931)
 
 ### Service Resolution
 
@@ -59,7 +59,7 @@ Deferred to future milestones. Tracked but not in current roadmap.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | SCAN-01 | Phase 63 | Complete |
-| SCAN-02 | Phase 63 | Pending |
+| SCAN-02 | Phase 63 | Complete |
 | SREL-02 | Phase 64 | Pending |
 | SREL-03 | Phase 64 | Pending |
 | SVCR-01 | Phase 65 | Pending |
