@@ -9,8 +9,8 @@ Requirements for v5.0 Marketplace Restructure. Each maps to roadmap phases.
 
 ### Structure
 
-- [ ] **STR-01**: Create `plugins/ligamen/` directory and move plugin files into it (commands/, hooks/, scripts/, worker/, lib/, skills/, .claude-plugin/, package.json, package-lock.json, ligamen.config.json.example)
-- [ ] **STR-02**: Root keeps: README.md, LICENSE, Makefile, docs/, tests/, .planning/, .mcp.json
+- [x] **STR-01**: Create `plugins/ligamen/` directory and move plugin files into it (commands/, hooks/, scripts/, worker/, lib/, skills/, .claude-plugin/, package.json, package-lock.json, ligamen.config.json.example)
+- [x] **STR-02**: Root keeps: README.md, LICENSE, Makefile, docs/, tests/, .planning/, .mcp.json
 
 ### Paths
 
@@ -43,8 +43,8 @@ None deferred.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| STR-01 | Phase 49 | Pending |
-| STR-02 | Phase 49 | Pending |
+| STR-01 | Phase 49 | Complete |
+| STR-02 | Phase 49 | Complete |
 | PTH-01 | Phase 50 | Pending |
 | PTH-02 | Phase 50 | Pending |
 | PTH-03 | Phase 50 | Pending |
