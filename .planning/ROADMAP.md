@@ -313,10 +313,9 @@ Plans:
   1. Two repos each containing a service named "api-gateway" produce distinct service IDs that do not collide in the database
   2. MCP impact queries for "api-gateway" scoped to project A return only connections involving project A's service, not project B's
   3. After scanning both repos, the /graph endpoint for each project shows only that project's "api-gateway" node with its correct connections
-**Plans**: 2 plans
+**Plans**: 1 plan
 Plans:
-- [ ] 65-01-PLAN.md — TBD
-- [ ] 65-02-PLAN.md — TBD
+- [ ] 65-01-PLAN.md — Scope _resolveServiceId by repoId and add ambiguity warning + tests
 
 ### Phase 66: Agent Interaction Fixes
 **Goal**: The confirmation flow accepts common affirmative synonyms and re-prompts on ambiguous input; the incremental scan agent prompt explicitly constrains the scan to changed files only
