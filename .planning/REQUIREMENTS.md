@@ -18,7 +18,7 @@ Requirements for Scan Data Integrity patch. Each maps to roadmap phases.
 
 ### Scan Reliability
 
-- [ ] **SREL-01**: Incremental scan prompt constrains agent to changed files (THE-933)
+- [x] **SREL-01**: Incremental scan prompt constrains agent to changed files (THE-933)
 - [x] **SREL-02**: upsertService/upsertConnection sanitize undefined values to null before SQLite binding (THE-935)
 - [x] **SREL-03**: CLI fallback scan passes explicit project root to openDb, not process.cwd() (THE-936)
 
@@ -64,7 +64,7 @@ Deferred to future milestones. Tracked but not in current roadmap.
 | SREL-03 | Phase 64 | Complete |
 | SVCR-01 | Phase 65 | Complete |
 | CONF-01 | Phase 66 | Complete |
-| SREL-01 | Phase 66 | Pending |
+| SREL-01 | Phase 66 | Complete |
 
 **Coverage:**
 - v5.2.1 requirements: 7 total

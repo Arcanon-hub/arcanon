@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 66-01-PLAN.md
-last_updated: "2026-03-21T19:36:00.852Z"
+stopped_at: Completed 66-02-PLAN.md
+last_updated: "2026-03-21T19:38:57.000Z"
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -53,6 +53,8 @@ Plan: 1 of 2
 - [Phase 64-undefined-value-crash-chain]: CLI fallback map.md Step 4: pass PROJECT_ROOT captured in Step 1 to openDb() to ensure correct DB hash regardless of process.cwd() at node -e invocation time
 - [Phase 65-service-id-scoping]: [Phase 65-service-id-scoping]: _resolveServiceId scoped by repoId — same-repo preference with global fallback and console.warn on ambiguous multi-repo matches
 - [Phase 66-agent-interaction-fixes]: CONF-01: NEEDS_REPROMPT is a frozen plain object sentinel for === identity comparison; AFFIRMATIVE_SYNONYMS is a frozen Set; synonym check in applyEdits() normalizes natural-language affirmatives to confirm behavior
+- [Phase 66-agent-interaction-fixes]: SREL-01: incremental-noop check placed before beginScan — no scan bracket opened for empty-diff incremental scans
+- [Phase 66-agent-interaction-fixes]: SREL-01: agent prompt constraint uses strong directive 'You MUST only examine' with INCREMENTAL_CONSTRAINT block appended to finalPrompt before agentRunner call
 
 ### Pending Todos
 
@@ -64,7 +66,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-21T19:36:00.849Z
-Stopped at: Completed 66-01-PLAN.md
+Last session: 2026-03-21T19:38:56.991Z
+Stopped at: Completed 66-02-PLAN.md
 Resume file: None
 Next action: Phase 64 Plan 01 complete (sanitizeBindings). Phase 64 Plan 02 (CLI fallback fix) also complete. Proceed to Phase 66.
