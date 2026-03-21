@@ -12,7 +12,8 @@
 - ✅ **v4.1 Command Cleanup** — Phases 46-48 (shipped 2026-03-20)
 - ✅ **v5.0 Marketplace Restructure** — Phases 49-51 (shipped 2026-03-21)
 - ✅ **v5.1 Graph Interactivity** — Phases 52-58 (shipped 2026-03-21)
-- 🚧 **v5.2.0 Plugin Distribution Fix** — Phases 59-61 (in progress)
+- ✅ **v5.2.0 Plugin Distribution Fix** — Phases 59-62 (shipped 2026-03-21)
+- 🚧 **v5.2.1 Scan Data Integrity** — Phases 63-66 (in progress)
 
 ## Phases
 
@@ -106,13 +107,23 @@ Full details: see Phase Details below (archived)
 
 </details>
 
-### 🚧 v5.2.0 Plugin Distribution Fix (In Progress)
+<details>
+<summary>✅ v5.2.0 Plugin Distribution Fix (Phases 59-62) — SHIPPED 2026-03-21</summary>
 
-**Milestone Goal:** Make the MCP server work when the plugin is installed from the marketplace by implementing runtime dependency installation and confirming correct ESM module resolution.
+- [x] Phase 59-62: 4 phases — runtime dep install, MCP launch verification, version sync, plugin cleanup
 
-- [ ] **Phase 59: Runtime Dependency Installation** - SessionStart hook installs MCP runtime deps into ${CLAUDE_PLUGIN_ROOT} with idempotency guard and self-healing MCP wrapper
-- [x] **Phase 60: MCP Server Launch Verification** - Confirm end-to-end MCP server startup from a marketplace-simulated install with ESM resolution working correctly
-- [ ] **Phase 61: Version Sync** - All five manifest files bumped to 5.2.0 with automated bump script and root .mcp.json cleaned up
+Full details: see Phase Details below (archived)
+
+</details>
+
+### 🚧 v5.2.1 Scan Data Integrity (In Progress)
+
+**Milestone Goal:** Fix 7 scan reliability bugs — stale data cleanup, undefined value crashes, CLI fallback project root, service ID collisions, confirmation flow synonym parsing, and incremental scan agent guidance.
+
+- [ ] **Phase 63: Scan Bracket Integrity** - POST /scan uses beginScan/endScan bracket and legacy NULL scan_version_id rows are garbage collected after full scan
+- [ ] **Phase 64: Undefined Value Crash Chain** - upsertService/upsertConnection sanitize undefined→null and CLI fallback scan passes explicit project root to openDb
+- [ ] **Phase 65: Service ID Scoping** - Cross-repo service ID resolution scoped to avoid name collisions across projects
+- [ ] **Phase 66: Agent Interaction Fixes** - Confirmation flow accepts synonyms and re-prompts on ambiguous input; incremental scan prompt constrains agent to changed files
 
 ## Phase Details
 
@@ -212,6 +223,9 @@ Plans:
 
 </details>
 
+<details>
+<summary>✅ v5.2.0 Plugin Distribution Fix (Phases 59-62) — SHIPPED 2026-03-21</summary>
+
 ### Phase 59: Runtime Dependency Installation
 **Goal**: The MCP server's runtime npm dependencies are installed into ${CLAUDE_PLUGIN_ROOT} on every session start, with idempotency to skip unchanged installs and a self-healing wrapper for the first-session race condition
 **Depends on**: Phase 58 (v5.1 complete)
@@ -224,8 +238,8 @@ Plans:
   5. The MCP wrapper script attempts self-healing dep install before exec'ing server.js, covering the first-session race
 **Plans**: 2 plans
 Plans:
-- [ ] 59-01-PLAN.md — install-deps.sh with diff-based idempotency + hooks.json wiring + bats tests
-- [ ] 59-02-PLAN.md — Self-healing mcp-wrapper.sh extension + .mcp.json wiring + bats tests
+- [x] 59-01-PLAN.md — install-deps.sh with diff-based idempotency + hooks.json wiring + bats tests
+- [x] 59-02-PLAN.md — Self-healing mcp-wrapper.sh extension + .mcp.json wiring + bats tests
 
 ### Phase 60: MCP Server Launch Verification
 **Goal**: The MCP server starts correctly from a marketplace-simulated install environment, with ESM resolution working without NODE_PATH and ChromaDB degrading gracefully when absent
@@ -251,22 +265,66 @@ Plans:
   4. Running `make bump VERSION=5.3.0` updates all five files atomically in one command
 **Plans**: 1 plan
 Plans:
-- [ ] 61-01-PLAN.md — Bump all 5 manifests to 5.2.0 and verify root .mcp.json
+- [x] 61-01-PLAN.md — Bump all 5 manifests to 5.2.0 and verify root .mcp.json
 
-### Phase 62: Plugin cleanup — add README, LICENSE, .gitignore to plugin dir, remove vestigial lint.json, add source guard to worker-client.sh
-
-**Goal:** Plugin directory passes marketplace validation: metadata files present, vestigial hook config removed, all lib scripts consistently guarded against direct execution.
+### Phase 62: Plugin Cleanup
+**Goal**: Plugin directory passes marketplace validation: metadata files present, vestigial hook config removed, all lib scripts consistently guarded against direct execution.
+**Depends on**: Phase 61
 **Requirements**: none (cleanup — no requirement IDs)
-**Depends on:** Phase 61
-**Plans:** 1 plan
-
+**Plans**: 1 plan
 Plans:
-- [ ] 62-01-PLAN.md — Add README.md, LICENSE, .gitignore to plugins/ligamen/; delete hooks/lint.json; add source guard to lib/worker-client.sh
+- [x] 62-01-PLAN.md — Add README.md, LICENSE, .gitignore to plugins/ligamen/; delete hooks/lint.json; add source guard to lib/worker-client.sh
+
+</details>
+
+### Phase 63: Scan Bracket Integrity
+**Goal**: POST /scan endpoint applies the beginScan/endScan version bracket for atomic stale-row cleanup, and a one-time garbage collection removes legacy NULL scan_version_id rows left by pre-bracket scans
+**Depends on**: Phase 62 (v5.2.0 complete)
+**Requirements**: SCAN-01, SCAN-02
+**Success Criteria** (what must be TRUE):
+  1. After a full scan completes, services and connections from prior scans that were not touched in the new scan are absent from the /graph response
+  2. If a scan is interrupted or fails partway through, the prior scan's data remains intact — no partial updates visible in the graph
+  3. Running a full scan on a repo with pre-existing NULL scan_version_id rows leaves no NULL scan_version_id rows in services or connections for that repo
+  4. The /graph response returns only rows belonging to the latest scan bracket — no ghost rows from previous runs
+**Plans**: TBD
+
+### Phase 64: Undefined Value Crash Chain
+**Goal**: upsertService and upsertConnection sanitize JavaScript undefined values to null before SQLite binding, and the CLI fallback scan resolves the project database by explicit root path rather than process.cwd()
+**Depends on**: Phase 63
+**Requirements**: SREL-02, SREL-03
+**Success Criteria** (what must be TRUE):
+  1. Scanning a service whose manifest produces undefined optional fields (description, version, language) completes without a SQLite binding error
+  2. When the worker crashes and the CLI fallback scan runs, it writes scan results to the correct project database rather than a cwd-relative fallback path
+  3. After a crash-recovery fallback scan, the /graph response reflects the correct project's data — not a phantom database created at the wrong path
+  4. Re-running `/ligamen:map` after a previous crash-recovery produces a clean scan with no orphaned database files
+**Plans**: TBD
+
+### Phase 65: Service ID Scoping
+**Goal**: Cross-repo service ID resolution is scoped per project so that a service named identically in two different repos resolves to the correct ID in each context
+**Depends on**: Phase 63
+**Requirements**: SVCR-01
+**Success Criteria** (what must be TRUE):
+  1. Two repos each containing a service named "api-gateway" produce distinct service IDs that do not collide in the database
+  2. MCP impact queries for "api-gateway" scoped to project A return only connections involving project A's service, not project B's
+  3. After scanning both repos, the /graph endpoint for each project shows only that project's "api-gateway" node with its correct connections
+**Plans**: TBD
+
+### Phase 66: Agent Interaction Fixes
+**Goal**: The confirmation flow accepts common affirmative synonyms and re-prompts on ambiguous input; the incremental scan agent prompt explicitly constrains the scan to changed files only
+**Depends on**: Phase 63
+**Requirements**: CONF-01, SREL-01
+**Success Criteria** (what must be TRUE):
+  1. Responding "sure", "yep", "looks good", or "sounds good" to a confirmation prompt is accepted as affirmative — no re-prompt or silent ignore
+  2. Responding with an ambiguous or unrecognized string to a confirmation prompt triggers a clear re-prompt asking for yes/no explicitly
+  3. When the incremental scan agent prompt runs, the agent's scan is bounded to the set of changed files passed in the prompt — the agent does not re-scan unchanged files
+  4. An incremental scan invoked with no changed files produces a no-op result rather than a full re-scan
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 59 → 60 → 61 → 62
+Phases execute in numeric order: 63 → 64 → 65 → 66
+(Phase 64 and 65 can run in parallel after Phase 63 completes)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -280,7 +338,8 @@ Phases execute in numeric order: 59 → 60 → 61 → 62
 | 46-48 | v4.1 | 6/6 | Complete | 2026-03-20 |
 | 49-51 | v5.0 | 5/5 | Complete | 2026-03-21 |
 | 52-58 | v5.1 | 11/11 | Complete | 2026-03-21 |
-| 59. Runtime Dependency Installation | v5.2.0 | 0/2 | Not started | - |
-| 60. MCP Server Launch Verification | v5.2.0 | 1/1 | Complete | 2026-03-21 |
-| 61. Version Sync | v5.2.0 | 0/TBD | Not started | - |
-| 62. Plugin Cleanup | v5.2.0 | 0/1 | Not started | - |
+| 59-62 | v5.2.0 | 5/5 | Complete | 2026-03-21 |
+| 63. Scan Bracket Integrity | v5.2.1 | 0/TBD | Not started | - |
+| 64. Undefined Value Crash Chain | v5.2.1 | 0/TBD | Not started | - |
+| 65. Service ID Scoping | v5.2.1 | 0/TBD | Not started | - |
+| 66. Agent Interaction Fixes | v5.2.1 | 0/TBD | Not started | - |

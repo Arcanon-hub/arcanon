@@ -58,19 +58,19 @@ Deferred to future milestones. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCAN-01 | — | Pending |
-| SCAN-02 | — | Pending |
-| SVCR-01 | — | Pending |
-| SREL-01 | — | Pending |
-| SREL-02 | — | Pending |
-| SREL-03 | — | Pending |
-| CONF-01 | — | Pending |
+| SCAN-01 | Phase 63 | Pending |
+| SCAN-02 | Phase 63 | Pending |
+| SREL-02 | Phase 64 | Pending |
+| SREL-03 | Phase 64 | Pending |
+| SVCR-01 | Phase 65 | Pending |
+| CONF-01 | Phase 66 | Pending |
+| SREL-01 | Phase 66 | Pending |
 
 **Coverage:**
 - v5.2.1 requirements: 7 total
-- Mapped to phases: 0
-- Unmapped: 7 ⚠️
+- Mapped to phases: 7
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-21*
-*Last updated: 2026-03-21 after initial definition*
+*Last updated: 2026-03-21 after roadmap creation — all 7 requirements mapped*
