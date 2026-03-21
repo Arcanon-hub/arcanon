@@ -1,32 +1,36 @@
 # Feature Research
 
-**Domain:** Developer tool — type-specific detail panels for a local service dependency graph UI
-**Researched:** 2026-03-17
-**Confidence:** HIGH (based on codebase inspection of v2.2 source + industry reference from Backstage catalog model)
+**Domain:** Claude Code plugin — runtime dependency installation, MCP server distribution, version manifest sync
+**Researched:** 2026-03-21
+**Confidence:** HIGH (official Claude Code docs + direct codebase inspection)
 
-> **Scope note:** This document covers v2.3 features only. All prior capabilities (graph rendering,
-> agent scanning, connections storage, service detail panel, scan data integrity) are **already
-> shipped** and are **dependencies**, not targets. Features below extend the detail panel system to
-> handle library and infra nodes — they must not break the existing service detail panel.
+> **Scope note:** This document covers v5.2.0 features only. All prior capabilities (MCP server with
+> 8 tools, hooks, commands, graph UI, SQLite storage, marketplace plugin structure) are **already
+> shipped** and are **dependencies**, not targets. Features below make the MCP server work when the
+> plugin is installed from the marketplace.
 
 ---
 
 ## Current State (Evidence Base)
 
-Read directly from the v2.2 source. These are facts, not assumptions.
+Read directly from the v5.1.2 source. These are facts, not assumptions.
 
 | What exists | File | Notes |
 |-------------|------|-------|
-| Service detail panel (calls / called-by with mismatch flags) | `worker/ui/modules/detail-panel.js` | Works correctly; not changed in v2.3 |
-| Library panel scaffold (`renderLibraryConnections`) | `worker/ui/modules/detail-panel.js:61–96` | Renders connection edges using `e.method` and `e.path`; reads same format as service panel; shows "Provides (N)" and "Used by (N services)" |
-| `exposed_endpoints` table (migration 003) | `worker/db/migrations/003_exposed_endpoints.js` | Schema: `(service_id, method, path, handler)` — designed for "GET /users" REST endpoints only; not structured for library exports or infra resources |
-| `persistFindings()` exposes parser | `worker/db/query-engine.js:797–815` | Splits `svc.exposes` strings on whitespace: `parts[0]` = method, `parts[1]` = path; treats all entries as REST-style; a library export `"createClient(config: ClientConfig): EdgeworksClient"` would store `"createClient(config:"` as `method` and `"ClientConfig):"` as `path` — unusable |
-| Agent prompts produce correct data | `worker/scan/agent-prompt-library.md`, `agent-prompt-infra.md` | Library exposes: `"functionName(params): ReturnType"` and type names. Infra exposes: `"k8s:deployment/payment-service"`, `"tf:output/db_connection_string"`, `"helm:values/env.DATABASE_URL"`. Data is structurally correct; only the storage and display layers are wrong. |
-| No infra panel rendering | `worker/ui/modules/detail-panel.js:43–49` | `isLib` check covers `library` and `sdk`; infra nodes fall through to `renderServiceConnections` which shows REST-style method/path for k8s/tf/helm paths |
+| MCP server with 8 tools | `plugins/ligamen/worker/mcp/server.js` | Imports `@modelcontextprotocol/sdk`, `better-sqlite3`, `zod` at the top level — will throw on startup if these are not resolvable |
+| `.mcp.json` in plugin root | `plugins/ligamen/.mcp.json` | Points to `${CLAUDE_PLUGIN_ROOT}/worker/mcp/server.js` with no `env` key — no `NODE_PATH` set |
+| `runtime-deps.json` | `plugins/ligamen/runtime-deps.json` | Lists all 7 MCP server dependencies with correct semver; version field `5.1.2` matches plugin version |
+| `package.json` with all deps | `plugins/ligamen/package.json` | Has `"type": "module"`, devDependencies, scripts — unsuitable as the install manifest for `npm install` into `CLAUDE_PLUGIN_DATA` |
+| SessionStart hook | `plugins/ligamen/hooks/hooks.json` + `scripts/session-start.sh` | Injects project context; runs worker auto-start; does NOT do npm install; timeout is 10s |
+| Root marketplace.json | `.claude-plugin/marketplace.json` | Version is `5.1.1` — drifted behind `plugin.json` and inner `marketplace.json` which are `5.1.2` |
+| Inner marketplace.json | `plugins/ligamen/.claude-plugin/marketplace.json` | Version `5.1.2` — correct |
+| `plugin.json` | `plugins/ligamen/.claude-plugin/plugin.json` | Version `5.1.2` — correct |
 
-The core problem: `persistFindings()` stores `svc.exposes` through a "GET /path" parser, and the
-panel renders everything as `method + path`. Library and infra data is structurally incompatible
-with this format at both storage and display layers.
+The core problem: when a user installs Ligamen from the marketplace and Claude Code starts the MCP
+server subprocess (`node ${CLAUDE_PLUGIN_ROOT}/worker/mcp/server.js`), Node.js cannot find
+`@modelcontextprotocol/sdk`, `better-sqlite3`, or `fastify` because they are not in the plugin
+directory and `NODE_PATH` is not set. The server crashes silently at import time. All 8 MCP tools
+are invisible to Claude.
 
 ---
 
@@ -34,114 +38,89 @@ with this format at both storage and display layers.
 
 ### Table Stakes (Users Expect These)
 
-These are the minimum for v2.3 to feel correct. Without them, clicking a library or infra node
-produces confusing output (truncated function signatures as "method", empty or garbled paths).
+These are the minimum for v5.2.0. Missing any one = MCP server fails after marketplace install.
 
-| Feature | Why Expected | Complexity | Depends On |
-|---------|--------------|------------|------------|
-| Library detail panel shows exported API surface | Any tool that shows library nodes (Backstage Component kind=library, GitHub Dependency Graph, DependenTree) shows what the library exports, not just who calls it. The library's exports ARE the thing that changes and breaks callers. | MEDIUM | New `exposed_items` table or `exposed_endpoints` schema extension; storage fix in `persistFindings()`; `renderLibraryPanel()` in detail-panel.js |
-| Library panel shows consumer list (deduplicated by service name) | The current scaffold already does dedup via a `Set` in `renderLibraryConnections`. This behavior is correct and expected — users want "which 3 services use this SDK?" not a list of individual import edges. | LOW | Already partially built; depends on correct data being stored first |
-| Infra detail panel shows managed resources with typed prefixes | When clicking an infra diamond node, users need to see what it manages: `k8s:deployment/payment-service`, `k8s:configmap/payment-env`, not a garbled REST representation. The `k8s:`, `tf:`, `helm:`, `compose:` prefixes from the agent prompt are the display format — they should be preserved as-is. | MEDIUM | New storage column (or separate `exposed_items` table) that stores raw exposes strings without parsing them as REST endpoints; new `renderInfraPanel()` function |
-| Infra panel shows configured/deployed services | Infra → service connections have `method: "deploy"` or `method: "configure"` and a structured path like `k8s:configmap/payment-env → PAYMENT_DB_URL`. The panel should show "Configures: payment-service (via k8s:configmap/payment-env → PAYMENT_DB_URL)". This is already stored in the `connections` table — only the display is wrong. | LOW | No storage changes needed; `renderInfraPanel()` reads existing connection edges with k8s/tf/helm protocols |
-| `persistFindings()` stores library/infra exposes without garbling them | The current `parts = endpoint.trim().split(/\s+/)` parser must not run on library function signatures or infra resource strings. A `"k8s:deployment/payment-service"` must be stored as a single displayable unit, not split into nonsense method+path. | MEDIUM | Schema: add `item_type` column to `exposed_endpoints` OR create separate `exposed_items` table; update `persistFindings()` with type-conditional storage; migration 007 |
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| SessionStart hook installs runtime deps into `${CLAUDE_PLUGIN_DATA}` | MCP server.js imports 7 packages; none ship with Node.js; without install those imports throw at startup and all 8 tools vanish | MEDIUM | Official Claude Code pattern: `diff -q "${CLAUDE_PLUGIN_ROOT}/runtime-deps.json" "${CLAUDE_PLUGIN_DATA}/runtime-deps.json" >/dev/null 2>&1 \|\| (cd "${CLAUDE_PLUGIN_DATA}" && cp "${CLAUDE_PLUGIN_ROOT}/runtime-deps.json" . && npm install --omit=dev) \|\| rm -f "${CLAUDE_PLUGIN_DATA}/runtime-deps.json"` |
+| `NODE_PATH` env var in `.mcp.json` | MCP server starts as a subprocess launched by Claude Code; it must find its dependencies via `NODE_PATH` pointing to `${CLAUDE_PLUGIN_DATA}/node_modules` | LOW | Add `"env": { "NODE_PATH": "${CLAUDE_PLUGIN_DATA}/node_modules" }` to the `ligamen-impact` server entry in `.mcp.json` |
+| High timeout on the install hook | `npm install` of 7 packages (including `better-sqlite3` native build, `chromadb` with platform binaries) takes 30–60s on first run; current SessionStart timeout is 10s — hook is killed mid-install | LOW | Add a **separate** hook entry for the install step with `"timeout": 120`; keep the existing session-start.sh hook at its current timeout |
+| Idempotent install guard | SessionStart fires on every session start; reinstalling every session blocks startup for 30–60s | LOW | The `diff ... \|\| install` pattern is the guard: runs only when `runtime-deps.json` differs from the stored copy; first run and post-update are both covered |
+| Version sync: root marketplace.json | Root `.claude-plugin/marketplace.json` version is `5.1.1`; this is what users discover via `claude plugin marketplace add`; stale version means consumers are offered the old cached build | LOW | Bump to `5.2.0` to match other manifests |
+| `runtime-deps.json` as the install manifest (not full `package.json`) | Full `package.json` has `"type": "module"`, devDependencies, and scripts that conflict with a plain `npm install` in a data directory; `runtime-deps.json` already contains only the 7 production deps | LOW | File already exists; just wire it into the install hook command instead of `package.json` |
 
 ### Differentiators (Competitive Advantage)
 
-Features that go beyond "not broken" and actively add value for v2.3 specifically.
+Features beyond minimum that improve distribution quality.
 
-| Feature | Value Proposition | Complexity | Depends On |
-|---------|-------------------|------------|------------|
-| Library panel groups exports by kind (functions vs types) | Backstage and GitHub Dependency Graph both distinguish interface/type exports from callable function exports. Showing `"Types (3): ClientConfig, EventHandler, Subscription"` vs `"Functions (4): createClient, publishEvent..."` makes the library surface immediately scannable. Parsing is trivial: strings containing `(` are functions, others are types. | LOW | Correct data in storage first; purely a `renderLibraryPanel()` classification step — no schema change needed |
-| Infra panel groups resources by prefix (k8s / tf / helm) | When an infra repo manages 15 resources, grouping by `k8s:` (8), `tf:` (4), `helm:` (3) mirrors how operators think. No additional data needed — the prefix is already in the stored string. Pure display logic. | LOW | Correct data in storage first; purely a `renderInfraPanel()` grouping step — no schema change needed |
-| Source file link for library exports | The agent stores `boundary_entry` (e.g., `src/index.ts`) on each library service. Showing this in the panel gives developers a one-click navigation target. Already in the `services` table as `root_path` / can be stored in handler column of `exposed_endpoints`. | LOW | `boundary_entry` is already in the agent JSON; needs to be persisted to `services` table (add `boundary_entry` column in migration 007) or read from handler column |
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Graceful fallback when `npm` unavailable | Install hook exits 0 silently when `npm` is missing rather than printing an error and interrupting session start | LOW | Add `command -v npm >/dev/null 2>&1 \|\|  exit 0` guard at top of install command or in a wrapper script; the `\|\| rm -f ...` trailing clause already handles npm failure by clearing the copied manifest so next session retries |
+| Version field in `runtime-deps.json` triggers reinstall on plugin updates | `runtime-deps.json` already has `"version": "5.1.2"` — diff against this file detects when a new plugin version ships, even if semver ranges in deps didn't change, because the version field bumps | LOW | Already present in `runtime-deps.json`; no code change needed; just keep version in sync with plugin version during releases |
+| Single source-of-truth version bump script | A `make bump-version VERSION=X.Y.Z` target that updates all four version locations atomically prevents the current 5.1.1 vs 5.1.2 drift | MEDIUM | Uses `jq` or `sed` to write: `.claude-plugin/marketplace.json`, `plugins/ligamen/.claude-plugin/marketplace.json`, `plugins/ligamen/.claude-plugin/plugin.json`, `plugins/ligamen/runtime-deps.json` |
+| Separate install hook entry (not inline in hooks.json command) | A dedicated shell script for the install step is testable, has proper error handling, and allows the install logic to evolve independently of hooks.json | LOW | `scripts/install-runtime-deps.sh` invoked from hooks.json; easier to bats-test than an inline one-liner |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Expand/collapse sections inside the panel | "Show me only the types, hide the functions" | Adds stateful UI complexity (section open/closed state, animations, JS event overhead) for a panel that typically shows <20 items. Premature optimization. | Render everything; CSS scroll handles long lists. Revisit if users report panels with 50+ exports. |
-| Click-to-navigate from a library export to its source file | "Click `createClient` and open `src/client.ts` in editor" | Requires editor integration (deep-link protocol or file:// open), which is OS-dependent, requires user permission, and is outside the AllClear scope (no external service deps). | Show the source file path as plain text. Users can copy-paste. |
-| Live "who's importing this function right now" from AST | "Instead of scan data, show real-time import analysis" | Requires a language server per repo (TypeScript Language Service, pylsp, rust-analyzer). Multi-language, multi-version, out-of-process. Out of scope for v2.3. | Use connection edges from the last scan; users re-scan when they need fresh data. |
-| Infra panel with kubectl live status | "Show whether `k8s:deployment/payment-service` is currently Running vs CrashLoopBackOff" | `/allclear:pulse` already covers live service health. Mixing scan-derived static data (what the IaC says should exist) with live cluster state in the same panel creates confusion about data freshness. | Link to `/allclear:pulse` output for live state; keep the detail panel as scan-derived static data only. |
-| Separate "Exports" tab vs "Connections" tab in the panel | "Library panel should have tabs for its own exports and its outgoing calls" | Tab UI requires layout changes that affect the panel for all node types. Current panel has no tabs. Scope creep. | Render exports section above connections section. Vertical layout with section headers is sufficient. |
+| Bundling `node_modules` inside the plugin directory | "Just ship the deps — no install step needed" | Claude Code copies marketplace plugins to `~/.claude/plugins/cache`; `better-sqlite3` and `chromadb` include platform-specific native binaries (darwin-arm64, linux-x64); bundling them fails on any platform other than where they were built; also inflates plugin size by ~40MB | Runtime install via `${CLAUDE_PLUGIN_DATA}` — platform-correct binaries, zero plugin size bloat |
+| Using full `package.json` as the install manifest | One file to maintain | `"type": "module"` in package.json causes problems in the `CLAUDE_PLUGIN_DATA` directory where server.js is not being loaded from; devDependencies install unnecessary packages; the `chromadb` optional dep for platform binaries needs separate handling | Use `runtime-deps.json` — already exists, contains only the 7 production deps plus the optional chroma binding |
+| Global `npm install -g` in hook | Appears simpler | Requires elevated permissions; breaks in sandboxed Claude Code environments; pollutes the user's global npm namespace with Ligamen's deps | `npm install` locally into `${CLAUDE_PLUGIN_DATA}/node_modules` with `NODE_PATH` |
+| Checking `node_modules` directory existence as install guard | "Skip if folder exists" | A prior install from an older plugin version stays forever even after dep changes; a failed partial install leaves the directory but modules are broken | `diff` the stored `runtime-deps.json` against the bundled one — detects both first-run and post-update states reliably |
+| Single combined SessionStart hook for context injection + install | "Keep hooks.json simple" | The existing session-start.sh has a 10s timeout that is correct for context injection; merging install into the same hook entry would require raising the timeout to 120s, making every session start wait up to 120s even after install is done | Two separate hook entries: one for install (timeout: 120), one for context injection (timeout: 10) |
+| Versioning only in `plugin.json` | "One place is enough" | Root `marketplace.json` at `.claude-plugin/marketplace.json` is what Claude Code reads during `claude plugin marketplace add`; if it is stale, users install the old cached version; the docs warn explicitly: "If you change your plugin's code but don't bump the version in plugin.json, existing users won't see your changes due to caching" — the same applies to marketplace.json | Keep all four files in sync; automate with version-bump script |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Migration 007: schema for type-aware exposes storage]
-    └──required by──> [Fix persistFindings() to not garble library/infra exposes]
-    └──required by──> [Library panel shows exported API surface (correct data)]
-    └──required by──> [Infra panel shows managed resources (correct data)]
+[runtime-deps.json as install manifest]
+    └──required by──> [SessionStart install hook (diff-based idempotency)]
+                          └──required by──> [NODE_PATH in .mcp.json]
+                                                └──required by──> [MCP server starts after marketplace install]
+                                                                       └──required by──> [8 MCP tools visible to Claude]
 
-[Fix persistFindings() storage]
-    └──required by──> [renderLibraryPanel() — needs correct stored exports]
-    └──required by──> [renderInfraPanel() — needs correct stored resources]
-    └──NOT required by──> [Infra panel shows configured/deployed services]
-                              (connections already stored correctly; display only)
+[High timeout on install hook]
+    └──required by──> [First-run native build doesn't time out]
+    └──separate from──> [Existing session-start.sh hook (timeout: 10)]
 
-[renderLibraryPanel()]
-    └──enhances──> [Groups exports by kind (functions vs types) — pure display logic]
-    └──enhances──> [Source file link — reads boundary_entry from services table]
-
-[renderInfraPanel()]
-    └──enhances──> [Groups resources by prefix (k8s/tf/helm) — pure display logic]
-
-[Existing renderServiceConnections() in detail-panel.js]
-    └──unchanged by all of the above — service panel is not touched in v2.3]
-
-[Existing connections table (protocol, method, path)]
-    └──already correct for infra connections (deploy/configure with k8s: paths)]
-    └──already correct for library connections (sdk/import protocol)]
+[Root marketplace.json version sync]
+    └──independent of install work (manifest files only)]
+    └──required by──> [Consumers offered correct version via `claude plugin marketplace add`]
 ```
 
 ### Dependency Notes
 
-- **The storage fix must ship before any panel rendering work.** Writing `renderLibraryPanel()` against the current garbled data would require the renderer to undo the parser's damage — fragile and wrong.
-- **Migration 007 is the foundation.** It must handle existing users who have library/infra repos already scanned (their `exposed_endpoints` rows have garbled data — the migration should truncate those rows for non-service types or add a `raw_text` column to store the original string alongside the broken method/path).
-- **The infra "configured services" panel section needs no storage changes.** Connection edges for infra repos already have correct protocol (`k8s`, `tf`, `helm`) and method (`deploy`, `configure`). Only `renderInfraPanel()` needs to display them differently from REST connections.
-- **`renderLibraryConnections()` already exists.** It is a scaffold that will be replaced/extended — not built from scratch. The "Used by" dedup logic (`Set` of consumer names) is correct and should be kept.
-- **`boundary_entry` from the agent prompt is not currently persisted.** The agent emits it, `agent-schema.json` documents it, but `persistFindings()` does not write it to the `services` table. This is a minor gap; storing it in migration 007 as a new column enables the source file link differentiator.
+- **Install hook must run before MCP server starts.** Claude Code fires SessionStart hooks before initializing MCP servers from `.mcp.json`. The install creates `${CLAUDE_PLUGIN_DATA}/node_modules` first; then the MCP server subprocess finds them via `NODE_PATH`. Ordering is guaranteed by design.
+- **`NODE_PATH` requires a successful install first.** If the install hook fails and `node_modules` does not exist, the MCP server will still fail. The `|| rm -f ...` cleanup in the install command ensures the next session retries rather than skipping.
+- **Two separate hook entries, not one.** The install hook needs `"timeout": 120`. The context injection hook needs `"timeout": 10`. They are independent and should be listed as separate entries in `hooks.json` under `SessionStart`.
+- **Version sync is fully independent.** Can be done in any order. Does not affect runtime behavior. Affects only what version users see when discovering/updating the plugin.
+- **`runtime-deps.json` version field must track plugin version.** When v5.2.0 ships, the file's `"version"` field must be `5.2.0`. This ensures the diff triggers a reinstall on update even if no dep semver ranges changed.
 
 ---
 
-## MVP Definition (v2.3)
+## MVP Definition (v5.2.0)
 
-### Launch With (v2.3 core)
+### Launch With (v5.2.0 core)
 
-Minimum for the milestone goal: "Make library and infra nodes show type-appropriate data in the
-detail panel."
+Minimum needed to make the MCP server work when installed from marketplace.
 
-- [ ] Migration 007: add `raw_text` column to `exposed_endpoints` (stores original agent string
-  verbatim); add `boundary_entry` column to `services` (optional, for source file display) — handles
-  existing rows safely by defaulting `raw_text = path` for existing service rows
-- [ ] Fix `persistFindings()`: detect node type from `svc.type`; for `service` nodes continue
-  using the existing "GET /path" parser; for `library`/`sdk` nodes store the full export string in
-  `raw_text` with `method=null`; for `infra` nodes store the full resource string in `raw_text`
-  with `method=null`; persist `boundary_entry` to services row
-- [ ] `renderLibraryPanel()` in `detail-panel.js`: show exports grouped as Functions and Types
-  (classify by presence of `(`); show source file from `boundary_entry`; show "Used by" consumer
-  list (keep existing dedup Set logic)
-- [ ] `renderInfraPanel()` in `detail-panel.js`: show managed resources from `exposed_endpoints.raw_text`
-  grouped by prefix (`k8s:`, `tf:`, `helm:`, `compose:`); show deploy/configure connections to
-  services from existing connection edges with correct method labels
-- [ ] Update `showDetailPanel()` dispatch: add `infra` to the type check (currently only `library`
-  and `sdk` get non-service rendering); route `infra` type nodes to `renderInfraPanel()`
+- [ ] Add install hook entry to `hooks/hooks.json` — separate entry under `SessionStart` with `"timeout": 120`, invoking `scripts/install-runtime-deps.sh`
+- [ ] Create `scripts/install-runtime-deps.sh` — implements the `diff ... || (cd "${CLAUDE_PLUGIN_DATA}" && cp runtime-deps.json . && npm install --omit=dev) || rm -f ...` pattern with `npm` availability guard
+- [ ] Add `NODE_PATH` env to `.mcp.json` — `"env": { "NODE_PATH": "${CLAUDE_PLUGIN_DATA}/node_modules" }` on the `ligamen-impact` server entry
+- [ ] Bump root `marketplace.json` to `5.2.0` — `.claude-plugin/marketplace.json` `"version"` field
+- [ ] Bump all other manifests to `5.2.0` — `plugins/ligamen/.claude-plugin/marketplace.json`, `plugins/ligamen/.claude-plugin/plugin.json`, `plugins/ligamen/runtime-deps.json`
 
-### Add After Validation (v2.3.x)
+### Add After Validation (v5.2.x)
 
-- [ ] `/api/graph` endpoint enrichment: include `exposed_items` count per node so the UI can show
-  "14 exports" or "8 resources" on the node tooltip — add only if users ask for it
-- [ ] Re-scan existing library/infra repos to populate `raw_text` correctly — no code needed, just
-  operator action; document in CHANGELOG
+- [ ] Makefile `bump-version` target — automates keeping all four version files in sync; trigger: any version drift found in CI or during next release
+- [ ] Bats tests for `install-runtime-deps.sh` — cover: first run, already-installed idempotency, npm missing fallback, failed install cleanup; trigger: any CI failure on install script
 
-### Future Consideration (v2.4+)
+### Future Consideration (v6+)
 
-- [ ] Diff panel: "these 3 exports were removed since last scan" — requires scan version history UI
-  (deferred to v2.4, depends on map_versions browsability)
-- [ ] Filter panel content (show only functions, hide types) — revisit only if users report panels
-  with 50+ exports
+- [ ] Declarative plugin dependency manifest (if Anthropic ships [issue #27113](https://github.com/anthropics/claude-code/issues/27113)) — would replace the manual npm install hook pattern with Claude Code managing the install lifecycle natively; the `runtime-deps.json` file already serves as the data source for this
 
 ---
 
@@ -149,43 +128,73 @@ detail panel."
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Migration 007 (raw_text + boundary_entry columns) | HIGH — foundation for everything else | LOW — additive migration, no data loss | P1 — must ship first |
-| Fix `persistFindings()` type-conditional storage | HIGH — current data is unusable for library/infra | MEDIUM — branch on `svc.type`, keep REST path for services | P1 — required |
-| `renderLibraryPanel()` with functions/types grouping | HIGH — library node clicks currently show confusing data | MEDIUM — new render function replacing scaffold | P1 — required |
-| `renderInfraPanel()` with resource grouping | HIGH — infra node clicks currently show garbled REST output | MEDIUM — new render function, uses existing connection data for deploy/configure | P1 — required |
-| Update `showDetailPanel()` dispatch for `infra` type | HIGH — without this the infra panel function is never called | LOW — add one branch to existing type check | P1 — required |
-| Source file link (boundary_entry) | MEDIUM — nice to have, helps navigation | LOW — store one extra field, display in panel header | P2 — ship in same PR if easy |
-| Groups by prefix in infra panel | MEDIUM — improves scannability for repos with many resources | LOW — pure display logic, no data changes | P2 — include in renderInfraPanel() |
+| SessionStart install hook + install script | HIGH — MCP server broken without it | LOW — ~30 lines of shell | P1 |
+| `NODE_PATH` in `.mcp.json` | HIGH — MCP server broken without it | LOW — one env key in JSON | P1 |
+| High timeout on install hook entry | HIGH — first-run install silently killed without it | LOW — one integer change | P1 |
+| Root marketplace.json version sync (5.2.0) | MEDIUM — users discover/install wrong version | LOW — one field in JSON | P1 |
+| All manifest files bumped to 5.2.0 | MEDIUM — consistency, avoids confusion | LOW — four field changes | P1 |
+| Makefile version-bump target | MEDIUM — prevents future drift | MEDIUM — jq/sed script | P2 |
+| Bats tests for install script | MEDIUM — CI confidence | MEDIUM — bats fixtures needed | P2 |
 
 **Priority key:**
-- P1: Required for v2.3 to meet its stated goal
-- P2: Include in same PR if it adds no risk; defer if it does
+- P1: Required for v5.2.0 to meet its goal (MCP server works from marketplace install)
+- P2: Should have; include in same PR if low risk, otherwise next patch
 - P3: Future consideration
 
 ---
 
-## Industry Reference: How Comparable Tools Handle This
+## Ecosystem Reference: Official Pattern (HIGH confidence)
 
-| Tool | Type differentiation in detail panel | Library panel content | Infra/resource panel content |
-|------|-------------------------------------|-----------------------|-----------------------------|
-| **Backstage catalog** | Separate entity pages per Kind (Component, Resource, API, Library). Each Kind has a different default tab set. Library components show "Provided APIs", "Consumed APIs", "Dependencies". | Exported APIs listed by name and type; dependencies on other catalog entities | Resource entities show owner, system, and linked components — not raw IaC files |
-| **GitHub Dependency Graph** | Differentiates packages (libraries) from runtime services. Library packages show: exports (from package manifest), consumers (repositories that depend on it), vulnerability alerts. | Exports derived from `package.json` exports field or SBOM manifest; shown as package name + version | No infra node type; closest equivalent is the "environments" tab which shows deployment targets per repo |
-| **Novatec Service Dependency Graph (Grafana)** | All nodes are services; no library or infra distinction. Detail tooltip shows: response time, error rate, request rate per connection. | N/A | N/A |
-| **DependenTree (Square)** | Differentiates library packages from service applications. Library nodes show exports at function level (which functions are actually called by consumers, derived from static analysis). | Function-level export + call-site mapping — the "what is actually used" view, not just "what is exported" | N/A |
-| **AllClear v2.3 (target)** | Three types: service (circle), library (hexagon), infra (diamond). Service panel: unchanged (calls/called-by with mismatch detection). Library panel: exported API surface + consumer list. Infra panel: managed resources grouped by prefix + deploy/configure connections. | Exports from scan data (function signatures + type names); consumers from connection edges | Resources from scan data (k8s/tf/helm prefixed strings); deploy/configure targets from connection edges |
+The official Claude Code docs ([plugins-reference](https://code.claude.com/docs/en/plugins-reference)) document this exact pattern:
 
-**Key insight from industry reference:** Backstage and DependenTree both show the library's exports as the primary content of a library node — not just its connections. This validates the v2.3 design direction. No tool in this category shows the "Used by" list as the primary content for a library; it is secondary to the export surface. AllClear's current scaffold has this inverted (connections first, no exports).
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "diff -q \"${CLAUDE_PLUGIN_ROOT}/package.json\" \"${CLAUDE_PLUGIN_DATA}/package.json\" >/dev/null 2>&1 || (cd \"${CLAUDE_PLUGIN_DATA}\" && cp \"${CLAUDE_PLUGIN_ROOT}/package.json\" . && npm install) || rm -f \"${CLAUDE_PLUGIN_DATA}/package.json\""
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+And the `NODE_PATH` MCP server pattern:
+
+```json
+{
+  "mcpServers": {
+    "routines": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server.js"],
+      "env": {
+        "NODE_PATH": "${CLAUDE_PLUGIN_DATA}/node_modules"
+      }
+    }
+  }
+}
+```
+
+Ligamen should use `runtime-deps.json` instead of `package.json` as the diff target, and add
+`--omit=dev` to the `npm install` invocation to skip devDependencies.
+
+The `${CLAUDE_PLUGIN_DATA}` directory resolves to `~/.claude/plugins/data/{id}/` where `{id}` is
+the plugin identifier with special characters replaced by `-`. It is created automatically on first
+reference. It persists across plugin updates and is only deleted on full uninstall.
 
 ---
 
 ## Sources
 
-- Codebase inspection: `worker/ui/modules/detail-panel.js`, `worker/db/query-engine.js:797–815`, `worker/db/migrations/003_exposed_endpoints.js`, `worker/scan/agent-prompt-library.md`, `worker/scan/agent-prompt-infra.md`, `worker/scan/agent-schema.json` — HIGH confidence (source of truth)
-- Backstage Software Catalog system model — [backstage.io/docs/features/software-catalog/system-model](https://backstage.io/docs/features/software-catalog/system-model/) — MEDIUM confidence (industry reference for type-differentiated catalog UI)
-- DependenTree, Square's graph visualization library — [developer.squareup.com/blog/dependentree-graph-visualization-library](https://developer.squareup.com/blog/dependentree-graph-visualization-library/) — MEDIUM confidence (function-level library export display reference)
-- GitHub Dependency Graph documentation — [docs.github.com/code-security/supply-chain-security](https://docs.github.com/code-security/supply-chain-security/understanding-your-software-supply-chain/about-the-dependency-graph) — MEDIUM confidence (library vs service type distinction)
-- Novatec Service Dependency Graph panel — [grafana.com/grafana/plugins/novatec-sdg-panel](https://grafana.com/grafana/plugins/novatec-sdg-panel/) — MEDIUM confidence (comparison: service-only tool with no library/infra differentiation)
+- [Claude Code Plugins Reference — official docs](https://code.claude.com/docs/en/plugins-reference) — HIGH confidence; canonical source for `CLAUDE_PLUGIN_DATA`, `NODE_PATH` pattern, SessionStart install hook, version management warnings, data directory path resolution
+- Direct code inspection of `plugins/ligamen/.mcp.json`, `plugins/ligamen/runtime-deps.json`, `plugins/ligamen/.claude-plugin/plugin.json`, `plugins/ligamen/.claude-plugin/marketplace.json`, `.claude-plugin/marketplace.json`, `plugins/ligamen/hooks/hooks.json`, `plugins/ligamen/scripts/session-start.sh`, `plugins/ligamen/worker/mcp/server.js` — HIGH confidence (source of truth for current state)
+- [Claude Code GitHub Issue #27113 — Declarative plugin dependencies](https://github.com/anthropics/claude-code/issues/27113) — MEDIUM confidence; feature request, not yet shipped
 
 ---
-*Feature research for: AllClear v2.3 — Type-Specific Detail Panels*
-*Researched: 2026-03-17*
+*Feature research for: Ligamen v5.2.0 — Plugin Distribution Fix (runtime deps + MCP server auto-start)*
+*Researched: 2026-03-21*

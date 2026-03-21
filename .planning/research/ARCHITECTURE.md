@@ -1,330 +1,364 @@
 # Architecture Research
 
-**Domain:** AllClear v2.3 — Type-Specific Detail Panels (library exports, infra resources)
-**Researched:** 2026-03-17
-**Confidence:** HIGH — based on direct source code inspection of all affected modules
+**Domain:** Ligamen v5.2.0 — Plugin Distribution Fix (Runtime Dependency Installation + NODE_PATH MCP Launch)
+**Researched:** 2026-03-21
+**Confidence:** HIGH — based on direct source inspection of all affected components
 
 ---
 
 ## Context
 
-This file covers v2.3 integration architecture only. Previous v2.2 migration research has been superseded. The question answered here: how do type-specific detail panels integrate with the existing architecture, what components change, what is new, and in what order should work proceed?
+This file covers v5.2.0 integration architecture only. The single question answered: how do runtime dependency
+installation via SessionStart hook and NODE_PATH-based MCP server launching integrate with the existing plugin
+architecture? What changes, what is new, and in what order should work proceed?
+
+---
+
+## The Distribution Problem
+
+When a user installs Ligamen from the marketplace (`claude plugin marketplace add` + `claude plugin install`):
+
+1. Claude Code copies plugin source to an install location (inaccessible path, no `node_modules`)
+2. `CLAUDE_PLUGIN_ROOT` is set to that install location at runtime
+3. The `.mcp.json` tells Claude to run `node ${CLAUDE_PLUGIN_ROOT}/worker/mcp/server.js`
+4. `server.js` opens with bare ESM imports: `import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"`
+5. Node.js fails — there are no `node_modules` at `CLAUDE_PLUGIN_ROOT`
+6. MCP server never starts; all 8 impact/drift tools are unavailable
+
+The fix has two parts that must work together:
+
+- **Install side:** SessionStart hook installs npm deps into `${CLAUDE_PLUGIN_DATA}` on first run
+- **Launch side:** `.mcp.json` passes `NODE_PATH` env var pointing at installed deps so Node.js finds modules
 
 ---
 
 ## Existing System Overview
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          Agent Scan Layer                                │
-│  agent-prompt-service.md   agent-prompt-library.md   agent-prompt-infra.md│
-│          ↓                         ↓                         ↓           │
-│          └──────── agent-schema.json (shared output shape) ──────────────┘
-│                                                                          │
-│  exposes format is TYPE-CONDITIONAL:                                     │
-│    service  → "METHOD /path"  e.g. "GET /users"                         │
-│    library  → "fnName(param: T): R"  or just "TypeName"                 │
-│    infra    → "k8s:deployment/name"  "tf:output/name"  etc.             │
-└──────────────────────────────┬───────────────────────────────────────────┘
-                               │ findings JSON → POST /scan
-┌──────────────────────────────▼───────────────────────────────────────────┐
-│                      Persistence Layer (query-engine.js)                 │
-│  persistFindings(repoId, findings, commit, scanVersionId)                │
-│                                                                          │
-│  BROKEN SECTION (lines 797-815):                                         │
-│    for (const endpoint of svc.exposes) {                                 │
-│      const parts = endpoint.trim().split(/\s+/);   // "METHOD PATH" only │
-│      const method = parts.length > 1 ? parts[0] : null;                 │
-│      const path   = parts.length > 1 ? parts[1] : parts[0];             │
-│      INSERT INTO exposed_endpoints(service_id, method, path, handler)   │
-│    }                                                                     │
-│  → library exports: method="createClient(config:", path="ClientConfig):" │
-│  → infra resources: method="k8s:deployment/payment-service", path=null  │
-└──────────────────────────────┬───────────────────────────────────────────┘
-                               │ SQLite (WAL, per-project DB)
-┌──────────────────────────────▼───────────────────────────────────────────┐
-│                        Database Layer                                    │
-│  exposed_endpoints (id, service_id, method TEXT, path TEXT NOT NULL,     │
-│                     handler TEXT)                                        │
-│  UNIQUE(service_id, method, path)                                        │
-│                                                                          │
-│  services (id, repo_id, name, root_path, language, type,                 │
-│            scan_version_id)   ← `type` column added in migration 002    │
-└──────────────────────────────┬───────────────────────────────────────────┘
-                               │ getGraph() → { services, connections,
-                               │               repos, mismatches }
-                               │ NOTE: exposes NOT included in getGraph() today
-┌──────────────────────────────▼───────────────────────────────────────────┐
-│                        HTTP API Layer (http.js)                          │
-│  GET /graph   → qe.getGraph()      (passes result through unchanged)     │
-│  Services array includes `type` field from DB — detail panel uses it    │
-└──────────────────────────────┬───────────────────────────────────────────┘
-                               │ JSON
-┌──────────────────────────────▼───────────────────────────────────────────┐
-│                          UI Layer                                        │
-│  loadProject() → state.graphData.nodes (each node has id/name/type/      │
-│                  language/repo_name — NO exposes field today)            │
-│                                                                          │
-│  interactions.js click → showDetailPanel(node)                           │
-│                                                                          │
-│  detail-panel.js:                                                        │
-│    getNodeType(node):                                                    │
-│      "library"|"sdk" → renderLibraryConnections(outgoing, incoming, ...) │
-│      else             → renderServiceConnections(outgoing, incoming, ...) │
-│    MISSING: no "infra" branch in getNodeType() or detail-panel routing   │
-└──────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                         Claude Code Plugin Runtime                               │
+│                                                                                  │
+│   CLAUDE_PLUGIN_ROOT=/path/to/installed/plugin  (set by Claude Code)            │
+│   CLAUDE_PLUGIN_DATA=/path/to/plugin/data       (writable per-plugin storage)  │
+│   CLAUDE_PLUGIN_CONFIG=...                       (plugin config dir)            │
+└──────────────┬───────────────────────────────────────────────┬───────────────────┘
+               │                                               │
+               ▼                                               ▼
+┌──────────────────────────────┐           ┌──────────────────────────────────────┐
+│         Hook Layer           │           │           MCP Layer                  │
+│  hooks/hooks.json            │           │  .mcp.json (per-plugin)              │
+│                              │           │                                      │
+│  SessionStart →              │           │  ligamen-impact server:              │
+│    scripts/session-start.sh  │           │    command: node                     │
+│                              │           │    args: [${CLAUDE_PLUGIN_ROOT}/     │
+│  PostToolUse (Write|Edit) →  │           │           worker/mcp/server.js]      │
+│    scripts/format.sh         │           │    env: {}    ← MISSING NODE_PATH    │
+│    scripts/lint.sh           │           │                                      │
+│                              │           │  server.js bare ESM imports:         │
+│  PreToolUse (Write|Edit) →   │           │    @modelcontextprotocol/sdk         │
+│    scripts/file-guard.sh     │           │    better-sqlite3                    │
+│                              │           │    fastify, zod, chromadb            │
+└──────────────────────────────┘           └──────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│      session-start.sh        │           ┌─────────────────────────────────────┐
+│  (current, pre-v5.2)         │           │         Data Directory              │
+│                              │           │  ~/.ligamen/  (LIGAMEN_DATA_DIR)    │
+│  1. Dedup by SESSION_ID      │           │  ├── worker.pid / worker.port       │
+│  2. Source worker-client.sh  │           │  ├── settings.json                  │
+│  3. Auto-start worker if     │           │  ├── projects/<hash>/               │
+│     ligamen.config.json      │           │  │   └── impact-map.db (SQLite)     │
+│     has [impact-map] key     │           │  └── logs/                          │
+│  4. Detect project type      │           │                                     │
+│  5. Emit additionalContext   │           │  CLAUDE_PLUGIN_DATA (new in v5.2)   │
+│     JSON to stdout           │           │  └── node_modules/ ← TO BE CREATED  │
+└──────────────────────────────┘           └─────────────────────────────────────┘
+```
+
+---
+
+## v5.2.0 Target Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                         Claude Code Plugin Runtime                               │
+│   CLAUDE_PLUGIN_ROOT  — plugin source (read-only after install)                  │
+│   CLAUDE_PLUGIN_DATA  — writable per-plugin data dir (npm install target)        │
+└──────────────┬───────────────────────────────────────────────┬───────────────────┘
+               │                                               │
+               ▼                                               ▼
+┌──────────────────────────────┐           ┌──────────────────────────────────────┐
+│         Hook Layer           │           │           MCP Layer (MODIFIED)       │
+│  hooks/hooks.json (UNCHANGED)│           │  .mcp.json                           │
+│                              │           │                                      │
+│  SessionStart →              │           │  ligamen-impact server:              │
+│    scripts/session-start.sh  │           │    command: node                     │
+│    (MODIFIED: adds dep       │           │    args: [${CLAUDE_PLUGIN_ROOT}/     │
+│     install step)            │           │           worker/mcp/server.js]      │
+│                              │           │    env:                              │
+│                              │           │      NODE_PATH: ${CLAUDE_PLUGIN_DATA}│
+│                              │           │               /node_modules          │
+└──────────────────────────────┘           └──────────────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                    session-start.sh (MODIFIED — new Step 0)                      │
+│                                                                                  │
+│  Step 0 (NEW): Runtime dep install                                               │
+│    - Check CLAUDE_PLUGIN_DATA is set and writable                                │
+│    - Check ${CLAUDE_PLUGIN_DATA}/.ligamen-deps-version                           │
+│    - If version missing or != current plugin version → run npm install           │
+│      npm install --prefix ${CLAUDE_PLUGIN_DATA}                                  │
+│               --no-save --no-package-lock                                        │
+│               --ignore-scripts                                                   │
+│               $(jq -r deps from runtime-deps.json | format as pkg@ver)          │
+│    - On success: write version stamp to .ligamen-deps-version                    │
+│    - On failure: exit 0 (non-blocking; MCP server will just fail gracefully)     │
+│                                                                                  │
+│  Step 1 (UNCHANGED): Dedup by SESSION_ID flag file                               │
+│  Step 2 (UNCHANGED): Source worker-client.sh, auto-start worker                 │
+│  Step 3 (UNCHANGED): Detect project type                                         │
+│  Step 4 (UNCHANGED): Emit additionalContext JSON                                 │
+└──────────────────────────────────────────────────────────────────────────────────┘
+               │ npm install
+               ▼
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                    CLAUDE_PLUGIN_DATA/                                           │
+│  ├── node_modules/                     ← npm install target                     │
+│  │   ├── @modelcontextprotocol/sdk/                                             │
+│  │   ├── better-sqlite3/                                                         │
+│  │   ├── fastify/                                                                │
+│  │   ├── @fastify/cors/                                                          │
+│  │   ├── @fastify/static/                                                        │
+│  │   ├── chromadb/                                                               │
+│  │   └── zod/                                                                   │
+│  └── .ligamen-deps-version             ← version stamp (e.g. "5.2.0")          │
+└──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Component Responsibilities
 
-| Component | Current Responsibility | v2.3 Change |
-|-----------|----------------------|-------------|
-| `migrations/007_expose_kind.js` | Does not exist | NEW: add `kind` column to `exposed_endpoints` |
-| `persistFindings()` in `query-engine.js` | Stores exposes via "METHOD PATH" split (broken for lib/infra) | MODIFIED: dispatch on `svc.type` to set correct `kind`, store raw string for lib/infra |
-| `getGraph()` in `query-engine.js` | Returns services/connections/repos/mismatches — no exposes | MODIFIED: attach `exposes` array per service node |
-| `GET /graph` in `http.js` | Passes `qe.getGraph()` through | UNCHANGED: additive response shape change is transparent |
-| `loadProject()` in UI JS | Builds `state.graphData.nodes` from API response | UNCHANGED: nodes will now carry `exposes` array automatically |
-| `utils.js getNodeType()` | Returns "library", "sdk", "frontend", "service" — no "infra" | MODIFIED: add `if (node.type === 'infra') return 'infra'` guard |
-| `state.js NODE_TYPE_COLORS` | Colors for library/sdk/frontend/service | MODIFIED: add `infra` color entry |
-| `detail-panel.js showDetailPanel()` | Routes to renderLibraryConnections or renderServiceConnections | MODIFIED: add `infra` branch; pass `node` to library renderer |
-| `detail-panel.js renderLibraryConnections()` | Shows "Provides" (outgoing) and "Used by" (incoming) | MODIFIED: add `node` param; render `node.exposes` (kind=export) as "Exports" section |
-| `detail-panel.js renderInfraConnections()` | Does not exist | NEW: show `node.exposes` (kind=resource) and outgoing edges labeled deploy/configure |
+| Component | Responsibility | v5.2.0 Change |
+|-----------|----------------|---------------|
+| `hooks/hooks.json` | Hook event routing — SessionStart, PostToolUse, PreToolUse | UNCHANGED |
+| `scripts/session-start.sh` | Session initialization: context injection, worker start | MODIFIED: add Step 0 dep install before existing logic |
+| `.mcp.json` | MCP server spawn config — command, args, env | MODIFIED: add `env.NODE_PATH` pointing to installed deps |
+| `runtime-deps.json` | Manifest of npm packages needed by MCP server | NEW FILE (already exists in repo — needs to be the authoritative source) |
+| `.claude-plugin/plugin.json` | Plugin metadata: name, version, author | MODIFIED: version bump to match milestone |
+| `.claude-plugin/marketplace.json` (plugin-level) | Marketplace listing metadata | MODIFIED: version sync |
+| `.claude-plugin/marketplace.json` (root-level) | Repo-level marketplace discovery | MODIFIED: version sync |
+| `package.json` | npm package metadata for dev install path | MODIFIED: version sync |
+| `worker/mcp/server.js` | MCP server — 8 tools for impact + drift queries | UNCHANGED: Node.js ESM resolution will find modules via NODE_PATH |
+| Root `.mcp.json` | Dev repo MCP config | UNCHANGED: already `{"mcpServers": {}}` — correct for dev repo |
 
 ---
 
 ## Key Integration Points
 
-### 1. Migration 007: Add `kind` Column to `exposed_endpoints`
+### 1. SESSION_ID Deduplication vs. Dep Install Timing
 
-**File:** `worker/db/migrations/007_expose_kind.js`
-**Type:** New file
+**The tension:** session-start.sh has a dedup guard (exits 0 if flag file for SESSION_ID already exists). The dep install step must happen BEFORE the dedup check, or it will only run on the very first session and never again after updates.
 
-The existing `exposed_endpoints` table was designed for HTTP endpoints only. For v2.3 it becomes a generic "service surface" table by adding a `kind` discriminant:
+**Resolution:** Place dep install as Step 0, before the SESSION_ID flag file check. The install itself is idempotent (version stamp prevents unnecessary reinstalls), so running it every session start is safe — the stamp check makes it near-zero cost after first install.
 
-```sql
-ALTER TABLE exposed_endpoints ADD COLUMN kind TEXT NOT NULL DEFAULT 'endpoint';
+```
+session-start.sh execution order:
+  1. (NEW) Dep install check: CLAUDE_PLUGIN_DATA version stamp ≠ plugin version → npm install
+  2. (existing) SESSION_ID dedup: exit if flag file exists
+  3. (existing) Worker auto-start
+  4. (existing) Project detection
+  5. (existing) Emit additionalContext JSON
 ```
 
-`kind` values:
-- `'endpoint'` — HTTP verb + path (service type; existing rows default to this)
-- `'export'`   — function signature or exported type name (library/sdk)
-- `'resource'` — infrastructure resource reference (infra; k8s/tf/helm/compose prefixed)
+### 2. NODE_PATH Resolution in .mcp.json
 
-The UNIQUE constraint `(service_id, method, path)` continues to work correctly:
-- For `endpoint` rows: method = HTTP verb, path = URL path
-- For `export` rows: method = NULL, path = full function signature string
-- For `resource` rows: method = NULL, path = full resource ref string
+**What NODE_PATH does:** When set, Node.js searches these directories for modules before its normal resolution path. A module imported as `@modelcontextprotocol/sdk/server/mcp.js` will be found at `${NODE_PATH}/@modelcontextprotocol/sdk/server/mcp.js`.
 
-No column rename needed. `path` holding non-URL strings for lib/infra is semantically odd but practically fine — it is never parsed by the mismatch detection query, only displayed.
+**The variable:** `.mcp.json` env values support `${CLAUDE_PLUGIN_DATA}` expansion. The path must be `${CLAUDE_PLUGIN_DATA}/node_modules` — the direct `node_modules` dir, not the parent.
 
-**Why not separate tables:** A single table with `kind` means one query to fetch all surface data for any node, one FTS5 virtual table covers all types in the future, and the `detectMismatches()` query keeps its existing `EXISTS (SELECT 1 FROM exposed_endpoints WHERE service_id = ...)` check — no JOIN across tables.
-
-### 2. `persistFindings()` — Type-Conditional Dispatch
-
-**File:** `worker/db/query-engine.js` — lines 797-815
-**Type:** Modify existing
-
-Current code treats every `svc.exposes` item as `"METHOD PATH"`. Replace with dispatch on `svc.type`:
-
-```javascript
-// Replace lines 797-815 in persistFindings():
-for (const svc of findings.services || []) {
-  const svcId = serviceIdMap.get(svc.name);
-  if (!svcId || !svc.exposes) continue;
-
-  for (const item of svc.exposes) {
-    let method = null;
-    let path = item.trim();
-    let kind = 'endpoint';
-
-    if (svc.type === 'service') {
-      const parts = item.trim().split(/\s+/);
-      if (parts.length > 1) { method = parts[0]; path = parts[1]; }
-      kind = 'endpoint';
-    } else if (svc.type === 'library' || svc.type === 'sdk') {
-      kind = 'export';
-      // method stays null, path is raw function signature or type name
-    } else if (svc.type === 'infra') {
-      kind = 'resource';
-      // method stays null, path is raw resource ref ("k8s:deployment/name")
+**Current `.mcp.json`:**
+```json
+{
+  "mcpServers": {
+    "ligamen-impact": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/worker/mcp/server.js"]
     }
-
-    try {
-      this._db.prepare(
-        'INSERT OR IGNORE INTO exposed_endpoints (service_id, method, path, handler, kind) VALUES (?, ?, ?, ?, ?)'
-      ).run(svcId, method, path, svc.boundary_entry || null, kind);
-    } catch { /* ignore duplicates */ }
   }
 }
 ```
 
-The `INSERT OR IGNORE` (matching existing code style) relies on the UNIQUE(service_id, method, path) constraint. For library/infra rows, `method` is always NULL so uniqueness is purely by `(service_id, path)`.
-
-### 3. `getGraph()` — Attach exposes to Service Nodes
-
-**File:** `worker/db/query-engine.js` — `getGraph()` method
-**Type:** Modify existing
-
-Currently `getGraph()` returns services with no `exposes` field. The detail panel needs exposes to render export/resource sections without an additional API call.
-
-Add after the services query:
-
-```javascript
-// After the services.all() call in getGraph():
-const allExposes = this._db.prepare(
-  'SELECT service_id, method, path, kind FROM exposed_endpoints'
-).all();
-
-const exposesByServiceId = {};
-for (const row of allExposes) {
-  if (!exposesByServiceId[row.service_id]) exposesByServiceId[row.service_id] = [];
-  exposesByServiceId[row.service_id].push(row);
-}
-for (const svc of services) {
-  svc.exposes = exposesByServiceId[svc.id] || [];
-}
-```
-
-The response shape change is additive — callers that ignore `exposes` (e.g. MCP tools, `/impact` route) are unaffected.
-
-### 4. `utils.js` — Add `infra` to `getNodeType()` and Color Map
-
-**File:** `worker/ui/modules/utils.js` and `worker/ui/modules/state.js`
-**Type:** Modify existing
-
-Without this fix, `infra` nodes fall through to `getNodeType()` returning `"service"`, and `showDetailPanel()` never reaches the infra renderer branch.
-
-In `utils.js`:
-```javascript
-export function getNodeType(node) {
-  if (node.type === 'infra') return 'infra';           // ADD THIS LINE
-  if (node.type === 'library' || node.type === 'sdk') return node.type;
-  if (node.name && /sdk|lib|client|shared|common/i.test(node.name)) return 'library';
-  if (node.name && /ui|frontend|web|dashboard|app/i.test(node.name)) return 'frontend';
-  return 'service';
-}
-```
-
-In `state.js` `NODE_TYPE_COLORS`:
-```javascript
-export const NODE_TYPE_COLORS = {
-  library:  '#9f7aea',
-  sdk:      '#9f7aea',
-  infra:    '#68d391',   // green — infrastructure/ops
-  frontend: '#f6ad55',
-  service:  '#4299e1',
-};
-```
-
-`getNodeColor()` in `utils.js` also needs the infra guard:
-```javascript
-export function getNodeColor(node) {
-  if (node.type === 'infra') return NODE_TYPE_COLORS.infra;   // ADD
-  if (node.type === 'library' || node.type === 'sdk') return NODE_TYPE_COLORS.library;
-  ...
-}
-```
-
-### 5. `detail-panel.js` — Three Render Paths
-
-**File:** `worker/ui/modules/detail-panel.js`
-**Type:** Modify existing
-
-**Routing change in `showDetailPanel()`:**
-```javascript
-// Replace the isLib conditional:
-if (nodeType === 'infra') {
-  html += renderInfraConnections(node, outgoing, nameById);
-} else if (nodeType === 'library' || nodeType === 'sdk') {
-  html += renderLibraryConnections(node, outgoing, incoming, nameById);
-} else {
-  html += renderServiceConnections(outgoing, incoming, nameById);  // unchanged
-}
-```
-
-**`renderLibraryConnections` signature change** (add `node` as first param):
-
-The function currently renders "Provides" and "Used by" from edge data alone. With `node.exposes` available, it should render an "Exports" section listing the actual function signatures:
-
-```javascript
-function renderLibraryConnections(node, outgoing, incoming, nameById) {
-  let html = '';
-
-  // Exports section — from exposes data
-  const exports = (node.exposes || []).filter(e => e.kind === 'export');
-  if (exports.length > 0) {
-    html += `<div class="detail-section">
-      <div class="detail-label">Exports (${exports.length})</div>`;
-    for (const ex of exports) {
-      html += `<div class="connection-item">
-        <div class="conn-path">${ex.path}</div>
-      </div>`;
-    }
-    html += `</div>`;
-  }
-
-  // Used by — from incoming edges (deduplicated by service name)
-  if (incoming.length > 0) {
-    html += `<div class="detail-section">
-      <div class="detail-label">Used by (${incoming.length} services)</div>`;
-    const users = new Set();
-    for (const e of incoming) {
-      const source = nameById[e.source_service_id] || '?';
-      if (!users.has(source)) {
-        users.add(source);
-        html += `<div class="connection-item">
-          <div><span class="conn-target">${source}</span></div>
-          ${e.source_file ? `<div class="conn-file">${e.source_file}</div>` : ''}
-        </div>`;
+**Target `.mcp.json`:**
+```json
+{
+  "mcpServers": {
+    "ligamen-impact": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/worker/mcp/server.js"],
+      "env": {
+        "NODE_PATH": "${CLAUDE_PLUGIN_DATA}/node_modules"
       }
     }
-    html += `</div>`;
   }
-
-  return html;
 }
 ```
 
-**New `renderInfraConnections()` function:**
+**Why not `--require` or `--loader`:** NODE_PATH is the standard mechanism for redirecting module resolution without modifying source. It works with ESM (`import`) when Node.js falls through to `NODE_PATH` directories after failing local resolution.
 
-```javascript
-function renderInfraConnections(node, outgoing, nameById) {
-  let html = '';
+**Confidence note:** Claude Code's variable expansion of `${CLAUDE_PLUGIN_DATA}` in `.mcp.json` `env` blocks should be confirmed against official docs. The `${CLAUDE_PLUGIN_ROOT}` pattern in `args` is proven to work (it's in the existing hooks.json). Extension to `env` values is likely but not confirmed from source.
 
-  // Managed resources — from exposes data
-  const resources = (node.exposes || []).filter(e => e.kind === 'resource');
-  if (resources.length > 0) {
-    html += `<div class="detail-section">
-      <div class="detail-label">Manages (${resources.length})</div>`;
-    for (const r of resources) {
-      html += `<div class="connection-item">
-        <div class="conn-path">${r.path}</div>
-      </div>`;
-    }
-    html += `</div>`;
-  }
+### 3. runtime-deps.json as Authoritative Manifest
 
-  // Configures/Deploys — outgoing connections
-  if (outgoing.length > 0) {
-    html += `<div class="detail-section">
-      <div class="detail-label">Wires (${outgoing.length})</div>`;
-    for (const e of outgoing) {
-      const target = nameById[e.target_service_id] || '?';
-      html += `<div class="connection-item">
-        <div><span class="conn-method">${e.method || e.protocol}</span>
-             <span class="conn-path">${e.path || ''}</span></div>
-        <div class="conn-direction">→ <span class="conn-target">${target}</span></div>
-        ${e.source_file ? `<div class="conn-file">${e.source_file}</div>` : ''}
-      </div>`;
-    }
-    html += `</div>`;
-  }
+**Current state:** `runtime-deps.json` exists at `plugins/ligamen/runtime-deps.json` with correct deps. `package.json` also has the same deps listed as `dependencies`. There are now two sources of truth.
 
-  return html;
-}
+**Integration:** `session-start.sh` Step 0 must read from `runtime-deps.json`, not `package.json`. Reading `package.json` would install all deps including dev tooling. `runtime-deps.json` is intentionally trimmed to MCP server needs only.
+
+**Install command pattern:**
+```bash
+# Read runtime-deps.json, format as "pkg@version" list, pass to npm install
+DEPS_JSON="${CLAUDE_PLUGIN_ROOT}/runtime-deps.json"
+INSTALL_ARGS=$(jq -r '
+  .dependencies // {} |
+  to_entries[] |
+  "\(.key)@\(.value | ltrimstr("^") | ltrimstr("~"))"
+' "$DEPS_JSON")
+npm install --prefix "${CLAUDE_PLUGIN_DATA}" \
+  --no-save --no-package-lock --ignore-scripts \
+  $INSTALL_ARGS
 ```
+
+Note: `optionalDependencies` (chromadb embed) should be handled separately — pass `--no-optional` on main install, attempt optional in a second pass that exits 0 on failure.
+
+### 4. Version Stamp Mechanism
+
+**Purpose:** Prevents npm install from running on every session start after deps are already installed. Also ensures deps are re-installed after plugin upgrade.
+
+**Location:** `${CLAUDE_PLUGIN_DATA}/.ligamen-deps-version`
+**Contents:** The plugin version string (e.g., `5.2.0`)
+**Source of truth for version:** `${CLAUDE_PLUGIN_ROOT}/runtime-deps.json` `.version` field
+
+**Logic:**
+```bash
+STAMP="${CLAUDE_PLUGIN_DATA}/.ligamen-deps-version"
+CURRENT_VERSION=$(jq -r '.version // empty' "${CLAUDE_PLUGIN_ROOT}/runtime-deps.json" 2>/dev/null)
+INSTALLED_VERSION=$(cat "$STAMP" 2>/dev/null || echo "")
+
+if [[ "$INSTALLED_VERSION" == "$CURRENT_VERSION" && -d "${CLAUDE_PLUGIN_DATA}/node_modules" ]]; then
+  # Deps are current — skip install
+  :
+else
+  # Install (or re-install on version mismatch)
+  npm install ... && echo "$CURRENT_VERSION" > "$STAMP"
+fi
+```
+
+### 5. Version Sync Across Manifest Files
+
+Four files carry the plugin version; they must stay in sync:
+
+| File | Field | Current |
+|------|-------|---------|
+| `plugins/ligamen/runtime-deps.json` | `.version` | 5.1.2 |
+| `plugins/ligamen/package.json` | `.version` | 5.1.2 |
+| `plugins/ligamen/.claude-plugin/plugin.json` | `.version` | 5.1.2 |
+| `plugins/ligamen/.claude-plugin/marketplace.json` | `.plugins[0].version` | 5.1.2 |
+| `.claude-plugin/marketplace.json` (root) | `.plugins[0].version` | 5.1.1 (STALE) |
+
+The root `.claude-plugin/marketplace.json` is already stale (5.1.1 vs 5.1.2). Version sync is a discrete, independent step with no code dependencies.
+
+---
+
+## Data Flow: v5.2.0 Runtime Boot
+
+```
+Claude Code starts new session
+    │
+    ▼
+SessionStart hook fires → session-start.sh
+    │
+    ├─ Step 0: Dep install check (NEW)
+    │   ├─ CLAUDE_PLUGIN_DATA set? → YES/NO
+    │   ├─ node_modules/ exists AND version stamp matches? → skip
+    │   └─ otherwise → npm install --prefix $CLAUDE_PLUGIN_DATA
+    │                  → write .ligamen-deps-version
+    │                  → exit 0 on failure (non-blocking)
+    │
+    ├─ Step 1: SESSION_ID dedup (unchanged)
+    ├─ Step 2: Worker auto-start (unchanged)
+    ├─ Step 3: Project detection (unchanged)
+    └─ Step 4: Emit additionalContext JSON (unchanged)
+
+Claude Code launches MCP server (separately, concurrently with hook)
+    │
+    ├─ Reads .mcp.json:
+    │   command: node
+    │   args: [${CLAUDE_PLUGIN_ROOT}/worker/mcp/server.js]
+    │   env: { NODE_PATH: "${CLAUDE_PLUGIN_DATA}/node_modules" }
+    │
+    └─ Node.js starts server.js
+        ├─ import { McpServer } from "@modelcontextprotocol/sdk/..."
+        │   └─ Node searches NODE_PATH → finds in $CLAUDE_PLUGIN_DATA/node_modules/
+        ├─ import Database from "better-sqlite3"
+        │   └─ Node searches NODE_PATH → finds native module
+        └─ MCP server initializes, 8 tools registered
+```
+
+**Timing consideration:** MCP server launch and SessionStart hook may run concurrently. The dep install in SessionStart may not complete before the MCP server starts. This is acceptable:
+- On first install: MCP server fails to start (deps not yet installed). User can restart session.
+- On subsequent sessions: deps are already installed (stamp exists); install step is a fast no-op; MCP server starts normally.
+- Alternative: move dep install to a pre-install script (if Claude Code supports it). No evidence this exists in the plugin format.
+
+---
+
+## Recommended Build Order
+
+Dependencies flow strictly from manifest → install logic → MCP config.
+
+### Step 1 — Version sync across all manifest files (MODIFY 5 files)
+
+**Files:**
+- `plugins/ligamen/runtime-deps.json` — bump `.version` to 5.2.0
+- `plugins/ligamen/package.json` — bump `.version` to 5.2.0
+- `plugins/ligamen/.claude-plugin/plugin.json` — bump `.version` to 5.2.0
+- `plugins/ligamen/.claude-plugin/marketplace.json` — bump `.plugins[0].version` to 5.2.0
+- `.claude-plugin/marketplace.json` (root) — bump `.plugins[0].version` to 5.2.0 (also fix stale 5.1.1)
+
+**Why first:** Dep install step reads version from `runtime-deps.json`. If version is wrong, stamp check logic breaks. Do this before writing any install logic.
+
+**Risk:** None — pure string changes, no logic.
+
+### Step 2 — Update .mcp.json with NODE_PATH env (MODIFY 1 file)
+
+**File:** `plugins/ligamen/.mcp.json`
+
+**What:** Add `env.NODE_PATH` pointing to `${CLAUDE_PLUGIN_DATA}/node_modules`.
+
+**Why second:** Independent of the install logic — can be verified in isolation. A user can manually run the install and test MCP server launch with NODE_PATH set before the hook is written.
+
+**Risk:** Low — additive JSON change. If `${CLAUDE_PLUGIN_DATA}` expansion doesn't work in env values, fallback is to use an absolute path (less portable) or a wrapper script.
+
+### Step 3 — Add dep install Step 0 to session-start.sh (MODIFY 1 file)
+
+**File:** `plugins/ligamen/scripts/session-start.sh`
+
+**What:** Insert dep install block before the SESSION_ID dedup check. Read version from `runtime-deps.json`, compare stamp, run npm install if needed, write stamp. Non-blocking (exit 0 on any failure).
+
+**Why third:** Depends on Step 1 (`runtime-deps.json` version must be correct). Step 2 can precede this because MCP config and install logic are independent.
+
+**Risk:** Moderate. The install step runs in a hook context; `npm` may not be on PATH in all environments. Mitigation: check `command -v npm` before attempting, exit 0 silently if absent.
+
+### Step 4 — Clean up root .mcp.json (VERIFY, no change needed)
+
+**File:** `/Users/ravichillerega/sources/ligamen/.mcp.json`
+
+**Current state:** `{"mcpServers": {}}` — already correct. This is the dev repo's MCP config; it should not register the MCP server (developers use the plugin-scoped `.mcp.json` for that).
+
+**Why last:** Verification only. If any cleanup is needed, it's isolated and safe to do last.
 
 ---
 
@@ -332,91 +366,48 @@ function renderInfraConnections(node, outgoing, nameById) {
 
 | Component | Reason |
 |-----------|--------|
-| `agent-prompt-service.md` | Service exposes format ("METHOD PATH") is correct as-is |
-| `agent-schema.json` | Already documents `exposes` as type-conditional; no structural change |
-| `GET /graph` route in `http.js` | Passes `qe.getGraph()` through; additive response shape is transparent |
-| `connections` table and all queries | Infra connections already store correctly (protocol=k8s/tf/helm, method=deploy/configure) |
-| `detectMismatches()` | Already filters on `protocol NOT IN ('internal','sdk','import')` — infra protocols (k8s/tf/helm) are excluded, so the mismatch query won't fire on infra nodes even after exposes data is stored |
-| `renderServiceConnections()` | Service panel is correct; no changes needed |
-| Web Worker / force simulation | Pure layout; unaffected |
-| MCP server tools | No `exposed_endpoints` queries in MCP tools; unaffected |
-| `loadProject()` in UI | Builds nodes from API response; `exposes` will flow through automatically once `getGraph()` returns it |
+| `hooks/hooks.json` | Hook event routing is correct; SessionStart already fires the right script |
+| `worker/mcp/server.js` | ESM imports are correct; NODE_PATH makes them findable at runtime |
+| `worker/index.js` | HTTP worker — started by worker-start.sh with full node_modules at plugin root (dev) or CLAUDE_PLUGIN_DATA (marketplace) |
+| `lib/worker-client.sh` | Worker HTTP helpers — no change |
+| `scripts/worker-start.sh` | Worker daemon launcher — no change |
+| All 8 MCP tool implementations | Pure business logic; module resolution is the only issue |
+| SQLite schema and migrations | No data model changes |
+| `worker/ui/` (graph UI) | Served from HTTP worker; not affected by MCP distribution changes |
 
 ---
 
-## Data Flow: v2.3 Changes
+## Anti-Patterns
 
-```
-Agent scan → findings.services[i].exposes (type-conditional strings)
-    │
-    ▼
-persistFindings() → dispatch on svc.type:
-    service  → kind='endpoint',  method=HTTP verb, path=URL path
-    library  → kind='export',    method=null,      path=fn signature / type name
-    infra    → kind='resource',  method=null,      path=k8s/tf/helm ref
-    │
-    ▼
-exposed_endpoints rows with kind discriminant
-    │
-    ▼
-getGraph() → attach svc.exposes = [{kind, method, path}, ...] to each service row
-    │
-    ▼
-GET /graph response → services[i].exposes present
-    │
-    ▼
-state.graphData.nodes[i].exposes = [...]  (loadProject() unchanged)
-    │
-    ▼
-showDetailPanel(node) → node.exposes available to all renderers:
-    infra   → renderInfraConnections(node, ...)
-              → node.exposes.filter(e => e.kind === 'resource')  "Manages" section
-              → outgoing edges labeled by method (deploy/configure)  "Wires" section
-    library → renderLibraryConnections(node, ...)
-              → node.exposes.filter(e => e.kind === 'export')    "Exports" section
-              → incoming edges deduplicated by source              "Used by" section
-    service → renderServiceConnections(...)  UNCHANGED
-```
+### Anti-Pattern 1: Run npm install on every session start
 
----
+**What people do:** Skip the version stamp and run `npm install` unconditionally at the start of each session.
+**Why wrong:** `npm install` for 7 packages including native addons (`better-sqlite3`) takes 5-30 seconds. This blocks every session start. The hook has a 10-second timeout in `hooks.json` — it would fire timeout errors regularly.
+**Do this instead:** Version stamp check. If `${CLAUDE_PLUGIN_DATA}/.ligamen-deps-version` matches `runtime-deps.json` `.version` and `node_modules/` exists, skip the install entirely. Near-zero overhead on subsequent sessions.
 
-## Recommended Build Order
+### Anti-Pattern 2: Install deps into CLAUDE_PLUGIN_ROOT
 
-Dependencies flow strictly bottom-up. Schema changes must land before application code that relies on them.
+**What people do:** Run `npm install` into the plugin source directory (`${CLAUDE_PLUGIN_ROOT}/node_modules`).
+**Why wrong:** `CLAUDE_PLUGIN_ROOT` is the plugin install location — it may be read-only. The correct writable per-plugin storage is `CLAUDE_PLUGIN_DATA`, which is explicitly provided for this purpose.
+**Do this instead:** Always target `--prefix ${CLAUDE_PLUGIN_DATA}`.
 
-### Step 1 — Migration 007: Add `kind` column (NEW FILE)
+### Anti-Pattern 3: Hardcode dependencies in session-start.sh
 
-**File:** `worker/db/migrations/007_expose_kind.js`
-**What:** `ALTER TABLE exposed_endpoints ADD COLUMN kind TEXT NOT NULL DEFAULT 'endpoint'`
-**Why first:** All subsequent steps depend on this column. Adding a column with DEFAULT is instant and non-destructive on existing rows (they get `kind='endpoint'` automatically).
-**Risk:** None — pure schema addition, no query changes required.
+**What people do:** Write the npm install command with package names and versions hardcoded in the shell script.
+**Why wrong:** Every dependency update requires editing two places: `runtime-deps.json` and `session-start.sh`. They inevitably drift. The version stamp check also becomes unreliable (stamp could match even if the hardcoded list diverges).
+**Do this instead:** Read deps dynamically from `runtime-deps.json` using `jq`. Single source of truth.
 
-### Step 2 — Fix `persistFindings()`: Type-Conditional Storage (MODIFY `query-engine.js`)
+### Anti-Pattern 4: Place dep install after SESSION_ID dedup
 
-**What:** Replace "METHOD PATH" string split (lines 797-815) with `svc.type` dispatch that sets `kind` correctly for library and infra exposes.
-**Why second:** Depends on Step 1 (kind column must exist in INSERT). This is the core correctness fix.
-**Risk:** Low — only the INSERT path changes; all existing read queries are unaffected. Service exposes behavior unchanged.
+**What people do:** Add the dep install block after the existing SESSION_ID flag file check.
+**Why wrong:** The dedup guard exits 0 if the flag file exists. Once the flag file is created in session N, session N+1 exits before reaching the install step. Deps never get re-installed after a plugin upgrade.
+**Do this instead:** Dep install (Step 0) must precede the SESSION_ID dedup check (Step 1). The stamp mechanism provides its own idempotency — the dedup guard is for context injection, not dep management.
 
-### Step 3 — Update `getGraph()`: Attach Exposes to Service Nodes (MODIFY `query-engine.js`)
+### Anti-Pattern 5: Blocking session-start.sh on npm install failure
 
-**What:** Query all `exposed_endpoints` rows after loading services; group by `service_id`; attach as `svc.exposes` array in the response.
-**Why third:** Depends on Step 2 producing correct `kind` values. Must precede UI changes so nodes carry exposes data.
-**Risk:** Low — additive change to response shape; no existing consumer breaks.
-
-### Step 4 — Fix `utils.js`: Add `infra` to Type Detection (MODIFY `utils.js` + `state.js`)
-
-**What:** Add `if (node.type === 'infra') return 'infra'` guard in `getNodeType()`; add infra guard in `getNodeColor()`; add `infra` color to `NODE_TYPE_COLORS` in `state.js`.
-**Why fourth:** Without this, the routing in Step 5 never reaches the infra branch. Must precede panel changes.
-**Risk:** None — purely additive guards; does not change behavior for service/library/sdk/frontend nodes.
-
-### Step 5 — Expand `detail-panel.js`: Three Render Paths (MODIFY `detail-panel.js`)
-
-**What:**
-- Update routing in `showDetailPanel()` to detect `nodeType === 'infra'`
-- Add `node` as first param to `renderLibraryConnections()`; add "Exports" section from `node.exposes`
-- Add new `renderInfraConnections(node, outgoing, nameById)` function; render "Manages" + "Wires" sections
-**Why last:** Depends on all prior steps — needs `node.type === 'infra'` routed correctly (Step 4), `node.exposes` present (Step 3), and correct `kind` values (Step 2).
-**Risk:** Moderate — `renderLibraryConnections` signature changes (old 3-arg → new 4-arg with `node` as first). Confirm no other callers exist (currently only called from `showDetailPanel()` in the same file — confirmed safe).
+**What people do:** Use `set -e` semantics where an npm install failure causes session-start.sh to exit non-zero.
+**Why wrong:** Claude Code may treat a non-zero exit from a SessionStart hook as an error that blocks the session. The entire plugin policy is non-blocking (`trap 'exit 0' ERR` is already set).
+**Do this instead:** Wrap the npm install in a subshell or `|| true`. If install fails, the MCP server fails to start, but hooks still function and the user sees an error message through Claude's MCP status rather than a broken session.
 
 ---
 
@@ -424,62 +415,32 @@ Dependencies flow strictly bottom-up. Schema changes must land before applicatio
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| Migration 007 ↔ `persistFindings()` | Direct SQLite schema | Migration must run before any INSERT with `kind` column |
-| `getGraph()` ↔ `loadProject()` in UI | HTTP JSON | `exposes` is additive; old UI ignores unknown fields gracefully |
-| `detail-panel.js` ↔ `utils.js` | ES module import | `getNodeType()` must return `'infra'` before panel routing works |
-| `renderLibraryConnections()` ↔ callers | Module-internal function | Only called once from `showDetailPanel()` — safe to change signature |
-| `detectMismatches()` ↔ `exposed_endpoints` | Direct SQL query | Mismatch query filters by `protocol NOT IN ('internal','sdk','import')` — infra protocols (k8s, tf, helm) are already excluded; adding `kind` column does not affect this query |
-
----
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Fetch Exposes on Panel Click
-
-**What people do:** Add `GET /node-detail/:id` that returns exposes for a single node when the panel opens.
-**Why wrong:** Adds a round-trip latency on every click. The `/graph` response already loads all node data at project switch time. A per-click request adds 20-200ms and requires error handling for the loading state.
-**Do this instead:** Attach `exposes` to service rows in `getGraph()`. One network call at project load covers all panel data needs.
-
-### Anti-Pattern 2: Parse exposes Format at Render Time
-
-**What people do:** Store the raw agent string and split "METHOD PATH" in the UI renderer, with special cases per node type.
-**Why wrong:** The parser belongs at storage time where `svc.type` is known. Parsing in the UI duplicates the same broken "METHOD PATH" logic and requires the renderer to know about three different string formats.
-**Do this instead:** Parse and tag with `kind` at `persistFindings()` time. UI receives pre-classified rows with explicit `kind`, `method`, and `path` fields.
-
-### Anti-Pattern 3: Separate Tables per Type
-
-**What people do:** Create `library_exports (service_id, signature, file)` and `infra_resources (service_id, resource_ref, file)` tables, keeping `exposed_endpoints` HTTP-only.
-**Why wrong:** Any cross-type "what does this node expose?" query requires a three-way UNION. FTS5 indexing would need separate virtual tables per type. The mismatch detection query cannot reference a single table. Every future cross-cutting feature (search, export reports) must be updated for each table.
-**Do this instead:** Single `exposed_endpoints` table with `kind` discriminant. One query, one index, one table.
-
-### Anti-Pattern 4: Skipping the `infra` Guard in `getNodeType()`
-
-**What people do:** Add infra rendering to `detail-panel.js` without first fixing `getNodeType()` in `utils.js`.
-**Why wrong:** `showDetailPanel()` calls `getNodeType(node)` to determine which renderer to use. Without the `infra` guard, infra nodes return `"service"` from `getNodeType()` and route to `renderServiceConnections()` — the infra renderer is never reached.
-**Do this instead:** Fix `utils.js` (Step 4) before modifying `detail-panel.js` (Step 5).
+| `session-start.sh` ↔ `runtime-deps.json` | Shell reads JSON via `jq` | `runtime-deps.json` must exist at `${CLAUDE_PLUGIN_ROOT}/runtime-deps.json` |
+| `session-start.sh` ↔ `CLAUDE_PLUGIN_DATA` | Shell writes files to writable dir | Must check `CLAUDE_PLUGIN_DATA` is set; not available in dev/direct-install context |
+| `.mcp.json` ↔ `CLAUDE_PLUGIN_DATA/node_modules` | Node.js ENV at server spawn | `NODE_PATH` is Node.js standard; requires `${CLAUDE_PLUGIN_DATA}` expansion in Claude Code `.mcp.json` env values |
+| `npm install` ↔ native addons | `node-gyp` at install time | `better-sqlite3` is a native addon; requires build tools (Python, C++ compiler). May fail in restricted environments. |
+| Version stamp ↔ dep install freshness | File read/write in `CLAUDE_PLUGIN_DATA` | Stamp must be written atomically after successful install (not before) |
 
 ---
 
 ## Recommended Project Structure Changes
 
 ```
-worker/
-├── db/
-│   ├── migrations/
-│   │   ├── 001_initial_schema.js       # unchanged
-│   │   ├── 002_service_type.js         # unchanged
-│   │   ├── 003_exposed_endpoints.js    # unchanged
-│   │   ├── 004_dedup_constraints.js    # unchanged (from v2.2)
-│   │   ├── 005_scan_versions.js        # unchanged (from v2.2)
-│   │   ├── 006_dedup_repos.js          # unchanged (from v2.2)
-│   │   └── 007_expose_kind.js          # NEW: kind column on exposed_endpoints
-│   └── query-engine.js                 # MODIFIED: persistFindings dispatch + getGraph exposes
-└── ui/
-    └── modules/
-        ├── state.js                    # MODIFIED: add infra to NODE_TYPE_COLORS
-        ├── utils.js                    # MODIFIED: getNodeType + getNodeColor infra guard
-        └── detail-panel.js             # MODIFIED: 3-way routing + new renderInfraConnections
+plugins/ligamen/
+├── .claude-plugin/
+│   ├── plugin.json              # MODIFIED: version → 5.2.0
+│   └── marketplace.json         # MODIFIED: version → 5.2.0
+├── .mcp.json                    # MODIFIED: add env.NODE_PATH
+├── runtime-deps.json            # MODIFIED: version → 5.2.0 (was 5.1.2)
+├── package.json                 # MODIFIED: version → 5.2.0
+└── scripts/
+    └── session-start.sh         # MODIFIED: add Step 0 dep install block
+
+.claude-plugin/
+└── marketplace.json             # MODIFIED: version → 5.2.0 (fix stale 5.1.1)
 ```
+
+No new files. No directory additions. All changes are modifications to existing files.
 
 ---
 
@@ -487,32 +448,33 @@ worker/
 
 | Area | Confidence | Source |
 |------|------------|--------|
-| Broken parser location | HIGH | Direct read of query-engine.js lines 797-815 |
-| exposed_endpoints schema | HIGH | Migration 003 read directly |
-| getGraph() response shape | HIGH | query-engine.js getGraph() read directly |
-| detail-panel routing | HIGH | detail-panel.js and interactions.js read directly |
-| utils.js type detection gap | HIGH | utils.js getNodeType() confirmed — no infra guard exists |
-| Migration numbering (007) | HIGH | Migrations 004-006 confirmed in directory listing |
-| renderLibraryConnections caller count | HIGH | Only called from showDetailPanel() in same file — confirmed |
-| detectMismatches() compatibility | HIGH | Query filter confirmed: `protocol NOT IN ('internal','sdk','import')` excludes infra |
+| MCP server ESM import failure root cause | HIGH | Direct inspection of server.js imports + installed file layout |
+| `CLAUDE_PLUGIN_DATA` as install target | HIGH | Standard Claude Code plugin convention; `CLAUDE_PLUGIN_ROOT` vs `CLAUDE_PLUGIN_DATA` distinction clear from env vars in session-start.sh |
+| NODE_PATH for ESM module resolution | HIGH | Node.js docs; standard mechanism; no source changes needed |
+| `${CLAUDE_PLUGIN_DATA}` expansion in .mcp.json env | MEDIUM | `${CLAUDE_PLUGIN_ROOT}` works in args (confirmed); env value expansion likely follows same pattern but not confirmed from official docs |
+| npm install in SessionStart hook timing | MEDIUM | MCP server and SessionStart may run concurrently; first-install race is known but acceptable |
+| `better-sqlite3` native addon build at install | LOW | Native addon requires build tools; may fail in some environments; no mitigation in current plan |
+| Session-start.sh dedup order issue | HIGH | Code directly read; SESSION_ID flag logic is lines 31-37; must precede flag write with Step 0 |
+| Version files needing sync | HIGH | All 5 files directly inspected; root marketplace.json confirmed stale at 5.1.1 |
 
 ---
 
 ## Sources
 
-- `worker/db/query-engine.js` — persistFindings() broken parser (lines 797-815), getGraph() shape, detectMismatches() filter (source code, HIGH)
-- `worker/db/migrations/003_exposed_endpoints.js` — current exposed_endpoints schema (source code, HIGH)
-- `worker/db/migrations/` directory — confirmed 001-006 exist; next migration is 007 (source code, HIGH)
-- `worker/server/http.js` — GET /graph passthrough, no exposes in response (source code, HIGH)
-- `worker/ui/modules/detail-panel.js` — routing logic, renderLibraryConnections/renderServiceConnections (source code, HIGH)
-- `worker/ui/modules/utils.js` — getNodeType() confirmed missing infra guard (source code, HIGH)
-- `worker/ui/modules/state.js` — NODE_TYPE_COLORS missing infra entry (source code, HIGH)
-- `worker/scan/agent-prompt-library.md` — library exposes format: function signatures (source code, HIGH)
-- `worker/scan/agent-prompt-infra.md` — infra exposes format: k8s:/tf:/helm: prefixed refs (source code, HIGH)
-- `worker/scan/agent-schema.json` — exposes as string array, format type-conditional (source code, HIGH)
-- `.planning/PROJECT.md` — v2.3 milestone goals and out-of-scope constraints (source code, HIGH)
+- `plugins/ligamen/worker/mcp/server.js` — ESM import statements (lines 1-14); confirmed bare package imports (source code, HIGH)
+- `plugins/ligamen/.mcp.json` — current spawn config without NODE_PATH (source code, HIGH)
+- `plugins/ligamen/runtime-deps.json` — authoritative dep list with versions (source code, HIGH)
+- `plugins/ligamen/scripts/session-start.sh` — dedup logic lines 31-37, overall flow (source code, HIGH)
+- `plugins/ligamen/hooks/hooks.json` — SessionStart → session-start.sh wiring (source code, HIGH)
+- `plugins/ligamen/lib/worker-client.sh` — worker start pattern (source code, HIGH)
+- `plugins/ligamen/scripts/worker-start.sh` — version mismatch restart pattern (reference for stamp approach) (source code, HIGH)
+- `plugins/ligamen/package.json` — version 5.1.2, dep list (source code, HIGH)
+- `plugins/ligamen/.claude-plugin/plugin.json` — version 5.1.2 (source code, HIGH)
+- `plugins/ligamen/.claude-plugin/marketplace.json` — version 5.1.2 (source code, HIGH)
+- `.claude-plugin/marketplace.json` (root) — version 5.1.1, confirmed stale (source code, HIGH)
+- `.planning/PROJECT.md` — v5.2.0 milestone goals (source code, HIGH)
 
 ---
 
-*Architecture research for: AllClear v2.3 Type-Specific Detail Panels*
-*Researched: 2026-03-17*
+*Architecture research for: Ligamen v5.2.0 Plugin Distribution Fix*
+*Researched: 2026-03-21*
