@@ -291,7 +291,9 @@ test("POST /scan persists findings and returns 200", async () => {
   const server = await makeServer({
     ...mockQE,
     upsertRepo: () => ({ id: 1 }),
-    persistFindings: (repoId, findings, commit) => persisted.push({ repoId, findings, commit }),
+    beginScan: () => 1,
+    endScan: () => {},
+    persistFindings: (repoId, findings, commit, scanVersionId) => persisted.push({ repoId, findings, commit, scanVersionId }),
   });
   const res = await server.inject({
     method: "POST",
@@ -306,6 +308,58 @@ test("POST /scan persists findings and returns 200", async () => {
   const body = JSON.parse(res.payload);
   assert.equal(body.status, "persisted");
   assert.equal(persisted.length, 1);
+  await server.close();
+});
+
+test("POST /scan applies beginScan/endScan bracket with correct scanVersionId", async () => {
+  const calls = { beginScan: [], persistFindings: [], endScan: [] };
+  const FAKE_SCAN_ID = 42;
+  const server = await makeServer({
+    ...mockQE,
+    upsertRepo: () => ({ id: 1 }),
+    beginScan: (repoId) => { calls.beginScan.push(repoId); return FAKE_SCAN_ID; },
+    persistFindings: (repoId, findings, commit, scanVersionId) => {
+      calls.persistFindings.push({ repoId, findings, commit, scanVersionId });
+    },
+    endScan: (repoId, scanVersionId) => { calls.endScan.push({ repoId, scanVersionId }); },
+  });
+  const res = await server.inject({
+    method: "POST",
+    url: "/scan",
+    payload: {
+      repo_path: "/tmp/test-repo",
+      findings: { services: [], connections: [], schemas: [] },
+    },
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(calls.beginScan.length, 1, "beginScan called once");
+  assert.equal(calls.beginScan[0], 1, "beginScan called with repoId=1");
+  assert.equal(calls.persistFindings.length, 1, "persistFindings called once");
+  assert.equal(calls.persistFindings[0].scanVersionId, FAKE_SCAN_ID, "scanVersionId passed to persistFindings");
+  assert.equal(calls.endScan.length, 1, "endScan called once");
+  assert.equal(calls.endScan[0].scanVersionId, FAKE_SCAN_ID, "endScan called with correct scanVersionId");
+  await server.close();
+});
+
+test("POST /scan does not call endScan when persistFindings throws", async () => {
+  const endScanCalls = [];
+  const server = await makeServer({
+    ...mockQE,
+    upsertRepo: () => ({ id: 1 }),
+    beginScan: () => 99,
+    persistFindings: () => { throw new Error("db write failed"); },
+    endScan: (repoId, scanVersionId) => { endScanCalls.push({ repoId, scanVersionId }); },
+  });
+  const res = await server.inject({
+    method: "POST",
+    url: "/scan",
+    payload: {
+      repo_path: "/tmp/test-repo",
+      findings: { services: [], connections: [], schemas: [] },
+    },
+  });
+  assert.equal(res.statusCode, 500, "should return 500 on persistFindings failure");
+  assert.equal(endScanCalls.length, 0, "endScan must NOT be called when persistFindings throws");
   await server.close();
 });
 

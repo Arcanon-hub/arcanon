@@ -187,7 +187,15 @@ async function createHttpServer(queryEngine, options = {}) {
         type: repo_type || "single",
       });
       const repoId = repo.id;
-      qe.persistFindings(repoId, findings, commit || null);
+      const scanVersionId = qe.beginScan(repoId);
+      try {
+        qe.persistFindings(repoId, findings, commit || null, scanVersionId);
+        qe.endScan(repoId, scanVersionId);
+      } catch (innerErr) {
+        // persistFindings failed — do NOT call endScan (bracket stays open / incomplete)
+        // Re-throw so the outer catch logs and returns 500
+        throw innerErr;
+      }
       return reply.code(200).send({ status: "persisted", repo_id: repoId });
     } catch (err) {
       httpLog('ERROR', err.message, { route: '/scan' });
