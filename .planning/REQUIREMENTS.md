@@ -24,7 +24,7 @@ Requirements for Scan Data Integrity patch. Each maps to roadmap phases.
 
 ### Confirmation UX
 
-- [ ] **CONF-01**: Confirmation flow accepts common synonyms (sure, yep, looks good → yes) and re-prompts on ambiguous input instead of silently ignoring (THE-934)
+- [x] **CONF-01**: Confirmation flow accepts common synonyms (sure, yep, looks good → yes) and re-prompts on ambiguous input instead of silently ignoring (THE-934)
 
 ## Future Requirements
 
@@ -63,7 +63,7 @@ Deferred to future milestones. Tracked but not in current roadmap.
 | SREL-02 | Phase 64 | Complete |
 | SREL-03 | Phase 64 | Complete |
 | SVCR-01 | Phase 65 | Complete |
-| CONF-01 | Phase 66 | Pending |
+| CONF-01 | Phase 66 | Complete |
 | SREL-01 | Phase 66 | Pending |
 
 **Coverage:**
