@@ -13,7 +13,8 @@
 - ✅ **v5.0 Marketplace Restructure** — Phases 49-51 (shipped 2026-03-21)
 - ✅ **v5.1 Graph Interactivity** — Phases 52-58 (shipped 2026-03-21)
 - ✅ **v5.2.0 Plugin Distribution Fix** — Phases 59-62 (shipped 2026-03-21)
-- 🚧 **v5.2.1 Scan Data Integrity** — Phases 63-66 (in progress)
+- ✅ **v5.2.1 Scan Data Integrity** — Phases 63-66 (shipped 2026-03-21)
+- 🚧 **v5.3.0 Scan Intelligence & Enrichment** — Phases 67-73 (in progress)
 
 ## Phases
 
@@ -116,14 +117,26 @@ Full details: see Phase Details below (archived)
 
 </details>
 
-### 🚧 v5.2.1 Scan Data Integrity (In Progress)
+<details>
+<summary>✅ v5.2.1 Scan Data Integrity (Phases 63-66) — SHIPPED 2026-03-21</summary>
 
-**Milestone Goal:** Fix 7 scan reliability bugs — stale data cleanup, undefined value crashes, CLI fallback project root, service ID collisions, confirmation flow synonym parsing, and incremental scan agent guidance.
+- [x] Phase 63-66: 4 phases — scan bracket integrity, undefined value crash chain, service ID scoping, agent interaction fixes
 
-- [ ] **Phase 63: Scan Bracket Integrity** - POST /scan uses beginScan/endScan bracket and legacy NULL scan_version_id rows are garbage collected after full scan
-- [ ] **Phase 64: Undefined Value Crash Chain** - upsertService/upsertConnection sanitize undefined→null and CLI fallback scan passes explicit project root to openDb
-- [ ] **Phase 65: Service ID Scoping** - Cross-repo service ID resolution scoped to avoid name collisions across projects
-- [ ] **Phase 66: Agent Interaction Fixes** - Confirmation flow accepts synonyms and re-prompts on ambiguous input; incremental scan prompt constrains agent to changed files
+Full details: see Phase Details below (archived)
+
+</details>
+
+### 🚧 v5.3.0 Scan Intelligence & Enrichment (In Progress)
+
+**Milestone Goal:** Add enrichment pass architecture, surface schema/field data, persist confidence/evidence, extract team ownership and auth/DB metadata, improve agent data quality, and spin out quality-gate.
+
+- [ ] **Phase 67: DB Foundation** - Migration 009 adds confidence/evidence columns, schema tables, and denormalized enrichment columns; upsertNodeMetadata() method added
+- [ ] **Phase 68: Enrichment Architecture & CODEOWNERS** - Enrichment pass framework wired into manager.js; CODEOWNERS parsed and team ownership stored
+- [ ] **Phase 69: Auth & DB Extraction** - Auth mechanism and database backend extracted per service via enrichment pass
+- [ ] **Phase 70: Confidence & Evidence Pipeline** - Confidence and evidence persisted through upsertConnection() and returned by getGraph()
+- [ ] **Phase 71: Schema Storage & API Extension** - Schema/field data stored, /graph response extended with schemas_by_connection and all enrichment fields
+- [ ] **Phase 72: Detail Panel UI** - Schema section, confidence badge, owner/auth/db rows, and "unknown" fallbacks rendered in detail panel
+- [ ] **Phase 73: Agent Prompts & Quality-Gate Spinout** - source_file/target_file guidance added to agent prompt; quality-gate extracted to standalone plugin
 
 ## Phase Details
 
@@ -277,6 +290,9 @@ Plans:
 
 </details>
 
+<details>
+<summary>✅ v5.2.1 Scan Data Integrity (Phases 63-66) — SHIPPED 2026-03-21</summary>
+
 ### Phase 63: Scan Bracket Integrity
 **Goal**: POST /scan endpoint applies the beginScan/endScan version bracket for atomic stale-row cleanup, and a one-time garbage collection removes legacy NULL scan_version_id rows left by pre-bracket scans
 **Depends on**: Phase 62 (v5.2.0 complete)
@@ -288,8 +304,8 @@ Plans:
   4. The /graph response returns only rows belonging to the latest scan bracket — no ghost rows from previous runs
 **Plans**: 2 plans
 Plans:
-- [ ] 63-01-PLAN.md — POST /scan: wrap persistFindings in beginScan/endScan bracket (THE-930)
-- [ ] 63-02-PLAN.md — endScan(): add NULL scan_version_id GC after successful bracket close (THE-931)
+- [x] 63-01-PLAN.md — POST /scan: wrap persistFindings in beginScan/endScan bracket (THE-930)
+- [x] 63-02-PLAN.md — endScan(): add NULL scan_version_id GC after successful bracket close (THE-931)
 
 ### Phase 64: Undefined Value Crash Chain
 **Goal**: upsertService and upsertConnection sanitize JavaScript undefined values to null before SQLite binding, and the CLI fallback scan resolves the project database by explicit root path rather than process.cwd()
@@ -302,8 +318,8 @@ Plans:
   4. Re-running `/ligamen:map` after a previous crash-recovery produces a clean scan with no orphaned database files
 **Plans**: 2 plans
 Plans:
-- [ ] 64-01-PLAN.md — Add sanitizeBindings() helper to QueryEngine; patch upsertService and upsertConnection to call it before .run()
-- [ ] 64-02-PLAN.md — Capture PROJECT_ROOT in map.md Step 1; pass explicit root to openDb() in Step 4 node snippet
+- [x] 64-01-PLAN.md — Add sanitizeBindings() helper to QueryEngine; patch upsertService and upsertConnection to call it before .run()
+- [x] 64-02-PLAN.md — Capture PROJECT_ROOT in map.md Step 1; pass explicit root to openDb() in Step 4 node snippet
 
 ### Phase 65: Service ID Scoping
 **Goal**: Cross-repo service ID resolution is scoped per project so that a service named identically in two different repos resolves to the correct ID in each context
@@ -315,7 +331,7 @@ Plans:
   3. After scanning both repos, the /graph endpoint for each project shows only that project's "api-gateway" node with its correct connections
 **Plans**: 1 plan
 Plans:
-- [ ] 65-01-PLAN.md — Scope _resolveServiceId by repoId and add ambiguity warning + tests
+- [x] 65-01-PLAN.md — Scope _resolveServiceId by repoId and add ambiguity warning + tests
 
 ### Phase 66: Agent Interaction Fixes
 **Goal**: The confirmation flow accepts common affirmative synonyms and re-prompts on ambiguous input; the incremental scan agent prompt explicitly constrains the scan to changed files only
@@ -328,14 +344,95 @@ Plans:
   4. An incremental scan invoked with no changed files produces a no-op result rather than a full re-scan
 **Plans**: 2 plans
 Plans:
-- [ ] 66-01-PLAN.md — applyEdits synonym normalization + NEEDS_REPROMPT sentinel in confirmation.js
-- [ ] 66-02-PLAN.md — Incremental scan changed-files constraint injected into agent prompt in manager.js
+- [x] 66-01-PLAN.md — applyEdits synonym normalization + NEEDS_REPROMPT sentinel in confirmation.js
+- [x] 66-02-PLAN.md — Incremental scan changed-files constraint injected into agent prompt in manager.js
+
+</details>
+
+### Phase 67: DB Foundation
+**Goal**: The database has all columns and tables required for enrichment — confidence/evidence on connections, owner/auth_mechanism/db_backend on services, schemas and schema_fields tables — and query-engine exposes upsertNodeMetadata()
+**Depends on**: Phase 66 (v5.2.1 complete)
+**Requirements**: CONF-01, CONF-02
+**Success Criteria** (what must be TRUE):
+  1. After migration 009 runs, `PRAGMA table_info(connections)` shows `confidence TEXT` and `evidence TEXT` columns
+  2. After migration 009 runs, `PRAGMA table_info(services)` shows `owner TEXT`, `auth_mechanism TEXT`, and `db_backend TEXT` columns
+  3. The `schemas` and `schema_fields` tables exist with indexes and the migration is idempotent — running it twice does not error
+  4. `upsertNodeMetadata(serviceId, view, key, value)` is callable from a scan context and writes a row to the `node_metadata` table without triggering a scan bracket
+**Plans**: TBD
+
+### Phase 68: Enrichment Architecture & CODEOWNERS
+**Goal**: A post-scan enrichment pass framework runs after core agent output is parsed, each enricher is isolated and gracefully silenced on failure, and the CODEOWNERS enricher correctly stores team ownership for each service
+**Depends on**: Phase 67
+**Requirements**: ENRICH-01, ENRICH-02, ENRICH-03, OWN-01
+**Success Criteria** (what must be TRUE):
+  1. After scanning a repo that has a CODEOWNERS file, the `services.owner` column is populated with the correct GitHub team handle for each service whose source path matches a CODEOWNERS pattern
+  2. A service with no matching CODEOWNERS pattern has `owner` as NULL — not an empty string or placeholder
+  3. If the CODEOWNERS enricher throws an unhandled error, the scan still completes and all primary service/connection data is persisted (the error is logged, not re-thrown)
+  4. Each enricher writes metadata with a distinct `view` key in `node_metadata` — no two enrichers collide on the same key
+  5. The enrichment pass does not trigger beginScan/endScan — `SELECT COUNT(*) FROM services` is unchanged after enrichment runs
+**Plans**: TBD
+
+### Phase 69: Auth & DB Extraction
+**Goal**: Auth mechanism and database backend are extracted from each service's source files via regex signal tables and written to the database, with credential value exclusion preventing secret leakage
+**Depends on**: Phase 68
+**Requirements**: AUTHDB-01, AUTHDB-02
+**Success Criteria** (what must be TRUE):
+  1. After scanning a Node.js service that uses JWT authentication, `services.auth_mechanism` is set to a recognized mechanism string (e.g., "jwt") — not a raw credential value
+  2. After scanning a service whose `schema.prisma` references PostgreSQL, `services.db_backend` is set to "postgresql"
+  3. A service with no detectable auth pattern has `auth_mechanism` as NULL — not a false-positive or guessed value
+  4. Extracted values never contain strings longer than 40 characters or matching credential patterns (Bearer tokens, connection strings with passwords) — the extractor rejects them before DB write
+**Plans**: TBD
+
+### Phase 70: Confidence & Evidence Pipeline
+**Goal**: Confidence levels and evidence snippets emitted by the agent during scanning are persisted through the upsert layer and returned on every connection object in the /graph response
+**Depends on**: Phase 67
+**Requirements**: CONF-03
+**Success Criteria** (what must be TRUE):
+  1. After a scan where the agent emits confidence and evidence fields, `SELECT confidence FROM connections WHERE confidence IS NOT NULL LIMIT 5` returns real rows — not zero results
+  2. Each connection object in the /graph API response includes `confidence` and `evidence` fields (null if not emitted by the agent)
+  3. Re-scanning without confidence/evidence in agent output leaves existing confidence/evidence values in place rather than overwriting with null (ON CONFLICT DO UPDATE preserves existing non-null values)
+**Plans**: TBD
+
+### Phase 71: Schema Storage & API Extension
+**Goal**: Schema and field data collected during scans is persisted in the schemas/schema_fields tables and the /graph response includes schemas_by_connection plus all enrichment fields pivoted from node_metadata
+**Depends on**: Phase 70, Phase 69
+**Requirements**: SCHEMA-02, OWN-02, OWN-03, AUTHDB-03
+**Success Criteria** (what must be TRUE):
+  1. After scanning a service that emits schema data, the `schemas` table contains the schema and `schema_fields` contains its fields, linked by connection_id
+  2. The /graph API response includes a top-level `schemas_by_connection` map keyed by connection_id — schema data is not embedded inside per-node objects
+  3. MCP `impact_query` and `impact_changed` responses include the owner field for each affected service
+  4. MCP impact responses include `auth_mechanism` and `db_backend` for each affected service
+  5. Re-scanning a service removes stale schema fields from prior scans — deleted fields do not accumulate across re-scans
+**Plans**: TBD
+
+### Phase 72: Detail Panel UI
+**Goal**: The detail panel renders schema/field data, confidence badges, owner/auth/db rows, and "unknown" placeholders for all missing metadata fields — with XSS-safe rendering throughout
+**Depends on**: Phase 71
+**Requirements**: SCHEMA-01, OWN-02, CONF-03, UNK-01
+**Success Criteria** (what must be TRUE):
+  1. Selecting a connection in the detail panel shows a schema section with a field table (name, type, required) when schema data exists for that connection
+  2. Each connection row in the detail panel displays a confidence badge (green for high, amber for low, gray for absent)
+  3. The owner row in a service's detail panel shows the GitHub team handle, or "unknown" if no owner was extracted
+  4. The auth mechanism and database backend rows show their values, or "unknown" when not detected — these rows are always visible, never hidden
+  5. TypeScript generic type strings (e.g., `Array<Record<string, unknown>>`) render as literal characters in the panel, not as invisible HTML
+**Plans**: TBD
+
+### Phase 73: Agent Prompts & Quality-Gate Spinout
+**Goal**: Agent scan prompts explicitly require source_file on connections to reduce null paths; quality-gate command and skill are removed from this plugin in preparation for a standalone plugin
+**Depends on**: Phase 67 (independent of enrichment phases; can run in parallel but placed here for sequential execution)
+**Requirements**: AGENT-01, AGENT-02, AGENT-03, QGATE-01
+**Success Criteria** (what must be TRUE):
+  1. After the prompt update, a scan of a repo with traceable connections produces connection rows where `source_file` is non-null for internally-connected services — the prompt guidance is specific enough to drive this behavior
+  2. When the agent emits a connection without `source_file`, a validation warning is logged to the worker's structured logger — the scan still completes
+  3. The detail panel connection list shows the source_file path next to each connection when the field is present
+  4. The `/ligamen:quality-gate` command no longer exists in this plugin — invoking it produces "command not found" or a redirect message pointing to the standalone plugin
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 63 → 64 → 65 → 66
-(Phase 64 and 65 can run in parallel after Phase 63 completes)
+Phases execute in numeric order: 67 → 68 → 69 → 70 → 71 → 72 → 73
+(Phase 70 can begin after Phase 67; Phase 69 can begin after Phase 68; Phase 71 requires both Phase 69 and Phase 70 complete; Phase 73 is independent but runs last)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -350,7 +447,11 @@ Phases execute in numeric order: 63 → 64 → 65 → 66
 | 49-51 | v5.0 | 5/5 | Complete | 2026-03-21 |
 | 52-58 | v5.1 | 11/11 | Complete | 2026-03-21 |
 | 59-62 | v5.2.0 | 5/5 | Complete | 2026-03-21 |
-| 63. Scan Bracket Integrity | 2/2 | Complete   | 2026-03-21 | - |
-| 64. Undefined Value Crash Chain | 2/2 | Complete   | 2026-03-21 | - |
-| 65. Service ID Scoping | 1/1 | Complete   | 2026-03-21 | - |
-| 66. Agent Interaction Fixes | 2/2 | Complete   | 2026-03-21 | - |
+| 63-66 | v5.2.1 | 7/7 | Complete | 2026-03-21 |
+| 67. DB Foundation | v5.3.0 | 0/TBD | Not started | - |
+| 68. Enrichment Architecture & CODEOWNERS | v5.3.0 | 0/TBD | Not started | - |
+| 69. Auth & DB Extraction | v5.3.0 | 0/TBD | Not started | - |
+| 70. Confidence & Evidence Pipeline | v5.3.0 | 0/TBD | Not started | - |
+| 71. Schema Storage & API Extension | v5.3.0 | 0/TBD | Not started | - |
+| 72. Detail Panel UI | v5.3.0 | 0/TBD | Not started | - |
+| 73. Agent Prompts & Quality-Gate Spinout | v5.3.0 | 0/TBD | Not started | - |

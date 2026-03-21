@@ -85,31 +85,31 @@ Deferred to future milestones. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| QGATE-01 | — | Pending |
-| SCHEMA-01 | — | Pending |
-| SCHEMA-02 | — | Pending |
-| CONF-01 | — | Pending |
-| CONF-02 | — | Pending |
-| CONF-03 | — | Pending |
-| OWN-01 | — | Pending |
-| OWN-02 | — | Pending |
-| OWN-03 | — | Pending |
-| ENRICH-01 | — | Pending |
-| ENRICH-02 | — | Pending |
-| ENRICH-03 | — | Pending |
-| AGENT-01 | — | Pending |
-| AGENT-02 | — | Pending |
-| AGENT-03 | — | Pending |
-| AUTHDB-01 | — | Pending |
-| AUTHDB-02 | — | Pending |
-| AUTHDB-03 | — | Pending |
-| UNK-01 | — | Pending |
+| CONF-01 | Phase 67 | Pending |
+| CONF-02 | Phase 67 | Pending |
+| ENRICH-01 | Phase 68 | Pending |
+| ENRICH-02 | Phase 68 | Pending |
+| ENRICH-03 | Phase 68 | Pending |
+| OWN-01 | Phase 68 | Pending |
+| AUTHDB-01 | Phase 69 | Pending |
+| AUTHDB-02 | Phase 69 | Pending |
+| CONF-03 | Phase 70 | Pending |
+| SCHEMA-02 | Phase 71 | Pending |
+| OWN-02 | Phase 71 | Pending |
+| OWN-03 | Phase 71 | Pending |
+| AUTHDB-03 | Phase 71 | Pending |
+| SCHEMA-01 | Phase 72 | Pending |
+| UNK-01 | Phase 72 | Pending |
+| AGENT-01 | Phase 73 | Pending |
+| AGENT-02 | Phase 73 | Pending |
+| AGENT-03 | Phase 73 | Pending |
+| QGATE-01 | Phase 73 | Pending |
 
 **Coverage:**
 - v5.3.0 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19 ⚠️
+- Mapped to phases: 19
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-22*
-*Last updated: 2026-03-22 after initial definition*
+*Last updated: 2026-03-22 after roadmap creation — all 19 requirements mapped to phases 67-73*
