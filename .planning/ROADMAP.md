@@ -249,7 +249,9 @@ Plans:
   2. All five files (root marketplace.json, plugin marketplace.json, plugin.json, package.json, runtime-deps.json) contain the same version string
   3. Running `make check` passes when all versions match and fails when any file is out of sync
   4. Running `make bump VERSION=5.3.0` updates all five files atomically in one command
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 61-01-PLAN.md — Bump all 5 manifests to 5.2.0 and verify root .mcp.json
 
 ## Progress
 
