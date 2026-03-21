@@ -147,6 +147,24 @@ export async function search(query, options = {}) {
 // ---------------------------------------------------------------------------
 const SEVERITY_ORDER = { CRITICAL: 0, WARN: 1, INFO: 2 };
 
+// ---------------------------------------------------------------------------
+// Binding sanitizer
+// ---------------------------------------------------------------------------
+
+/**
+ * Converts any `undefined` values in a binding object to `null`.
+ * better-sqlite3 throws TypeError for undefined bindings; null is always safe.
+ * @param {object} obj
+ * @returns {object}
+ */
+function sanitizeBindings(obj) {
+  const out = {};
+  for (const key of Object.keys(obj)) {
+    out[key] = obj[key] === undefined ? null : obj[key];
+  }
+  return out;
+}
+
 export class QueryEngine {
   /**
    * @param {import('better-sqlite3').Database} db - An open better-sqlite3 instance.
@@ -521,11 +539,9 @@ export class QueryEngine {
    * @returns {number} Row id
    */
   upsertService(serviceData) {
-    const result = this._stmtUpsertService.run({
-      type: "service",
-      scan_version_id: null,
-      ...serviceData,
-    });
+    const result = this._stmtUpsertService.run(
+      sanitizeBindings({ type: "service", scan_version_id: null, ...serviceData })
+    );
     return result.lastInsertRowid;
   }
 
@@ -535,15 +551,17 @@ export class QueryEngine {
    * @returns {number} Row id
    */
   upsertConnection(connData) {
-    const result = this._stmtUpsertConnection.run({
-      method: null,
-      path: null,
-      source_file: null,
-      target_file: null,
-      scan_version_id: null,
-      crossing: null,
-      ...connData,
-    });
+    const result = this._stmtUpsertConnection.run(
+      sanitizeBindings({
+        method: null,
+        path: null,
+        source_file: null,
+        target_file: null,
+        scan_version_id: null,
+        crossing: null,
+        ...connData,
+      })
+    );
     return result.lastInsertRowid;
   }
 

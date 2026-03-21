@@ -1,6 +1,9 @@
 /**
  * Tests for sanitizeBindings helper and undefined-safe upsert methods.
  *
+ * Scenario: scan output may provide optional fields as undefined, which when
+ * spread into a binding object can overwrite null defaults — causing errors.
+ *
  * Run: node worker/db/query-engine-sanitize.test.js
  */
 
@@ -143,9 +146,11 @@ async function buildDb() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 1: upsertService with language: undefined does NOT throw
+// Test 1: upsertConnection — optional fields with undefined do NOT throw
+// Core scenario: scan output provides optional fields as undefined, which when
+// spread overwrites null defaults. sanitizeBindings prevents this.
 // ---------------------------------------------------------------------------
-console.log("Test 1: upsertService with language: undefined does not throw TypeError");
+console.log("Test 1: upsertConnection with optional fields as undefined does not throw");
 {
   const db = await buildDb();
   const { QueryEngine } = await import("./query-engine.js?v=sanitize-1");
@@ -155,22 +160,42 @@ console.log("Test 1: upsertService with language: undefined does not throw TypeE
     .prepare("INSERT INTO repos(path, name, type) VALUES(?,?,?)")
     .run("/tmp/san-r1", "san-repo1", "single").lastInsertRowid;
 
-  assert.doesNotThrow(() => {
-    qe.upsertService({ repo_id: repoId, name: "svc-undef", root_path: ".", language: undefined });
-  }, "upsertService with language: undefined must not throw");
+  const svcId = qe.upsertService({
+    repo_id: repoId, name: "svc-conn", root_path: ".", language: "js",
+  });
 
-  const row = db.prepare("SELECT language FROM services WHERE name = ?").get("svc-undef");
-  assert.ok(row, "Service row should exist");
-  assert.strictEqual(row.language, null, "language should be stored as null");
+  // Optional nullable fields set to undefined — must not throw (undefined overwrites
+  // null defaults without sanitizeBindings, triggering errors in strict binding modes)
+  assert.doesNotThrow(() => {
+    qe.upsertConnection({
+      source_service_id: svcId,
+      target_service_id: svcId,
+      protocol: "http",
+      method: undefined,      // optional field: must be preserved as null
+      path: undefined,        // optional field: must be preserved as null
+      source_file: undefined, // optional field: must be preserved as null
+      target_file: undefined, // optional field: must be preserved as null
+    });
+  }, "upsertConnection with undefined optional fields must not throw");
+
+  // Verify the row was written with null values
+  const row = db.prepare("SELECT method, path, source_file, target_file FROM connections").get();
+  assert.ok(row, "Connection row should exist");
+  assert.strictEqual(row.method, null, "method should be null");
+  assert.strictEqual(row.path, null, "path should be null");
+  assert.strictEqual(row.source_file, null, "source_file should be null");
+  assert.strictEqual(row.target_file, null, "target_file should be null");
 
   db.close();
 }
 console.log("  PASS");
 
 // ---------------------------------------------------------------------------
-// Test 2: upsertService with no undefined values still works correctly
+// Test 2: upsertService — scan_version_id: undefined does not throw
+// When caller passes scan_version_id: undefined, it overwrites the null default.
+// sanitizeBindings converts it back to null.
 // ---------------------------------------------------------------------------
-console.log("Test 2: upsertService with valid values still works correctly");
+console.log("Test 2: upsertService with scan_version_id: undefined does not throw");
 {
   const db = await buildDb();
   const { QueryEngine } = await import("./query-engine.js?v=sanitize-2");
@@ -179,6 +204,37 @@ console.log("Test 2: upsertService with valid values still works correctly");
   const repoId = db
     .prepare("INSERT INTO repos(path, name, type) VALUES(?,?,?)")
     .run("/tmp/san-r2", "san-repo2", "single").lastInsertRowid;
+
+  assert.doesNotThrow(() => {
+    qe.upsertService({
+      repo_id: repoId,
+      name: "svc-scanid",
+      root_path: ".",
+      language: "ts",
+      scan_version_id: undefined,  // overwrites the null default — must become null
+    });
+  }, "upsertService with scan_version_id: undefined must not throw");
+
+  const row = db.prepare("SELECT scan_version_id FROM services WHERE name = ?").get("svc-scanid");
+  assert.ok(row, "Service row should exist");
+  assert.strictEqual(row.scan_version_id, null, "scan_version_id should be null");
+
+  db.close();
+}
+console.log("  PASS");
+
+// ---------------------------------------------------------------------------
+// Test 3: upsertService with valid values still works correctly
+// ---------------------------------------------------------------------------
+console.log("Test 3: upsertService with valid values still works correctly");
+{
+  const db = await buildDb();
+  const { QueryEngine } = await import("./query-engine.js?v=sanitize-3");
+  const qe = new QueryEngine(db);
+
+  const repoId = db
+    .prepare("INSERT INTO repos(path, name, type) VALUES(?,?,?)")
+    .run("/tmp/san-r3", "san-repo3", "single").lastInsertRowid;
 
   assert.doesNotThrow(() => {
     qe.upsertService({ repo_id: repoId, name: "svc-normal", root_path: ".", language: "ts" });
@@ -193,36 +249,44 @@ console.log("Test 2: upsertService with valid values still works correctly");
 console.log("  PASS");
 
 // ---------------------------------------------------------------------------
-// Test 3: upsertConnection with protocol: undefined does NOT throw
+// Test 4: upsertConnection with all optional fields as null still works
 // ---------------------------------------------------------------------------
-console.log("Test 3: upsertConnection with protocol: undefined does not throw TypeError");
+console.log("Test 4: upsertConnection with explicit null optional fields works");
 {
   const db = await buildDb();
-  const { QueryEngine } = await import("./query-engine.js?v=sanitize-3");
+  const { QueryEngine } = await import("./query-engine.js?v=sanitize-4");
   const qe = new QueryEngine(db);
 
   const repoId = db
     .prepare("INSERT INTO repos(path, name, type) VALUES(?,?,?)")
-    .run("/tmp/san-r3", "san-repo3", "single").lastInsertRowid;
+    .run("/tmp/san-r4", "san-repo4", "single").lastInsertRowid;
 
-  const svcId = qe.upsertService({ repo_id: repoId, name: "svc-conn", root_path: ".", language: "js" });
+  const svcId = qe.upsertService({
+    repo_id: repoId, name: "svc-conn4", root_path: ".", language: "go",
+  });
 
   assert.doesNotThrow(() => {
     qe.upsertConnection({
       source_service_id: svcId,
       target_service_id: svcId,
-      protocol: undefined,
+      protocol: "grpc",
+      method: null,
+      path: null,
     });
-  }, "upsertConnection with protocol: undefined must not throw");
+  });
+
+  const row = db.prepare("SELECT protocol FROM connections").get();
+  assert.ok(row, "Connection row should exist");
+  assert.strictEqual(row.protocol, "grpc", "protocol should be 'grpc'");
 
   db.close();
 }
 console.log("  PASS");
 
 // ---------------------------------------------------------------------------
-// Test 4: sanitizeBindings function exists in source (at least 3 occurrences)
+// Test 5: sanitizeBindings function exists in source (at least 3 occurrences)
 // ---------------------------------------------------------------------------
-console.log("Test 4: sanitizeBindings defined in query-engine.js with at least 3 occurrences");
+console.log("Test 5: sanitizeBindings defined in query-engine.js with at least 3 occurrences");
 {
   const { readFileSync } = await import("fs");
   const { fileURLToPath } = await import("url");
