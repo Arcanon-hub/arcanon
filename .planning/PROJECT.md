@@ -73,18 +73,14 @@ Every edit is automatically formatted and linted, every quality check runs with 
 - ✓ Added `drift_openapi` MCP tool for OpenAPI spec breaking change detection — v4.1
 - ✓ MCP server expanded from 5 to 8 tools with 19 new drift tests — v4.1
 
+- ✓ Repo restructured as Claude Code marketplace with plugin source under `plugins/ligamen/` — v5.0
+- ✓ marketplace.json at repo root for `claude plugin marketplace add` discovery — v5.0
+- ✓ All internal paths (shell, JS, hooks, Makefile) updated for new layout — v5.0
+- ✓ 173/173 bats tests passing with restructured paths — v5.0
+
 ### Active
 
-## Current Milestone: v5.0 Marketplace Restructure
-
-**Goal:** Restructure the repo as a proper Claude Code marketplace so end users can install via `claude plugin marketplace add` + `claude plugin install` without cloning.
-
-**Target features:**
-- Move plugin files (commands/, hooks/, scripts/, worker/, lib/, skills/, .claude-plugin/) into `plugins/ligamen/`
-- Keep repo-level files (README, LICENSE, docs, tests, .planning, Makefile) at root
-- Update all internal paths, imports, and references
-- Update README installation instructions
-- Ensure Makefile, tests, and CI still work with the new layout
+(Defined per milestone — see REQUIREMENTS.md when next milestone starts)
 
 ### Out of Scope
 
@@ -98,7 +94,7 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ## Context
 
-Shipped v4.1 with ~42,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 48 phases across 8 milestones, 88 plans. Kubernetes commands removed; MCP server expanded with drift query tools (8 tools total). Plugin focused on code quality, cross-repo intelligence, and agent-queryable drift detection.
+Shipped v5.0 with ~42,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 51 phases across 9 milestones, 93 plans. Repo restructured as Claude Code marketplace — plugin source lives under `plugins/ligamen/`, installable via `claude plugin marketplace add` + `claude plugin install`. MCP server has 8 tools (5 impact + 3 drift).
 
 Architecture: commands/ for user-invoked features, skills/ for auto-invoked knowledge, hooks/ for formatting/linting/guarding, worker/ for Node.js daemon (db/, server/, scan/, mcp/, ui/ subdirectories), lib/ for shared bash/JS libraries. Agent scan prompts modularized into type-specific variants (service, library, infra) with shared common component. Graph UI uses deterministic layered layout with boundary grouping, external actor hexagons, and protocol-differentiated edges. Filter panel provides protocol, layer, boundary, language, mismatch, and isolated-node toggles.
 
@@ -152,6 +148,8 @@ Known tech debt: no log rotation, db/database.js has console.log in script-mode 
 | Remove K8s commands (pulse, deploy-verify) | Kubernetes-specific, doesn't fit core focus on code quality and cross-repo intelligence | ✓ Good |
 | Port drift logic to JS for MCP (not shell out) | Clean testability, matches existing queryChanged pattern, no env var conflicts | ✓ Good |
 | Filesystem queries at call time (no new DB tables) | Drift data changes too frequently to persist; repos table has paths as anchors | ✓ Good |
+| Marketplace structure with plugins/ligamen/ | Matches official Claude Code marketplace format; enables `claude plugin marketplace add` | ✓ Good |
+| marketplace.json at repo root | Required for marketplace discovery; points to ./plugins/ligamen as plugin source | ✓ Good |
 
 ---
-*Last updated: 2026-03-20 after v5.0 milestone started*
+*Last updated: 2026-03-21 after v5.0 milestone*

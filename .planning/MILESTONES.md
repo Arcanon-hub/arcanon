@@ -1,5 +1,19 @@
 # Milestones
 
+## v5.0 Marketplace Restructure (Shipped: 2026-03-21)
+
+**Phases completed:** 3 phases, 5 plans, 0 tasks
+
+**Key accomplishments:**
+
+- Restructured repo as Claude Code marketplace — plugin source moved to `plugins/ligamen/` via history-preserving `git mv`
+- Created `marketplace.json` at repo root for marketplace discovery (`"source": "./plugins/ligamen"`)
+- Fixed drift-common.sh path traversal, Makefile targets, README MCP server path for new layout
+- Fixed 3 test root causes (test_helper PLUGIN_ROOT, drift-common exit→return, worker-start version check)
+- 173/173 bats tests passing, `claude plugin marketplace add` + `install` verified end-to-end
+
+---
+
 ## v4.1 Command Cleanup (Shipped: 2026-03-20)
 
 **Phases completed:** 3 phases, 6 plans, 0 tasks
