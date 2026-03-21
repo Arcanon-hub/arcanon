@@ -161,7 +161,7 @@ After building your first map, add the Ligamen MCP server so all Claude agents c
     "ligamen-impact": {
       "type": "stdio",
       "command": "node",
-      "args": ["<path-to-ligamen>/worker/mcp/server.js"]
+      "args": ["<path-to-ligamen>/plugins/ligamen/worker/mcp/server.js"]
     }
   }
 }
