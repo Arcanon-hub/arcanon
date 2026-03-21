@@ -286,7 +286,10 @@ Plans:
   2. If a scan is interrupted or fails partway through, the prior scan's data remains intact — no partial updates visible in the graph
   3. Running a full scan on a repo with pre-existing NULL scan_version_id rows leaves no NULL scan_version_id rows in services or connections for that repo
   4. The /graph response returns only rows belonging to the latest scan bracket — no ghost rows from previous runs
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 63-01-PLAN.md — POST /scan: wrap persistFindings in beginScan/endScan bracket (THE-930)
+- [ ] 63-02-PLAN.md — endScan(): add NULL scan_version_id GC after successful bracket close (THE-931)
 
 ### Phase 64: Undefined Value Crash Chain
 **Goal**: upsertService and upsertConnection sanitize JavaScript undefined values to null before SQLite binding, and the CLI fallback scan resolves the project database by explicit root path rather than process.cwd()
@@ -310,7 +313,10 @@ Plans:
   1. Two repos each containing a service named "api-gateway" produce distinct service IDs that do not collide in the database
   2. MCP impact queries for "api-gateway" scoped to project A return only connections involving project A's service, not project B's
   3. After scanning both repos, the /graph endpoint for each project shows only that project's "api-gateway" node with its correct connections
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 65-01-PLAN.md — TBD
+- [ ] 65-02-PLAN.md — TBD
 
 ### Phase 66: Agent Interaction Fixes
 **Goal**: The confirmation flow accepts common affirmative synonyms and re-prompts on ambiguous input; the incremental scan agent prompt explicitly constrains the scan to changed files only
