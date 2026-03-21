@@ -3,34 +3,27 @@
 **Defined:** 2026-03-21
 **Core Value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
 
-## v5.1 Requirements
+## v5.2.0 Requirements
 
-Requirements for Graph Interactivity milestone. Each maps to roadmap phases.
+Requirements for Plugin Distribution Fix milestone. Each maps to roadmap phases.
 
-### Navigation
+### Runtime Dependency Installation
 
-- [x] **NAV-01**: User can press F to fit all nodes to screen
-- [x] **NAV-02**: User can press Esc to deselect current node and close detail panel
-- [x] **NAV-03**: User can press / to focus the search input
-- [x] **NAV-04**: User can click a service name in the detail panel connections list to select and pan to that node
-- [x] **NAV-05**: User can press I on a selected node to isolate its subgraph (1-hop default)
-- [x] **NAV-06**: User can press 2/3 to expand isolation to 2-hop or 3-hop depth
+- [ ] **DEPS-01**: SessionStart hook installs runtime deps into ${CLAUDE_PLUGIN_ROOT} via npm install
+- [ ] **DEPS-02**: Install uses diff-based idempotency — skips if runtime-deps.json unchanged
+- [ ] **DEPS-03**: Hook timeout is 120s+ to accommodate better-sqlite3 native compilation
+- [ ] **DEPS-04**: Install runs before SESSION_ID dedup guard in session-start.sh
 
-### Graph Display
+### MCP Server Distribution
 
-- [x] **GRAPH-01**: Parallel edges between the same source→target pair are bundled into a single thick edge with count badge
-- [x] **GRAPH-02**: User can click a bundled edge to expand individual connections in the detail panel
-- [x] **GRAPH-03**: Nodes and edges from the latest scan are visually highlighted (glow or "NEW" badge)
-- [x] **GRAPH-04**: /graph API endpoint includes scan_version_id per service and connection
+- [ ] **MCP-01**: MCP server starts successfully from marketplace-installed plugin
+- [ ] **MCP-02**: Self-healing MCP wrapper installs deps if missing before server exec
+- [ ] **MCP-03**: .mcp.json works without NODE_PATH (ESM-compatible resolution)
 
-### Export
+### Version Sync
 
-- [x] **EXP-01**: User can click an export button to download the current canvas view as PNG
-
-### Documentation
-
-- [x] **DOC-01**: README updated with v5.1 feature descriptions and keyboard shortcut reference
-- [x] **DOC-02**: docs/commands.md updated with new graph UI capabilities
+- [ ] **VER-01**: All 5 manifest files bumped to 5.2.0 (root marketplace.json, plugin marketplace.json, plugin.json, package.json, runtime-deps.json)
+- [ ] **VER-02**: Root .mcp.json is empty (dev repo, not consumer)
 
 ## Future Requirements
 
@@ -48,15 +41,21 @@ Deferred to future milestones. Tracked but not in current roadmap.
 - **VIZ-03**: Zoom level indicator with reset-to-100% click
 - **VIZ-04**: URL state persistence for bookmarkable views (zoom, position, filters, selected node)
 
+### Release Tooling
+
+- **REL-01**: Automated bump-version.sh script for all manifest files
+- **REL-02**: make check validation that all version files match
+
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
+| esbuild bundling of MCP server | Adds build step complexity; install-at-runtime is simpler and officially documented |
+| Committing node_modules | Bloats repo, ABI version fragility across platforms |
+| npx-based MCP launch | Splits distribution across marketplace + npm registry |
+| WASM SQLite replacement | 65+ call sites to migrate, doesn't solve chromadb native dep |
 | SVG export | Canvas-to-SVG re-rendering is high effort; PNG covers the use case |
 | Touch/mobile support | Single-developer desktop tool |
-| Accessibility (WCAG) | Single-developer tool; not public-facing |
-| Edge labels on hover | Adds rendering complexity; detail panel already shows edge info on click |
-| Graph diff endpoint | Full diff API is over-engineered; scan_version_id comparison is sufficient |
 
 ## Traceability
 
@@ -64,25 +63,21 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NAV-01 | Phase 52 | Complete |
-| NAV-02 | Phase 52 | Complete |
-| NAV-03 | Phase 52 | Complete |
-| NAV-04 | Phase 53 | Complete |
-| NAV-05 | Phase 54 | Complete |
-| NAV-06 | Phase 54 | Complete |
-| GRAPH-01 | Phase 57 | Complete |
-| GRAPH-02 | Phase 57 | Complete |
-| GRAPH-03 | Phase 56 | Complete |
-| GRAPH-04 | Phase 55 | Complete |
-| EXP-01 | Phase 52 | Complete |
-| DOC-01 | Phase 58 | Complete |
-| DOC-02 | Phase 58 | Complete |
+| DEPS-01 | — | Pending |
+| DEPS-02 | — | Pending |
+| DEPS-03 | — | Pending |
+| DEPS-04 | — | Pending |
+| MCP-01 | — | Pending |
+| MCP-02 | — | Pending |
+| MCP-03 | — | Pending |
+| VER-01 | — | Pending |
+| VER-02 | — | Pending |
 
 **Coverage:**
-- v5.1 requirements: 13 total
-- Mapped to phases: 13
-- Unmapped: 0 ✓
+- v5.2.0 requirements: 9 total
+- Mapped to phases: 0
+- Unmapped: 9 ⚠️
 
 ---
 *Requirements defined: 2026-03-21*
-*Last updated: 2026-03-21 after roadmap creation (phases 52-58)*
+*Last updated: 2026-03-21 after initial definition*
