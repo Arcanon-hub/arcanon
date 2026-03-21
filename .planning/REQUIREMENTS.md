@@ -12,7 +12,7 @@ Requirements for Graph Interactivity milestone. Each maps to roadmap phases.
 - [x] **NAV-01**: User can press F to fit all nodes to screen
 - [x] **NAV-02**: User can press Esc to deselect current node and close detail panel
 - [x] **NAV-03**: User can press / to focus the search input
-- [ ] **NAV-04**: User can click a service name in the detail panel connections list to select and pan to that node
+- [x] **NAV-04**: User can click a service name in the detail panel connections list to select and pan to that node
 - [ ] **NAV-05**: User can press I on a selected node to isolate its subgraph (1-hop default)
 - [ ] **NAV-06**: User can press 2/3 to expand isolation to 2-hop or 3-hop depth
 
@@ -67,7 +67,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | NAV-01 | Phase 52 | Complete |
 | NAV-02 | Phase 52 | Complete |
 | NAV-03 | Phase 52 | Complete |
-| NAV-04 | Phase 53 | Pending |
+| NAV-04 | Phase 53 | Complete |
 | NAV-05 | Phase 54 | Pending |
 | NAV-06 | Phase 54 | Pending |
 | GRAPH-01 | Phase 57 | Pending |

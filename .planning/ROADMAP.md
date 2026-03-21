@@ -101,7 +101,7 @@ Full details: `.planning/milestones/v5.0-ROADMAP.md`
 **Milestone Goal:** Make the graph visualization useful for daily debugging with keyboard-driven navigation, subgraph isolation, change detection, and edge bundling.
 
 - [x] **Phase 52: Keyboard Shortcuts & PNG Export** - F/Esc/slash keyboard shortcuts and one-click canvas export (completed 2026-03-21)
-- [ ] **Phase 53: Clickable Detail Panel Targets** - Service names in connections list navigate to that node on click
+- [x] **Phase 53: Clickable Detail Panel Targets** - Service names in connections list navigate to that node on click (completed 2026-03-21)
 - [ ] **Phase 54: Subgraph Isolation** - I key isolates selected node's N-hop neighborhood; 2/3 keys expand depth
 - [ ] **Phase 55: Scan Version API** - /graph API exposes scan_version_id per service and connection
 - [ ] **Phase 56: What-Changed Overlay** - New/modified nodes and edges from the latest scan are visually highlighted
@@ -218,7 +218,7 @@ Phases execute in numeric order: 52 → 53 → 54 → 55 → 56 → 57 → 58
 | 46-48 | v4.1 | 6/6 | Complete | 2026-03-20 |
 | 49-51 | v5.0 | 5/5 | Complete | 2026-03-21 |
 | 52. Keyboard Shortcuts & PNG Export | 2/2 | Complete   | 2026-03-21 | - |
-| 53. Clickable Detail Panel Targets | v5.1 | 0/1 | Not started | - |
+| 53. Clickable Detail Panel Targets | 1/1 | Complete   | 2026-03-21 | - |
 | 54. Subgraph Isolation | v5.1 | 0/2 | Not started | - |
 | 55. Scan Version API | v5.1 | 0/1 | Not started | - |
 | 56. What-Changed Overlay | v5.1 | 0/TBD | Not started | - |
