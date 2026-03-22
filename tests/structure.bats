@@ -62,24 +62,16 @@ setup() {
 }
 
 @test "all command files exist" {
-  for cmd in quality-gate cross-impact drift; do
+  for cmd in cross-impact drift; do
     assert [ -f "commands/$cmd.md" ]
   done
 }
 
 @test "all command files have valid frontmatter" {
-  for cmd in quality-gate cross-impact drift; do
+  for cmd in cross-impact drift; do
     run grep -c "^description:" "commands/$cmd.md"
     assert_success
   done
-}
-
-@test "quality-gate skill exists for auto-invocation" {
-  assert [ -f "skills/quality-gate/SKILL.md" ]
-  run grep -c "^name:" "skills/quality-gate/SKILL.md"
-  assert_success
-  run grep -c "^description:" "skills/quality-gate/SKILL.md"
-  assert_success
 }
 
 @test "all hook scripts are executable" {

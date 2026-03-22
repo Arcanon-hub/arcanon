@@ -135,7 +135,7 @@ assert 'Python' in ctx, 'expected Python in context: ' + ctx
 import sys, json
 d = json.load(sys.stdin)
 ctx = d['hookSpecificOutput']['additionalContext']
-assert '/ligamen:quality-gate' in ctx, 'expected /ligamen:quality-gate in context: ' + ctx
+assert '/ligamen:cross-impact' in ctx, 'expected /ligamen:cross-impact in context: ' + ctx
 "
   rm -f /tmp/ligamen_session_bats-pt-02.initialized
 }
@@ -393,7 +393,7 @@ assert 'hookSpecificOutput' in d, 'missing hookSpecificOutput'
 assert 'additionalContext' in d['hookSpecificOutput'], 'missing additionalContext'
 ctx = d['hookSpecificOutput']['additionalContext']
 assert 'Ligamen active' in ctx, 'expected Ligamen active in context: ' + ctx
-assert '/ligamen:quality-gate' in ctx, 'expected commands in context: ' + ctx
+assert '/ligamen:cross-impact' in ctx, 'expected commands in context: ' + ctx
 "
 
   rm -f /tmp/ligamen_session_bats-intg-02.initialized
