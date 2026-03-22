@@ -109,23 +109,21 @@ Every edit is automatically formatted and linted, every quality check runs with 
 - ✓ Auth mechanism and DB backend extracted via regex enrichment pass (THE-943) — v5.3.0
 - ✓ Missing metadata shows "unknown" in detail panel (THE-944) — v5.3.0
 
+- ✓ Known-service guard prevents phantom actor hexagons in graph for scanned services (THE-945) — v5.4.0
+- ✓ detectRepoType docker-compose exemption + Go/Java/Poetry library heuristics (THE-955) — v5.4.0
+- ✓ CODEOWNERS enricher uses absolute path for probing, relative for matching (THE-956) — v5.4.0
+- ✓ Discovery agent (Phase 1) wired before deep scan with {{DISCOVERY_JSON}} injection (THE-953) — v5.4.0
+- ✓ Multi-language prompt examples (Java, C#, Ruby, Kotlin) replacing Python/JS bias (THE-959) — v5.4.0
+- ✓ Dead code removed: agent-prompt-deep.md deleted, promptDeep variable removed (THE-954) — v5.4.0
+- ✓ findings.js warn-and-skip for invalid type enum, empty root_path/language (THE-957) — v5.4.0
+- ✓ execFileSync with argument arrays replacing execSync string interpolation (THE-958) — v5.4.0
+- ✓ Parallel scan fan-out with retry-once and skip-with-warning (THE-952) — v5.4.0
+- ✓ Graph UI actor dedup filter as defense-in-depth layer (THE-948) — v5.4.0
+- ✓ All manifests at version 5.4.0 — v5.4.0
+
 ### Active
 
-## Current Milestone: v5.4.0 Scan Pipeline Hardening
-
-**Goal:** Fix scan pipeline bugs, wire up the unused discovery phase for language-agnostic scanning, harden validation, and clean up dead code.
-
-**Target features:**
-- Fix persistFindings duplicate actor creation for known services (THE-945)
-- Wire up discovery phase (Phase 1) before deep scan for language-agnostic repo analysis (THE-953)
-- Strip hardcoded Python/JS bias from agent prompts using discovery context (THE-959)
-- Fix detectRepoType misclassification of service repos with docker-compose (THE-955)
-- Fix codeowners enricher absolute path bug (THE-956)
-- Tighten findings.js validation for services[].type and required fields (THE-957)
-- Replace execSync string interpolation with execFileSync argument arrays (THE-958)
-- Add UI-layer actor deduplication as defense in depth (THE-948)
-- Remove dead code: agent-prompt-deep.md and promptDeep variable (THE-954)
-- Scan reliability: parallel agents, error handling, prompt size (THE-952)
+(No active requirements — start next milestone with `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -139,11 +137,14 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ## Context
 
-Shipped v5.3.0 with ~45,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 73 phases across 13 milestones, 128 plans. Repo restructured as Claude Code marketplace — plugin source lives under `plugins/ligamen/`, installable via `claude plugin marketplace add` + `claude plugin install`. MCP server has 8 tools (5 impact + 3 drift). Runtime deps installed automatically on first session via SessionStart hook + self-healing MCP wrapper. Post-scan enrichment architecture extracts team ownership (CODEOWNERS), auth mechanisms, and database backends. Confidence/evidence on connections, schema/field data in detail panel.
+Shipped v5.4.0 with ~47,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 79 phases across 14 milestones, 137 plans. Repo restructured as Claude Code marketplace — plugin source lives under `plugins/ligamen/`, installable via `claude plugin marketplace add` + `claude plugin install`. MCP server has 8 tools (5 impact + 3 drift). Runtime deps installed automatically on first session via SessionStart hook + self-healing MCP wrapper. Post-scan enrichment architecture extracts team ownership (CODEOWNERS), auth mechanisms, and database backends. Confidence/evidence on connections, schema/field data in detail panel.
 
-Architecture: commands/ for user-invoked features, skills/ for auto-invoked knowledge, hooks/ for formatting/linting/guarding, worker/ for Node.js daemon (db/, server/, scan/, mcp/, ui/ subdirectories), lib/ for shared bash/JS libraries. Agent scan prompts modularized into type-specific variants (service, library, infra) with shared common component. Graph UI uses deterministic layered layout with boundary grouping, external actor hexagons, and protocol-differentiated edges. Filter panel provides protocol, layer, boundary, language, mismatch, and isolated-node toggles.
+Architecture: commands/ for user-invoked features, skills/ for auto-invoked knowledge, hooks/ for formatting/linting/guarding, worker/ for Node.js daemon (db/, server/, scan/, mcp/, ui/ subdirectories), lib/ for shared bash/JS libraries. Two-phase scan pipeline: discovery agent (Phase 1) detects languages/frameworks/entry-points, then deep scan agent (Phase 2) receives discovery context via {{DISCOVERY_JSON}} for language-aware analysis. Agent prompts modularized into type-specific variants (service, library, infra) with shared common component and multi-language examples. Parallel scan fan-out with retry-once error handling. Graph UI uses deterministic layered layout with boundary grouping, actor dedup filter, and protocol-differentiated edges. Filter panel provides protocol, layer, boundary, language, mismatch, and isolated-node toggles.
 
-Known tech debt: no log rotation, db/database.js has console.log in script-mode guard, getQueryEngineByHash inline migration workaround, renderLibraryConnections() unused `outgoing` parameter, node_metadata table unused (forward-looking for STRIDE/vuln views), query-engine-upsert.test.js pre-existing failure (test schema missing migrations 5-8), impact-flow.bats imports stale module paths (pre-existing from v3.0 restructure), package.json bin entry references non-existent ligamen-init.js.
+Known tech debt: no log rotation, db/database.js has console.log in script-mode guard, getQueryEngineByHash inline migration workaround, renderLibraryConnections() unused `outgoing` parameter, node_metadata table unused (forward-looking for STRIDE/vuln views), query-engine-upsert.test.js pre-existing failure (test schema missing migrations 5-8), impact-flow.bats imports stale module paths (pre-existing from v3.0 restructure), package.json bin entry references non-existent ligamen-init.js, graph-fit-to-screen.test.js has 2 stale assertions for inlined fitToScreen() (Phase 26 regression).
+
+---
+*Last updated: 2026-03-22 after v5.4.0 milestone*
 
 ## Constraints
 

@@ -1,5 +1,15 @@
 # Milestones
 
+## v5.4.0 Scan Pipeline Hardening (Shipped: 2026-03-22)
+
+**Phases completed:** 6 phases, 9 plans, 0 tasks
+
+**Key accomplishments:**
+
+- (none recorded)
+
+---
+
 ## v5.3.0 Scan Intelligence & Enrichment (Shipped: 2026-03-22)
 
 **Phases completed:** 7 phases, 12 plans, 2 tasks
