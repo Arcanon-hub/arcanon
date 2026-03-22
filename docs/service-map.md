@@ -63,6 +63,25 @@ When multiple connections exist between the same two services, they're bundled i
 
 After a re-scan, new or modified nodes get a glow ring and "NEW" badge, and new edges are highlighted — making recent changes visible at a glance.
 
+**Filtering:**
+
+The graph toolbar includes filters to narrow down what's visible:
+
+- Protocol filter — toggle REST, gRPC, events, internal connections
+- Layer filter — show/hide services, libraries, infrastructure, external actors
+- Language filter — show only services written in a specific language
+- Boundary filter — show only services in a specific organizational boundary
+- Mismatch-only — show only edges with detected mismatches
+- Hide isolated nodes — remove nodes with zero visible connections
+
+**Project picker:**
+
+If you've scanned multiple projects, the graph UI shows a project picker to switch between them.
+
+**Log terminal:**
+
+A collapsible panel at the bottom shows real-time scan progress logs. You can filter by component (agent, mcp, http, etc.) and search within logs. Useful for monitoring long-running scans.
+
 **PNG export:**
 
 Click the camera icon in the toolbar to download a screenshot of the current view.
@@ -94,4 +113,18 @@ Add this to your Claude Code MCP settings (typically `~/.claude/settings.json` u
 }
 ```
 
-This gives all Claude sessions access to these MCP tools: `impact_query`, `impact_changed`, `impact_graph`, `impact_search`, and `impact_scan`.
+This gives all Claude sessions access to these tools:
+
+**Impact tools:**
+
+- `impact_query` — query which services consume or are consumed by a given service, with optional endpoint filtering and transitive tracing
+- `impact_changed` — identify which services are affected by currently changed files (uses git diff)
+- `impact_graph` — return the dependency subgraph for a service (1-5 hops, upstream/downstream/both)
+- `impact_search` — full-text search across all service connections (uses ChromaDB semantic search when available, falls back to keyword search)
+- `impact_scan` — trigger a dependency scan via the background worker
+
+**Drift tools:**
+
+- `drift_versions` — query dependency version mismatches across repos
+- `drift_types` — query type/interface definition drift
+- `drift_openapi` — query OpenAPI spec changes

@@ -901,7 +901,8 @@ export class QueryEngine {
       const metaRows = this._db.prepare(`
         SELECT service_id, key, value
         FROM node_metadata
-        WHERE view = 'scan' AND key IN ('owner', 'auth_mechanism', 'db_backend')
+        WHERE view IN ('enrichment', 'security', 'infra', 'ownership')
+          AND key IN ('owner', 'owners', 'auth_mechanism', 'db_backend')
       `).all();
       const metaByService = {};
       for (const row of metaRows) {
@@ -1260,8 +1261,8 @@ export function enrichImpactResult(db, serviceName, results) {
           SELECT nm.key, nm.value, s.name as service_name
           FROM node_metadata nm
           JOIN services s ON s.id = nm.service_id
-          WHERE nm.view = 'scan'
-            AND nm.key IN ('owner', 'auth_mechanism', 'db_backend')
+          WHERE nm.view IN ('enrichment', 'security', 'infra', 'ownership')
+            AND nm.key IN ('owner', 'owners', 'auth_mechanism', 'db_backend')
             AND s.name IN (${placeholders})
         `).all(...serviceNames);
 
@@ -1310,8 +1311,8 @@ export function enrichAffectedResult(db, affected) {
       SELECT nm.key, nm.value, s.name as service_name
       FROM node_metadata nm
       JOIN services s ON s.id = nm.service_id
-      WHERE nm.view = 'scan'
-        AND nm.key IN ('owner', 'auth_mechanism', 'db_backend')
+      WHERE nm.view IN ('enrichment', 'security', 'infra', 'ownership')
+        AND nm.key IN ('owner', 'owners', 'auth_mechanism', 'db_backend')
         AND s.name IN (${placeholders})
     `).all(...serviceNames);
 

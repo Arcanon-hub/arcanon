@@ -24,7 +24,10 @@ This command scans linked repositories using Claude agents to discover services,
 source ${CLAUDE_PLUGIN_ROOT}/lib/worker-client.sh
 worker_running || bash ${CLAUDE_PLUGIN_ROOT}/scripts/worker-start.sh
 PORT=$(cat ~/.ligamen/worker.port)
-open "http://localhost:${PORT}"
+# Cross-platform open
+if command -v xdg-open &>/dev/null; then xdg-open "http://localhost:${PORT}"
+elif command -v open &>/dev/null; then open "http://localhost:${PORT}"
+else echo "Open http://localhost:${PORT} in your browser"; fi
 ```
 
 Print "Graph UI opened" and stop. Do not proceed to scanning.
@@ -38,8 +41,9 @@ Find repos to scan from two sources:
 **From config:**
 
 ```bash
-[ -f ligamen.config.json ] && node -e "
-  const c = JSON.parse(require('fs').readFileSync('ligamen.config.json', 'utf8'));
+[ -f ligamen.config.json ] && node --input-type=module -e "
+  import fs from 'fs';
+  const c = JSON.parse(fs.readFileSync('ligamen.config.json', 'utf8'));
   (c['linked-repos'] || []).forEach(r => console.log(r));
 "
 ```
@@ -89,10 +93,10 @@ PROJECT_ROOT="$(pwd)"
    Compare with the repo's `last_scanned_commit` from the database. If they match and `full` is not set, skip this repo and print: "Skipping <repo> (no changes since last scan)".
 
 2. **Phase 1 — Discovery** (fast, reads only structure files):
-   Read the discovery prompt template:
+   Read the discovery prompt template using the Read tool:
 
-   ```bash
-   cat ${CLAUDE_PLUGIN_ROOT}/worker/scan/agent-prompt-discovery.md
+   ```
+   Read(${CLAUDE_PLUGIN_ROOT}/worker/scan/agent-prompt-discovery.md)
    ```
 
    Replace `{{REPO_PATH}}` with the absolute path. Spawn a quick agent:
@@ -108,10 +112,10 @@ PROJECT_ROOT="$(pwd)"
    The agent returns a JSON with `languages`, `frameworks`, `service_hints`, `route_files`, etc. This takes seconds.
 
 3. **Phase 2 — Deep scan** (reads source code, targeted by discovery):
-   Read the deep scan prompt template:
+   Read the deep scan prompt template using the Read tool:
 
-   ```bash
-   cat ${CLAUDE_PLUGIN_ROOT}/worker/scan/agent-prompt-deep.md
+   ```
+   Read(${CLAUDE_PLUGIN_ROOT}/worker/scan/agent-prompt-deep.md)
    ```
 
    Replace `{{REPO_PATH}}` with the absolute path. Replace `{{DISCOVERY_JSON}}` with the Phase 1 JSON output. Spawn a focused agent:
@@ -171,19 +175,30 @@ Uncertain: Is user-api calling config-service at GET /config?
 
 ## Step 4: Save to Database
 
-Write the confirmed findings directly to SQLite using the Ligamen db module:
+First, write the confirmed findings JSON to a temp file to avoid shell escaping and ARG_MAX issues:
+
+```bash
+# Write findings to temp file (use Write tool, or echo with heredoc)
+FINDINGS_FILE=$(mktemp /tmp/ligamen-findings-XXXXXX.json)
+```
+
+Then save to SQLite using the beginScan/endScan bracket to garbage-collect stale data:
 
 ```bash
 node --input-type=module -e "
-  import { openDb, writeScan } from '${CLAUDE_PLUGIN_ROOT}/worker/db/database.js';
+  import fs from 'fs';
+  import { openDb } from '${CLAUDE_PLUGIN_ROOT}/worker/db/database.js';
   import { QueryEngine } from '${CLAUDE_PLUGIN_ROOT}/worker/db/query-engine.js';
   const db = openDb('${PROJECT_ROOT}');
   const qe = new QueryEngine(db);
-  const findings = JSON.parse(process.argv[1]);
+  const findings = JSON.parse(fs.readFileSync('${FINDINGS_FILE}', 'utf8'));
   const repoId = qe.upsertRepo({ path: findings.repo_path, name: findings.repo_name, type: 'single' });
-  qe.persistFindings(repoId, findings, findings.commit || null);
+  const scanVersionId = qe.beginScan(repoId);
+  qe.persistFindings(repoId, findings, findings.commit || null, scanVersionId);
+  qe.endScan(repoId, scanVersionId);
   console.log('saved');
-" '<CONFIRMED_FINDINGS_JSON>'
+"
+rm -f "${FINDINGS_FILE}"
 ```
 
 Repeat for each repo. Print: "Dependency map saved. N services, M connections."

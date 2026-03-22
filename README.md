@@ -1,176 +1,80 @@
 # Ligamen
 
-Quality gates, cross-repo impact analysis, and service dependency intelligence for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
+**Your AI coding agent doesn't know what it's about to break.**
 
-Ligamen is a Claude Code **plugin** that auto-formats, auto-lints, guards sensitive files, and maps service dependencies across your repositories — with an interactive layered graph UI.
+Claude Code is powerful — it writes, refactors, and ships code fast. But it operates blind to what lives in your other repositories. It doesn't know that the endpoint it just renamed is called by three downstream services, or that the schema it changed is shared across your entire platform.
 
-## Installation
+Ligamen gives Claude Code a service dependency graph that spans all your repositories. Before changes are made, Claude can see which services are connected, trace the blast radius of a change, and catch drift across API contracts, shared types, and dependency versions — so your AI agent stops introducing cross-service bugs.
+
+## What Ligamen Does
+
+**Maps your architecture.** Ligamen scans your linked repositories with Claude agents to build an interactive service dependency graph — services, libraries, infrastructure, external actors, and every connection between them. Explore it visually in an interactive graph UI at `http://localhost:37888`.
+
+**Shows what breaks before it breaks.** Run `/ligamen:cross-impact` and Ligamen traces dependencies through your service graph, flagging every downstream service affected by your changes — ranked by severity. Your AI agent can check this automatically via MCP tools before making any modification.
+
+**Catches drift across repos.** Dependency versions out of sync? Type definitions that diverged? OpenAPI specs that don't agree? `/ligamen:drift` finds the inconsistencies before they become production incidents.
+
+**Keeps your code clean automatically.** Every file Claude edits gets auto-formatted and auto-linted. Sensitive files like `.env`, lock files, and credentials are protected from accidental writes. No configuration needed.
+
+## Quick Start
 
 ```bash
 claude plugin marketplace add https://github.com/chilleregeravi/ligamen
 claude plugin install ligamen@ligamen --scope user
 ```
 
-This registers Ligamen globally — all your Claude Code sessions will have access to the hooks and commands.
+That's it. Ligamen works with zero configuration — hooks activate immediately, and commands are available in every Claude Code session.
 
-**Update:**
-
-```bash
-claude plugin update ligamen@ligamen
-```
-
-**Uninstall:**
-
-```bash
-claude plugin uninstall ligamen@ligamen
-```
-
-### Contributing
-
-See [Development](docs/development.md) for cloning the repo, running tests, and submitting changes.
-
-## What It Does
-
-**Runs automatically (hooks):**
-- Auto-format on every edit (Python, Rust, TypeScript, Go)
-- Auto-lint with issues surfaced to Claude
-- Block writes to `.env`, lock files, credentials
-- Session context with project type detection
-
-**On-demand (commands):**
-- `/ligamen:quality-gate` — lint, format, test, typecheck
-- `/ligamen:map` — scan repos and build service dependency graph
-- `/ligamen:cross-impact` — find what breaks when you change something
-- `/ligamen:drift` — check dependency version alignment across repos
-
-**Graph UI (http://localhost:37888):**
-- Deterministic layered layout (services, libraries, infrastructure)
-- Boundary grouping with labeled boxes
-- External actor detection (hexagon nodes)
-- Protocol-differentiated edges (solid/dashed/dotted)
-- Collapsible filter panel (protocol, layer, boundary, language)
-- Click-to-inspect detail panels per node type
-- Keyboard-driven navigation (fit, deselect, search focus, subgraph isolation)
-- Clickable service names in the detail panel connections list navigate directly to that node
-- Subgraph isolation (I key, expandable to 2/3 hops)
-- What-changed overlay (new/modified nodes and edges from the latest scan are visually highlighted)
-- Edge bundling (parallel edges between the same node pair collapse into a single edge with count badge)
-- One-click PNG export button to screenshot the current canvas view
-
-### Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `F` | Fit all nodes to the visible canvas area |
-| `Esc` | Deselect the current node and close the detail panel |
-| `/` | Move keyboard focus to the search input |
-| `I` | Isolate the selected node's subgraph (1-hop neighborhood) |
-| `2` | Expand isolation to 2-hop depth |
-| `3` | Expand isolation to 3-hop depth |
-
-## Configuration
-
-Zero-config by default. Optional overrides:
-
-### Project Config: `ligamen.config.json`
-
-Lives in your project root. Committed to git.
-
-```json
-{
-  "linked-repos": [
-    "../api",
-    "../auth",
-    "../sdk"
-  ],
-  "boundaries": [
-    {
-      "name": "core",
-      "label": "Core Services",
-      "services": ["api-gateway", "auth-service", "user-service"]
-    },
-    {
-      "name": "adapters",
-      "label": "Protocol Adapters",
-      "services": ["grpc-adapter", "mqtt-adapter"]
-    }
-  ]
-}
-```
-
-| Key | Purpose |
-|-----|---------|
-| `linked-repos` | Explicit list of connected repos. Auto-discovered from parent dir if absent. |
-| `boundaries` | Optional service grouping for the graph UI. Services are enclosed in labeled boxes. |
-
-### Machine Settings: `~/.ligamen/settings.json`
-
-Machine-specific settings. Never committed.
-
-```json
-{
-  "LIGAMEN_WORKER_PORT": "37888",
-  "LIGAMEN_LOG_LEVEL": "INFO"
-}
-```
-
-### ChromaDB (optional)
-
-Ligamen can sync service graph data to [ChromaDB](https://www.trychroma.com/) for semantic search. This is optional — without it, Ligamen falls back to SQLite FTS5 full-text search.
-
-**1. Run ChromaDB locally:**
-
-```bash
-# Docker
-docker run -p 8000:8000 chromadb/chroma
-
-# Or pip
-pip install chromadb
-chroma run --host localhost --port 8000
-```
-
-**2. Enable in `~/.ligamen/settings.json`:**
-
-```json
-{
-  "LIGAMEN_CHROMA_MODE": "local",
-  "LIGAMEN_CHROMA_HOST": "localhost",
-  "LIGAMEN_CHROMA_PORT": "8000"
-}
-```
-
-**3. Re-scan your project:**
+**Build your first service map:**
 
 ```
 /ligamen:map
 ```
 
-Findings are synced to ChromaDB automatically after each scan. MCP tools and `/ligamen:cross-impact` will use ChromaDB for semantic search when available.
+**See what your changes affect:**
 
-**All ChromaDB settings:**
+```
+/ligamen:cross-impact
+```
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `LIGAMEN_CHROMA_MODE` | _(empty)_ | Set to `"local"` to enable ChromaDB sync |
-| `LIGAMEN_CHROMA_HOST` | `localhost` | ChromaDB server hostname |
-| `LIGAMEN_CHROMA_PORT` | `8000` | ChromaDB server port |
-| `LIGAMEN_CHROMA_SSL` | `false` | Enable HTTPS for ChromaDB connection |
-| `LIGAMEN_CHROMA_API_KEY` | _(empty)_ | API key for authenticated ChromaDB instances |
-| `LIGAMEN_CHROMA_TENANT` | `default_tenant` | ChromaDB tenant ID |
-| `LIGAMEN_CHROMA_DATABASE` | `default_database` | ChromaDB database name |
+**Check for drift across repos:**
 
-### Environment Variables
+```
+/ligamen:drift
+```
 
-| Variable | Effect |
-|----------|--------|
-| `LIGAMEN_DISABLE_FORMAT=1` | Skip auto-formatting |
-| `LIGAMEN_DISABLE_LINT=1` | Skip auto-linting |
-| `LIGAMEN_DISABLE_GUARD=1` | Skip file guard |
-| `LIGAMEN_DISABLE_SESSION_START=1` | Skip session context |
+## Commands
+
+| Command | What it does |
+|---------|-------------|
+| `/ligamen:map` | Scan repos and build service dependency graph |
+| `/ligamen:map view` | Open the graph UI without re-scanning |
+| `/ligamen:cross-impact` | Trace blast radius of current changes across services |
+| `/ligamen:drift` | Find version mismatches, type drift, and API spec divergence |
+| `/ligamen:quality-gate` | Run lint, format, test, and typecheck for your project |
+
+See [Commands](docs/commands.md) for full usage and options.
+
+## Automatic Behaviors
+
+Ligamen runs these in the background on every Claude Code session with zero setup:
+
+- **Auto-format** — formats every file Claude edits (Python, Rust, TypeScript, Go, JSON, YAML)
+- **Auto-lint** — runs your project's linter and surfaces issues to Claude
+- **File guard** — blocks writes to `.env`, lock files, credentials, and generated directories
+- **Session context** — detects your project type and auto-starts the graph worker if configured
+
+See [Automatic Behaviors](docs/hooks.md) for details and how to disable individual behaviors.
+
+## Graph UI
+
+After scanning, open `http://localhost:37888` to explore your service architecture visually — layered layout, boundary grouping, protocol-differentiated edges, subgraph isolation, blast radius highlighting, what-changed overlay, filtering by protocol/language/boundary, and PNG export.
+
+See [Service Map](docs/service-map.md) for the full feature set.
 
 ## MCP Server
 
-After building your first map, add the Ligamen MCP server so all Claude agents can check impact before making changes:
+After building your first map, add the Ligamen MCP server so every Claude agent — not just the session that ran the scan — can check impact before making changes:
 
 ```json
 {
@@ -184,15 +88,23 @@ After building your first map, add the Ligamen MCP server so all Claude agents c
 }
 ```
 
+Add this to your Claude Code MCP settings (typically `~/.claude/settings.json` under `"mcpServers"`).
+
+This exposes 8 tools to all Claude sessions: `impact_query`, `impact_changed`, `impact_graph`, `impact_search`, `impact_scan`, `drift_versions`, `drift_types`, and `drift_openapi`.
+
+## Configuration
+
+Ligamen works with zero configuration. For customization, see [Configuration](docs/configuration.md) — linked repos, service boundaries, ChromaDB semantic search, environment variables, and machine settings.
+
 ## Documentation
 
 | Doc | Description |
 |-----|-------------|
-| [Hooks](docs/hooks.md) | Auto-format, auto-lint, file guard, session context |
-| [Commands](docs/commands.md) | All slash commands with usage examples |
-| [Service Map](docs/service-map.md) | Dependency graph scanning, storage, visualization |
-| [Configuration](docs/configuration.md) | Config files, environment variables, settings |
-| [Architecture](docs/architecture.md) | Project structure, worker process, MCP server |
+| [Commands](docs/commands.md) | All slash commands with usage and options |
+| [Automatic Behaviors](docs/hooks.md) | Auto-format, auto-lint, file guard, session context |
+| [Service Map](docs/service-map.md) | Dependency graph scanning, graph UI, MCP setup |
+| [Configuration](docs/configuration.md) | Project config, environment variables, ChromaDB, advanced settings |
+| [Architecture](docs/architecture.md) | System internals for contributors |
 | [Development](docs/development.md) | Testing, linting, contributing |
 
 ## License

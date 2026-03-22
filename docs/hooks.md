@@ -51,6 +51,13 @@ You can add your own blocked patterns with the `LIGAMEN_EXTRA_BLOCKED` environme
 
 When you start a Claude Code session, Ligamen detects your project type and injects the available commands into context. If you've previously built a dependency map, it also starts the background worker automatically so the graph UI and MCP tools are ready.
 
+## Auto-Triggered Skills
+
+In addition to hooks, Ligamen includes two skills that Claude automatically invokes based on context — you don't need to use a slash command:
+
+- **Quality gate skill** — when you ask Claude to run checks, verify code quality, or prepare for a commit, it automatically uses Ligamen's quality gate.
+- **Impact skill** — when you ask Claude about service dependencies, impact mapping, or cross-repo scanning, it automatically uses Ligamen's map and impact tools. On first use, it also suggests setting up ChromaDB and the MCP server.
+
 ## Disabling Behaviors
 
 | Variable | Effect |
