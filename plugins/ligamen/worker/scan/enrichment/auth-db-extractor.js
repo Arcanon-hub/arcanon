@@ -37,6 +37,40 @@ function isExcluded(filePath) {
 }
 
 // ---------------------------------------------------------------------------
+// Shannon entropy — detect high-entropy strings (secrets, tokens, passwords)
+// ---------------------------------------------------------------------------
+
+/**
+ * Calculate Shannon entropy in bits per character.
+ * @param {string} str
+ * @returns {number}
+ */
+export function shannonEntropy(str) {
+  if (!str || str.length === 0) return 0;
+  const freq = {};
+  for (const ch of str) freq[ch] = (freq[ch] || 0) + 1;
+  const len = str.length;
+  let entropy = 0;
+  for (const count of Object.values(freq)) {
+    const p = count / len;
+    entropy -= p * Math.log2(p);
+  }
+  return entropy;
+}
+
+const ENTROPY_REJECT_THRESHOLD = 4.0;   // bits/char — reject above this
+const ENTROPY_WARN_THRESHOLD   = 3.5;   // bits/char — log warn between 3.5 and 4.0
+
+// Module-level injectable logger (for near-threshold warn logging)
+let _logger = null;
+
+/**
+ * Inject a logger for near-threshold entropy warn logging.
+ * @param {object|null} logger
+ */
+export function setExtractorLogger(logger) { _logger = logger; }
+
+// ---------------------------------------------------------------------------
 // Credential rejection — reject extracted values that look like actual secrets
 // ---------------------------------------------------------------------------
 
@@ -53,7 +87,17 @@ const CREDENTIAL_REJECT = [
  */
 function isCredential(value) {
   if (!value || value.length > 40) return true;  // reject anything >40 chars
-  return CREDENTIAL_REJECT.some(p => p.test(value));
+  if (CREDENTIAL_REJECT.some(p => p.test(value))) return true;
+  const entropy = shannonEntropy(value);
+  if (entropy >= ENTROPY_REJECT_THRESHOLD) return true;
+  if (entropy >= ENTROPY_WARN_THRESHOLD && _logger) {
+    _logger.warn('near-threshold entropy value rejected from storage — review threshold', {
+      value_length: value.length,
+      entropy: entropy.toFixed(2),
+      threshold: ENTROPY_REJECT_THRESHOLD,
+    });
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------

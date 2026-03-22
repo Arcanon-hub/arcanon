@@ -447,8 +447,9 @@ describe('Shannon entropy credential rejection (SEC-02)', () => {
     assert.ok(shannonEntropy('postgresql') < 3.5, `expected < 3.5, got ${shannonEntropy('postgresql')}`);
   });
 
-  it('shannonEntropy("a]B7$kP2x!mQ9#wR") returns > 4.0 (high-entropy secret)', () => {
-    assert.ok(shannonEntropy('a]B7$kP2x!mQ9#wR') > 4.0, `expected > 4.0, got ${shannonEntropy('a]B7$kP2x!mQ9#wR')}`);
+  it('shannonEntropy("a]B7$kP2x!mQ9#wR") returns >= 4.0 (high-entropy secret)', () => {
+    // 16 unique chars in 16 positions: entropy = log2(16) = 4.0 exactly (>= REJECT_THRESHOLD)
+    assert.ok(shannonEntropy('a]B7$kP2x!mQ9#wR') >= 4.0, `expected >= 4.0, got ${shannonEntropy('a]B7$kP2x!mQ9#wR')}`);
   });
 
   it('shannonEntropy("") returns 0 (empty string)', () => {
@@ -500,11 +501,11 @@ describe('Shannon entropy credential rejection (SEC-02)', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('high-entropy secret (>4.0 bits/char) is rejected — not stored in DB', async () => {
-    // Craft a source that would match jwt regex but contains a high-entropy value in file
-    // We verify via a controlled test that shannonEntropy of the secret is > 4.0
+  it('high-entropy secret (>=4.0 bits/char) is rejected — not stored in DB', async () => {
+    // "a]B7$kP2x!mQ9#wR" has 16 unique chars in 16 positions → entropy = log2(16) = 4.0 exactly
+    // ENTROPY_REJECT_THRESHOLD = 4.0 rejects >= 4.0, so this string IS rejected
     const secret = 'a]B7$kP2x!mQ9#wR';
-    assert.ok(shannonEntropy(secret) > 4.0, 'precondition: secret has high entropy');
+    assert.ok(shannonEntropy(secret) >= 4.0, 'precondition: secret has high entropy (>= 4.0)');
     // Verify the value length check (> 40 chars) also rejects
     const longToken = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.XXXXXXXXXXXXXXXXXXX';
     assert.ok(longToken.length > 40, 'precondition: token is > 40 chars');
@@ -515,8 +516,8 @@ describe('Shannon entropy credential rejection (SEC-02)', () => {
   // -------------------------------------------------------------------------
 
   it('near-threshold entropy (3.5-4.0) triggers warn log but value is NOT rejected', async () => {
-    // "mongodb+srv" has ~3.7 entropy — in the near-threshold zone
-    const nearThresholdStr = 'mongodb+srv';
+    // "abcdefghijkl" has entropy ~3.585 — in the near-threshold zone [3.5, 4.0)
+    const nearThresholdStr = 'abcdefghijkl';
     const entropy = shannonEntropy(nearThresholdStr);
     assert.ok(entropy >= 3.5 && entropy < 4.0,
       `expected entropy in [3.5, 4.0), got ${entropy} for "${nearThresholdStr}"`);
@@ -524,8 +525,8 @@ describe('Shannon entropy credential rejection (SEC-02)', () => {
     // Build a scenario where the near-threshold string would be the detected label
     // by injecting a mock logger and testing isCredential behaviour indirectly.
     // We use the extractAuthAndDb integration path: craft an entry file and a custom
-    // mechanism that happens to match the near-threshold name "mongodb+srv".
-    // Since AUTH_SIGNALS has no "mongodb+srv" mechanism, instead we verify via
+    // mechanism that happens to match the near-threshold name "abcdefghijkl".
+    // Since AUTH_SIGNALS has no "abcdefghijkl" mechanism, instead we verify via
     // the warn logger being called when shannonEntropy is in the warn range.
 
     // Use shannonEntropy directly to confirm the near-threshold value and then
@@ -544,7 +545,7 @@ describe('Shannon entropy credential rejection (SEC-02)', () => {
     // extractorLogger injection works and then checking the entropy gate logic
     // through a separate integration test that uses an inline value.
 
-    // Verify shannonEntropy of "mongodb+srv" is in 3.5-4.0 range
+    // Verify shannonEntropy of "abcdefghijkl" is in 3.5-4.0 range
     assert.ok(entropy >= 3.5 && entropy < 4.0, 'near-threshold entropy precondition');
 
     // Clean up logger
@@ -552,24 +553,14 @@ describe('Shannon entropy credential rejection (SEC-02)', () => {
   });
 
   it('near-threshold warn log message contains "near-threshold"', async () => {
-    // Build a tmpDir where the detected mechanism will be a near-threshold value.
-    // "mongodb+srv" has entropy ~3.7 — simulate by using the API with the logger injected.
-    // We test this by calling extractAuthAndDb with a service whose auth signal
-    // matches a near-threshold mechanism label — but current AUTH_SIGNALS only has
-    // predefined labels like 'jwt', 'oauth2', etc. which are all low entropy.
-    //
-    // Instead, we test that the warn logger is invoked when isCredential receives
-    // a near-threshold input. We verify this via the setExtractorLogger integration:
-    // craft a source file that would trigger auth detection where the mechanism string
-    // itself is near-threshold. Since the mechanism comes from AUTH_SIGNALS (hardcoded
-    // labels), we need to test with a custom source.
-    //
-    // For now, we confirm: entropy("mongodb+srv") is in range AND logger would fire
-    // if isCredential were called with it. We test the guard by verifying that
-    // shannonEntropy values in [3.5,4.0) are accepted (not rejected) while those >= 4.0
-    // are rejected — the unit test for shannonEntropy values covers this.
+    // Verify the warn message emitted for near-threshold strings contains "near-threshold".
+    // We use a custom mechanism path: the "api-key" signal in javascript matches
+    // /[Aa]pi[Kk]ey|x-api-key|API_KEY/ — but its label is "api-key" (low entropy).
+    // To test the warn path, we directly simulate by checking the entropy boundary:
+    // any string with entropy in [3.5, 4.0) that goes through isCredential should
+    // trigger the logger. We confirm via setExtractorLogger + direct integration.
 
-    const nearThresholdStr = 'mongodb+srv';
+    const nearThresholdStr = 'abcdefghijkl';  // entropy ~3.585
     const highEntropyStr = 'a]B7$kP2x!mQ9#wR';
 
     assert.ok(shannonEntropy(nearThresholdStr) >= 3.5, 'near-threshold lower bound');
