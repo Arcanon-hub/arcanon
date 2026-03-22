@@ -472,5 +472,5 @@ Phases execute in numeric order: 67 → 68 → 69 → 70 → 71 → 72 → 73
 | 69. Auth & DB Extraction | 1/1 | Complete   | 2026-03-22 | - |
 | 70. Confidence & Evidence Pipeline | 1/1 | Complete   | 2026-03-22 | - |
 | 71. Schema Storage & API Extension | 2/2 | Complete   | 2026-03-22 | - |
-| 72. Detail Panel UI | 1/2 | In Progress|  | - |
+| 72. Detail Panel UI | 2/2 | Complete   | 2026-03-22 | - |
 | 73. Agent Prompts & Quality-Gate Spinout | v5.3.0 | 0/TBD | Not started | - |

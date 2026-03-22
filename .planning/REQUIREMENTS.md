@@ -13,7 +13,7 @@ Requirements for Scan Intelligence & Enrichment milestone. Each maps to roadmap 
 
 ### Schema Surfacing
 
-- [ ] **SCHEMA-01**: Schema/field data displayed in detail panel when connection selected (THE-938)
+- [x] **SCHEMA-01**: Schema/field data displayed in detail panel when connection selected (THE-938)
 - [x] **SCHEMA-02**: MCP impact tools include field-level severity in responses (THE-938)
 
 ### Confidence & Evidence
@@ -48,7 +48,7 @@ Requirements for Scan Intelligence & Enrichment milestone. Each maps to roadmap 
 
 ### Unknown State Display
 
-- [ ] **UNK-01**: Missing metadata fields show "unknown" in detail panel instead of being hidden (THE-944)
+- [x] **UNK-01**: Missing metadata fields show "unknown" in detail panel instead of being hidden (THE-944)
 
 ## Future Requirements
 
@@ -98,8 +98,8 @@ Deferred to future milestones. Tracked but not in current roadmap.
 | OWN-02 | Phase 71 | Complete |
 | OWN-03 | Phase 71 | Complete |
 | AUTHDB-03 | Phase 71 | Complete |
-| SCHEMA-01 | Phase 72 | Pending |
-| UNK-01 | Phase 72 | Pending |
+| SCHEMA-01 | Phase 72 | Complete |
+| UNK-01 | Phase 72 | Complete |
 | AGENT-01 | Phase 73 | Pending |
 | AGENT-02 | Phase 73 | Pending |
 | AGENT-03 | Phase 73 | Pending |

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 72-01-PLAN.md
-last_updated: "2026-03-22T11:10:35.312Z"
+stopped_at: Completed 72-02-PLAN.md
+last_updated: "2026-03-22T11:13:00Z"
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 12
-  completed_plans: 8
+  completed_plans: 10
 ---
 
 # Project State
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-21)
 
 ## Current Position
 
-Phase: 72 (Detail Panel UI) — EXECUTING
-Plan: 1 of 2
+Phase: 72 (Detail Panel UI) — COMPLETE
+Plan: 2 of 2 (all plans complete)
 
 ## Performance Metrics
 
@@ -58,6 +58,8 @@ Plan: 1 of 2
 - [Phase 71-schema-storage---api-extension]: v5.3.0: getGraph() fallback connections SELECT projects null as confidence, null as evidence for type consistency on pre-migration-009 DBs
 - [Phase 72-detail-panel-ui]: renderServiceMeta called only in non-actor branch of showDetailPanel — actor nodes have different data shape
 - [Phase 72-detail-panel-ui]: schemas_by_connection stored at state.graphData level (not per-node) — consistent with Phase 71 API design
+- [Phase 72-detail-panel-ui]: renderConnectionSchema wired into outgoing loop only in renderServiceConnections — incoming edges show schema at source service panel
+- [Phase 72-detail-panel-ui]: escapeHtml applied to f.name AND f.type — TypeScript generics must render as visible literal characters
 
 ### Pending Todos
 
@@ -70,6 +72,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T11:10:35.309Z
-Stopped at: Completed 72-01-PLAN.md
+Last session: 2026-03-22T11:13:00Z
+Stopped at: Completed 72-02-PLAN.md
 Resume file: None
