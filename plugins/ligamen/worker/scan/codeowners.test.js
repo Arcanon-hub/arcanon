@@ -387,3 +387,70 @@ describe('createCodeownersEnricher', () => {
     db.close();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test 7: SBUG-03 — separate repo root for file probe vs relative root_path for matching
+// ---------------------------------------------------------------------------
+
+describe('SBUG-03: relative root_path matching', () => {
+  let tmpDir;
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir();
+  });
+
+  afterEach(() => cleanDir(tmpDir));
+
+  it('finds .github/CODEOWNERS at absolute repo root and matches relative service root_path', async () => {
+    // Set up CODEOWNERS at the repo root (absolute path)
+    mkdirSync(join(tmpDir, '.github'), { recursive: true });
+    writeFileSync(join(tmpDir, '.github', 'CODEOWNERS'), 'services/api/ @backend-team\n');
+
+    const db = buildDb();
+    db.prepare("UPDATE services SET root_path = 'services/api' WHERE id = 1").run();
+
+    // ctx with repoAbsPath = absolute repo root, repoPath = relative service path
+    const ctx = {
+      serviceId: 1,
+      repoAbsPath: tmpDir,        // absolute repo root — for CODEOWNERS file probe
+      repoPath: 'services/api',   // relative service root_path — for pattern matching
+      language: 'javascript',
+      entryFile: 'index.js',
+      db,
+      logger: null,
+    };
+
+    const result = await createCodeownersEnricher()(ctx);
+
+    // Should have matched 'services/api/' pattern and returned @backend-team
+    assert.strictEqual(result.owner, '@backend-team', `Expected @backend-team, got ${result.owner}`);
+
+    const row = db.prepare("SELECT * FROM node_metadata WHERE view = 'ownership'").get();
+    assert.ok(row, 'should have written an ownership row');
+    const owners = JSON.parse(row.value);
+    assert.deepStrictEqual(owners, ['@backend-team']);
+    db.close();
+  });
+
+  it('falls back to ctx.repoPath for file probe when repoAbsPath is absent (backward compatible)', async () => {
+    // Set up CODEOWNERS at tmpDir root (used as both repo root and match path)
+    writeFileSync(join(tmpDir, 'CODEOWNERS'), '* @org/everyone\n');
+
+    const db = buildDb();
+    const ctx = {
+      serviceId: 1,
+      // repoAbsPath intentionally absent — legacy/test context
+      repoPath: tmpDir,           // absolute path (used as both probe root and match path — legacy behavior)
+      language: 'javascript',
+      entryFile: 'index.js',
+      db,
+      logger: null,
+    };
+
+    // Should not crash; should fall back to ctx.repoPath for file probe
+    const result = await createCodeownersEnricher()(ctx);
+    // tmpDir matches '*' pattern — owner is @org/everyone
+    assert.ok(result !== undefined, 'should return a result without crashing');
+    db.close();
+  });
+});
