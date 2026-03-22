@@ -38,7 +38,7 @@ Requirements for Scan Intelligence & Enrichment milestone. Each maps to roadmap 
 
 - [ ] **AGENT-01**: Agent prompt makes source_file required on connections (THE-942)
 - [ ] **AGENT-02**: Validation warns when source_file missing on connections (THE-942)
-- [ ] **AGENT-03**: File paths displayed in detail panel connections list (THE-942)
+- [x] **AGENT-03**: File paths displayed in detail panel connections list (THE-942)
 
 ### Auth & DB Extraction
 
@@ -102,7 +102,7 @@ Deferred to future milestones. Tracked but not in current roadmap.
 | UNK-01 | Phase 72 | Complete |
 | AGENT-01 | Phase 73 | Pending |
 | AGENT-02 | Phase 73 | Pending |
-| AGENT-03 | Phase 73 | Pending |
+| AGENT-03 | Phase 73 | Complete |
 | QGATE-01 | Phase 73 | Pending |
 
 **Coverage:**
