@@ -46,6 +46,7 @@ Plan: 3 of 3
 - v5.5.0: SEC-01 (path traversal) is highest priority — ships in Phase 80 before any other work
 - v5.5.0: QUAL-02 (map project name) is partially implemented in the command file already
 - v5.5.0: Shannon entropy >= 4.0 bits/char rejects (>=, not >); 'abcdefghijkl' (3.585 entropy) is the correct near-threshold test fixture
+- v5.5.0: SEC-03 scan lock scope is the full repoPaths array; lock dir is $LIGAMEN_DATA_DIR or ~/.ligamen; stale detection via process.kill(pid, 0)
 
 ### Pending Todos
 
@@ -58,5 +59,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-22
-Stopped at: Completed 80-02-PLAN.md
+Stopped at: Completed 80-03-PLAN.md
 Resume file: None
