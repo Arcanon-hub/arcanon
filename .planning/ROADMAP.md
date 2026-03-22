@@ -489,9 +489,6 @@ Plans:
 - [ ] 75-01-PLAN.md — SVAL-01 warn-and-skip validation for service type/root_path/language in findings.js
 - [ ] 75-02-PLAN.md — SVAL-02 replace execSync with execFileSync argument arrays in manager.js
 
-
-
-
 ### Phase 76: Discovery Phase Wiring
 **Goal**: A discovery agent runs before the deep scan agent for each repo, producing structured language/framework/entry-point context that is injected into the deep scan prompt as {{DISCOVERY_JSON}}
 **Depends on**: Phase 74 (bug fixes should be stable before wiring new scan phases — discovery output affects scan flow)
@@ -504,9 +501,6 @@ Plans:
 **Plans:** 1 plan
 Plans:
 - [ ] 76-01-PLAN.md — Wire runDiscoveryPass into scanRepos loop + discovery wiring tests
-
-
-
 
 ### Phase 77: Prompt Debiasing & Dead Code Removal
 **Goal**: Active agent prompts use discovery context for language-specific guidance instead of hardcoded Python/JS examples; the unused agent-prompt-deep.md file and promptDeep variable are deleted after any unique content is migrated
@@ -530,9 +524,10 @@ Plans:
   2. When a deep scan agent call fails on first attempt, a single retry is automatically issued before the repo is skipped — the user sees a warning identifying the skipped repo by name
   3. A skipped repo (after retry failure) does not cause the entire `/ligamen:map` command to error out — remaining repos complete normally
   4. When the /graph endpoint returns an actor whose name exactly matches a known service name, the actor node is absent from the rendered graph and its connections point to the service node instead
-**Plans:** 1 plan
+**Plans:** 2 plans
 Plans:
-- [ ] 79-01-PLAN.md — Bump all manifest version fields to 5.4.0
+- [ ] 78-01-PLAN.md — Parallel scan fan-out with retry-once error handling
+- [ ] 78-02-PLAN.md — Graph UI actor dedup filter (defense in depth)
 
 ### Phase 79: Version Bump
 **Goal**: All manifest files reflect version 5.4.0 so the marketplace and plugin install surfaces present the correct version
