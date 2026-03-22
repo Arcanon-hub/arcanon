@@ -95,4 +95,30 @@ expectedTriggers.forEach((t) => {
 });
 
 console.log("PASS: migration 001 schema and FTS5 behavior");
+
+// Migration 009 assertions
+const connCols = db.prepare("PRAGMA table_info(connections)").all().map(c => c.name);
+assert.ok(connCols.includes("confidence"), "connections.confidence column exists");
+assert.ok(connCols.includes("evidence"), "connections.evidence column exists");
+
+const svcCols = db.prepare("PRAGMA table_info(services)").all().map(c => c.name);
+assert.ok(svcCols.includes("owner"), "services.owner column exists");
+assert.ok(svcCols.includes("auth_mechanism"), "services.auth_mechanism column exists");
+assert.ok(svcCols.includes("db_backend"), "services.db_backend column exists");
+
+const schemaCols = db.prepare("PRAGMA table_info(schemas)").all().map(c => c.name);
+assert.ok(schemaCols.includes("scan_version_id"), "schemas.scan_version_id column exists");
+
+const fieldCols = db.prepare("PRAGMA table_info(fields)").all().map(c => c.name);
+assert.ok(fieldCols.includes("scan_version_id"), "fields.scan_version_id column exists");
+
+const ver9 = db.prepare("SELECT MAX(version) FROM schema_versions").pluck().get();
+assert.ok(ver9 >= 9, "schema version is at least 9 (got " + ver9 + ")");
+
+// Idempotency: running up() again must not throw
+const { up: up009 } = await import("./migrations/009_confidence_enrichment.js");
+up009(db);
+assert.ok(true, "migration 009 is idempotent");
+
+console.log("Migration 009 assertions passed.");
 db.close();
