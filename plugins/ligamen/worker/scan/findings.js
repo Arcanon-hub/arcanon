@@ -28,7 +28,7 @@
  *   connections: Connection[],
  *   schemas: Schema[]
  * }} Findings
- * @typedef {{ valid: true, findings: Findings } | { valid: false, error: string }} FindingsResult
+ * @typedef {{ valid: true, findings: Findings, warnings: string[] } | { valid: false, error: string }} FindingsResult
  */
 
 /** @type {string[]} */
@@ -66,10 +66,11 @@ function err(error) {
 /**
  * Returns a success result.
  * @param {Findings} findings
- * @returns {{ valid: true, findings: Findings }}
+ * @param {string[]} [warnings]
+ * @returns {{ valid: true, findings: Findings, warnings: string[] }}
  */
-function ok(findings) {
-  return { valid: true, findings };
+function ok(findings, warnings = []) {
+  return { valid: true, findings, warnings };
 }
 
 // ---------------------------------------------------------------------------
@@ -220,7 +221,16 @@ export function validateFindings(obj) {
     }
   }
 
-  return ok(/** @type {Findings} */ (obj));
+  // Collect source_file warnings — null is valid but undesirable (AGENT-02 / THE-942)
+  const warnings = [];
+  for (let i = 0; i < obj.connections.length; i++) {
+    if (obj.connections[i].source_file === null) {
+      warnings.push(
+        `connection[${i}].source_file is null — agent did not identify call site`,
+      );
+    }
+  }
+  return ok(/** @type {Findings} */ (obj), warnings);
 }
 
 // ---------------------------------------------------------------------------
