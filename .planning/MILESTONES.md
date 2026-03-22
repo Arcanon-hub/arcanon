@@ -1,5 +1,15 @@
 # Milestones
 
+## v5.5.0 Security & Data Integrity Hardening (Shipped: 2026-03-22)
+
+**Phases completed:** 4 phases, 9 plans, 0 tasks
+
+**Key accomplishments:**
+
+- (none recorded)
+
+---
+
 ## v5.4.0 Scan Pipeline Hardening (Shipped: 2026-03-22)
 
 **Phases completed:** 6 phases, 9 plans, 0 tasks

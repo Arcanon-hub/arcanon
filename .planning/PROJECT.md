@@ -121,26 +121,23 @@ Every edit is automatically formatted and linted, every quality check runs with 
 - ✓ Graph UI actor dedup filter as defense-in-depth layer (THE-948) — v5.4.0
 - ✓ All manifests at version 5.4.0 — v5.4.0
 
+- ✓ MCP resolveDb() path traversal protection with path.resolve + startsWith guard — v5.5.0
+- ✓ Shannon entropy credential rejection (>=4.0 bits/char) in auth-db enricher — v5.5.0
+- ✓ Concurrent scan lock with filesystem PID-based stale detection — v5.5.0
+- ✓ endScan() schema FK cleanup for null-versioned connections — v5.5.0
+- ✓ upsertRepo() correct row ID on ON CONFLICT UPDATE — v5.5.0
+- ✓ node_metadata enrichment tests use canonical view names — v5.5.0
+- ✓ session-start.sh version mismatch worker restart — v5.5.0
+- ✓ Multi-strategy agent output parsing (fenced block, raw JSON, substring extraction) — v5.5.0
+- ✓ Transitive impact depth limit (7 hops) with 30s query timeout — v5.5.0
+- ✓ Auth-db extractor traversal guards (depth 8, 1MB cap, 8 excluded dirs) — v5.5.0
+- ✓ FTS5 LRU prepared statement cache (capacity 50) — v5.5.0
+- ✓ Journal mode pragma ordering contract tests — v5.5.0
+- ✓ /ligamen:map asks for project name before first scan — v5.5.0
+
 ### Active
 
-## Current Milestone: v5.5.0 Security & Data Integrity Hardening
-
-**Goal:** Fix security vulnerabilities, data integrity bugs, and critical test coverage gaps identified during v5.4.0 audit.
-
-**Target features:**
-- Path traversal protection in MCP resolveDb()
-- Concurrent scan protection with project locking
-- Agent output parsing hardening with multiple strategies
-- endScan() schema FK cleanup (already fixed, needs shipping from source)
-- upsertRepo() correct ID on update (already fixed, needs shipping from source)
-- node_metadata test view mismatch fix (already fixed, needs shipping from source)
-- Worker version restart on session start (already fixed, needs shipping from source)
-- Credential rejection hardening with entropy-based detection
-- Transitive dependency depth limit with query timeout
-- Journal mode pragma test coverage
-- Auth-db extractor file traversal limits
-- FTS5 prepared statement caching
-- Map command asks user for project name
+(No active requirements — start next milestone with `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -154,14 +151,14 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ## Context
 
-Shipped v5.4.0 with ~47,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 79 phases across 14 milestones, 137 plans. Repo restructured as Claude Code marketplace — plugin source lives under `plugins/ligamen/`, installable via `claude plugin marketplace add` + `claude plugin install`. MCP server has 8 tools (5 impact + 3 drift). Runtime deps installed automatically on first session via SessionStart hook + self-healing MCP wrapper. Post-scan enrichment architecture extracts team ownership (CODEOWNERS), auth mechanisms, and database backends. Confidence/evidence on connections, schema/field data in detail panel.
+Shipped v5.5.0 with ~48,000 LOC (Node.js worker, Canvas UI, shell scripts, bats tests). 83 phases across 15 milestones, 146 plans. Repo restructured as Claude Code marketplace — plugin source lives under `plugins/ligamen/`, installable via `claude plugin marketplace add` + `claude plugin install`. MCP server has 8 tools (5 impact + 3 drift). Runtime deps installed automatically on first session via SessionStart hook + self-healing MCP wrapper. Post-scan enrichment architecture extracts team ownership (CODEOWNERS), auth mechanisms, and database backends. Confidence/evidence on connections, schema/field data in detail panel.
 
 Architecture: commands/ for user-invoked features, skills/ for auto-invoked knowledge, hooks/ for formatting/linting/guarding, worker/ for Node.js daemon (db/, server/, scan/, mcp/, ui/ subdirectories), lib/ for shared bash/JS libraries. Two-phase scan pipeline: discovery agent (Phase 1) detects languages/frameworks/entry-points, then deep scan agent (Phase 2) receives discovery context via {{DISCOVERY_JSON}} for language-aware analysis. Agent prompts modularized into type-specific variants (service, library, infra) with shared common component and multi-language examples. Parallel scan fan-out with retry-once error handling. Graph UI uses deterministic layered layout with boundary grouping, actor dedup filter, and protocol-differentiated edges. Filter panel provides protocol, layer, boundary, language, mismatch, and isolated-node toggles.
 
-Known tech debt: no log rotation, db/database.js has console.log in script-mode guard, getQueryEngineByHash inline migration workaround, renderLibraryConnections() unused `outgoing` parameter, node_metadata table unused (forward-looking for STRIDE/vuln views), query-engine-upsert.test.js pre-existing failure (test schema missing migrations 5-8), impact-flow.bats imports stale module paths (pre-existing from v3.0 restructure), package.json bin entry references non-existent ligamen-init.js, graph-fit-to-screen.test.js has 2 stale assertions for inlined fitToScreen() (Phase 26 regression).
+Known tech debt: no log rotation, db/database.js has console.log in script-mode guard, getQueryEngineByHash inline migration workaround, renderLibraryConnections() unused `outgoing` parameter, node_metadata table unused (forward-looking for STRIDE/vuln views), impact-flow.bats imports stale module paths (pre-existing from v3.0 restructure), package.json bin entry references non-existent ligamen-init.js, graph-fit-to-screen.test.js has 2 stale assertions for inlined fitToScreen() (Phase 26 regression). setExtractorLogger exported but never called from production code (near-threshold entropy warnings dark — low severity).
 
 ---
-*Last updated: 2026-03-22 after v5.5.0 milestone start*
+*Last updated: 2026-03-22 after v5.5.0 milestone*
 
 ## Constraints
 
