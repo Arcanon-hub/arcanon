@@ -20,7 +20,7 @@ Requirements for Scan Intelligence & Enrichment milestone. Each maps to roadmap 
 
 - [x] **CONF-01**: Confidence column persisted on services and connections via migration 009 (THE-939)
 - [x] **CONF-02**: Evidence snippets persisted on connections (THE-939)
-- [ ] **CONF-03**: Confidence badge visible on nodes/edges in graph UI (THE-939)
+- [x] **CONF-03**: Confidence badge visible on nodes/edges in graph UI (THE-939)
 
 ### Team Ownership
 
@@ -93,7 +93,7 @@ Deferred to future milestones. Tracked but not in current roadmap.
 | OWN-01 | Phase 68 | Complete |
 | AUTHDB-01 | Phase 69 | Complete |
 | AUTHDB-02 | Phase 69 | Complete |
-| CONF-03 | Phase 70 | Pending |
+| CONF-03 | Phase 70 | Complete |
 | SCHEMA-02 | Phase 71 | Pending |
 | OWN-02 | Phase 71 | Pending |
 | OWN-03 | Phase 71 | Pending |
