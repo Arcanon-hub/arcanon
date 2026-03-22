@@ -148,6 +148,101 @@ check(
   "state.positions[nodeId]"
 );
 
+// ── Phase 72: renderServiceMeta ────────────────────────────────────────────
+
+// renderServiceMeta function is defined
+check(
+  src.includes("function renderServiceMeta"),
+  "Phase72: renderServiceMeta function is defined",
+  "function renderServiceMeta"
+);
+
+// renderServiceMeta is called from showDetailPanel (at least 2 occurrences total)
+check(
+  (src.match(/renderServiceMeta/g) || []).length >= 2,
+  "Phase72: renderServiceMeta has definition + call site",
+  "renderServiceMeta appears >= 2 times"
+);
+
+// Owner row always rendered
+check(
+  src.includes('"Owner"') || src.includes("'Owner'") || src.includes(">Owner<"),
+  "Phase72: Owner row label present in renderServiceMeta",
+  "'Owner'"
+);
+
+// Auth Mechanism row always rendered
+check(
+  src.includes("Auth Mechanism"),
+  "Phase72: Auth Mechanism row label present in renderServiceMeta",
+  "Auth Mechanism"
+);
+
+// Database row always rendered
+check(
+  src.includes('"Database"') || src.includes("'Database'") || src.includes(">Database<"),
+  "Phase72: Database row label present in renderServiceMeta",
+  "'Database'"
+);
+
+// Gray color #718096 used for unknown/null values
+check(
+  src.includes("#718096"),
+  "Phase72: #718096 gray used for unknown values",
+  "#718096"
+);
+
+// escapeHtml applied to owner value
+check(
+  src.includes("escapeHtml(node.owner)"),
+  "Phase72 XSS: escapeHtml applied to node.owner",
+  "escapeHtml(node.owner)"
+);
+
+// escapeHtml applied to auth_mechanism value
+check(
+  src.includes("escapeHtml(node.auth_mechanism)"),
+  "Phase72 XSS: escapeHtml applied to node.auth_mechanism",
+  "escapeHtml(node.auth_mechanism)"
+);
+
+// escapeHtml applied to db_backend value
+check(
+  src.includes("escapeHtml(node.db_backend)"),
+  "Phase72 XSS: escapeHtml applied to node.db_backend",
+  "escapeHtml(node.db_backend)"
+);
+
+// ── Phase 72: confidence badges ────────────────────────────────────────────
+
+// confidenceColor variable defined
+check(
+  src.includes("confidenceColor"),
+  "Phase72: confidenceColor variable defined in renderServiceConnections",
+  "confidenceColor"
+);
+
+// confidenceBadge variable defined
+check(
+  src.includes("confidenceBadge"),
+  "Phase72: confidenceBadge variable defined in renderServiceConnections",
+  "confidenceBadge"
+);
+
+// Green color #48bb78 for high confidence
+check(
+  src.includes("#48bb78"),
+  "Phase72: #48bb78 green color for high confidence",
+  "#48bb78"
+);
+
+// Amber color #ed8936 for low confidence
+check(
+  src.includes("#ed8936"),
+  "Phase72: #ed8936 amber color for low confidence",
+  "#ed8936"
+);
+
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);
