@@ -301,7 +301,7 @@ describe("getGraph() extended response", () => {
 
     db.prepare(
       "INSERT INTO node_metadata(service_id, view, key, value, source, updated_at) VALUES(?,?,?,?,?,?)"
-    ).run(svcAId, "scan", "owner", "team-alpha", "scan", new Date().toISOString());
+    ).run(svcAId, "ownership", "owner", "team-alpha", "scan", new Date().toISOString());
 
     const qe = new QueryEngine(db);
     const graph = qe.getGraph();

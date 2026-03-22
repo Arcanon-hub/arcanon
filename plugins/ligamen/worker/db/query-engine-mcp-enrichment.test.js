@@ -73,11 +73,15 @@ function seedService(db, repoId, name, type = "service") {
     .run(repoId, name, ".", "typescript", type).lastInsertRowid;
 }
 
-/** Insert a node_metadata row. */
+/** Insert a node_metadata row.
+ *  View must match the production filter: enrichment, security, infra, ownership.
+ *  Route keys to their canonical view automatically. */
+const KEY_TO_VIEW = { owner: "ownership", owners: "ownership", auth_mechanism: "security", db_backend: "infra" };
 function seedMeta(db, serviceId, key, value) {
+  const view = KEY_TO_VIEW[key] || "enrichment";
   db.prepare(
     "INSERT INTO node_metadata (service_id, view, key, value) VALUES (?,?,?,?)"
-  ).run(serviceId, "scan", key, value);
+  ).run(serviceId, view, key, value);
 }
 
 // ---------------------------------------------------------------------------
