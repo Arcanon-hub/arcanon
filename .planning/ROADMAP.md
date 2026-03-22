@@ -386,7 +386,9 @@ Plans:
   2. After scanning a service whose `schema.prisma` references PostgreSQL, `services.db_backend` is set to "postgresql"
   3. A service with no detectable auth pattern has `auth_mechanism` as NULL — not a false-positive or guessed value
   4. Extracted values never contain strings longer than 40 characters or matching credential patterns (Bearer tokens, connection strings with passwords) — the extractor rejects them before DB write
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 69-01-PLAN.md — auth-db-extractor.js with regex signal tables + enricher registry registration
 
 ### Phase 70: Confidence & Evidence Pipeline
 **Goal**: Confidence levels and evidence snippets emitted by the agent during scanning are persisted through the upsert layer and returned on every connection object in the /graph response
@@ -467,8 +469,8 @@ Phases execute in numeric order: 67 → 68 → 69 → 70 → 71 → 72 → 73
 | 63-66 | v5.2.1 | 7/7 | Complete | 2026-03-21 |
 | 67. DB Foundation | v5.3.0 | 0/TBD | Not started | - |
 | 68. Enrichment Architecture & CODEOWNERS | v5.3.0 | 0/TBD | Not started | - |
-| 69. Auth & DB Extraction | v5.3.0 | 0/TBD | Not started | - |
-| 70. Confidence & Evidence Pipeline | v5.3.0 | 0/1 | Not started | - |
+| 69. Auth & DB Extraction | v5.3.0 | 0/1 | Not started | - |
+| 70. Confidence & Evidence Pipeline | v5.3.0 | 0/TBD | Not started | - |
 | 71. Schema Storage & API Extension | v5.3.0 | 0/TBD | Not started | - |
 | 72. Detail Panel UI | v5.3.0 | 0/TBD | Not started | - |
 | 73. Agent Prompts & Quality-Gate Spinout | v5.3.0 | 0/TBD | Not started | - |
