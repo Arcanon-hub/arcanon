@@ -511,7 +511,7 @@ Plans:
   2. Scanning a Java repo produces scan output where the agent correctly identifies Java entry points (e.g., @RestController, Application.java) — not Python or JS patterns
   3. The file `plugins/ligamen/worker/scan/agent-prompt-deep.md` does not exist in the repository
   4. The variable `promptDeep` does not appear in `plugins/ligamen/worker/scan/manager.js`
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 Plans:
 - [ ] 77-01-PLAN.md — Debias prompts with multi-language examples, add DISCOVERY_JSON, delete dead code
 
@@ -565,6 +565,6 @@ Phases execute in numeric order: 74 → 75 → 76 → 77 → 78 → 79
 | 74. Scan Bug Fixes | 2/2 | Complete    | 2026-03-22 | - |
 | 75. Validation Hardening | 2/2 | Complete    | 2026-03-22 | - |
 | 76. Discovery Phase Wiring | 1/1 | Complete    | 2026-03-22 | - |
-| 77. Prompt Debiasing & Dead Code Removal | v5.4.0 | 0/TBD | Not started | - |
+| 77. Prompt Debiasing & Dead Code Removal | 1/1 | Complete   | 2026-03-22 | - |
 | 78. Scan Reliability | 1/2 | In Progress|  | - |
 | 79. Version Bump | v5.4.0 | 0/TBD | Not started | - |

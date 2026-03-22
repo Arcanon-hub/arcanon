@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 78-scan-reliability 78-02-PLAN.md
-last_updated: "2026-03-22T18:07:16.156Z"
+stopped_at: Completed 77-prompt-debiasing-dead-code-removal 77-01-PLAN.md
+last_updated: "2026-03-22T18:07:22.241Z"
 progress:
   total_phases: 6
   completed_phases: 4
@@ -66,6 +66,8 @@ Plan: 1 of 1
 - [Phase 76-discovery-phase-wiring]: promptDeep (agent-prompt-deep.md) used for all deep scans — type-specific prompts not used (SARC-03 Phase 77 cleanup)
 - [Phase 76-discovery-phase-wiring]: beginScan bracket opens AFTER runDiscoveryPass completes — no orphaned scan_versions rows on discovery failure
 - [Phase 78-scan-reliability]: SREL-02: Actor dedup filter at UI layer using existing serviceNameToId map in graph.js loadProject() — no new DB fetch, filter between raw assignment and synthetic node loop
+- [Phase 77-01]: Type-specific prompt selection: repoType === 'library' ? promptLibrary : repoType === 'infra' ? promptInfra : promptService
+- [Phase 77-01]: agent-prompt-deep.md deleted — Discovery Context section migrated to all three type-specific active prompts
 
 ### Pending Todos
 
@@ -77,6 +79,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T18:07:09.994Z
-Stopped at: Completed 78-scan-reliability 78-02-PLAN.md
+Last session: 2026-03-22T18:07:22.237Z
+Stopped at: Completed 77-prompt-debiasing-dead-code-removal 77-01-PLAN.md
 Resume file: None
