@@ -410,7 +410,7 @@ describe("scanRepos", () => {
     );
   });
 
-  test("agents run sequentially — for...of not Promise.all", async () => {
+  test("agents run via Promise.allSettled — parallel fan-out", async () => {
     const repo2 = makeTempRepo();
     writeFileSync(join(repo2.dir, "b.js"), "const b = 2;");
     execSync("git add b.js", { cwd: repo2.dir, stdio: "pipe" });
@@ -442,13 +442,169 @@ describe("scanRepos", () => {
     });
 
     await scanRepos([repoDir, repo2.dir], {}, qe);
-    assert.deepEqual(
-      order,
-      ["svc-a", "svc-b"],
-      "deep scan agents must run in order (sequential)",
+    assert.equal(
+      order.length,
+      2,
+      "both deep scan agents must run (parallel fan-out via Promise.allSettled)",
     );
 
     cleanupDir(repo2.dir);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// scanRepos — retry-once on agentRunner failure
+// ---------------------------------------------------------------------------
+
+describe("scanRepos — retry-once on agentRunner failure", () => {
+  let repoDir;
+  let repo2Dir;
+
+  before(() => {
+    const r1 = makeTempRepo();
+    repoDir = r1.dir;
+    writeFileSync(join(r1.dir, "index.js"), "module.exports = {}");
+    execSync("git add index.js", { cwd: r1.dir, stdio: "pipe" });
+    execSync('git commit -m "add index.js"', { cwd: r1.dir, stdio: "pipe" });
+
+    const r2 = makeTempRepo();
+    repo2Dir = r2.dir;
+    writeFileSync(join(r2.dir, "app.js"), "const x = 1;");
+    execSync("git add app.js", { cwd: repo2Dir, stdio: "pipe" });
+    execSync('git commit -m "add app.js"', { cwd: repo2Dir, stdio: "pipe" });
+  });
+
+  after(() => {
+    cleanupDir(repoDir);
+    cleanupDir(repo2Dir);
+  });
+
+  beforeEach(() => {
+    setAgentRunner(null);
+    setScanLogger(null);
+  });
+
+  const validFindings = (name) =>
+    JSON.stringify({
+      service_name: name,
+      confidence: "high",
+      services: [
+        { name, root_path: ".", language: "javascript", confidence: "high" },
+      ],
+      connections: [],
+      schemas: [],
+    });
+
+  const minimalDiscovery = '```json\n{"languages":["javascript"],"frameworks":[],"service_hints":[]}\n```';
+
+  function makeQueryEngine({ repoState = null } = {}) {
+    return {
+      upsertRepo: (repoData) => ({ id: 42 }),
+      getRepoState: (_id) => repoState,
+      setRepoState: (_id, _commit) => {},
+      getRepoByPath: (_path) => null,
+      beginScan: (_repoId) => 1,
+      persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
+      endScan: (_repoId, _scanVersionId) => {},
+      _db: { prepare: () => ({ all: () => [] }) },
+    };
+  }
+
+  test("failed agentRunner retries once then succeeds", async () => {
+    const qe = makeQueryEngine({ repoState: null });
+    let callCount = 0;
+
+    setAgentRunner(async (prompt, _path) => {
+      // Discovery calls always succeed
+      if (prompt.includes('Discovery Agent') || prompt.includes('structure discovery')) {
+        return minimalDiscovery;
+      }
+      // Deep scan: throw on first attempt, succeed on second
+      callCount++;
+      if (callCount === 1) {
+        throw new Error("agent crashed on first attempt");
+      }
+      return `\`\`\`json\n${validFindings("retry-svc")}\n\`\`\``;
+    });
+
+    const results = await scanRepos([repoDir], {}, qe);
+    assert.equal(results.length, 1);
+    assert.ok(results[0].findings !== null, "retry succeeded — findings must not be null");
+    assert.equal(callCount, 2, "agentRunner must be called twice (initial + retry)");
+  });
+
+  test("skipped repo after retry failure — WARN with repo name", async () => {
+    const qe = makeQueryEngine({ repoState: null });
+    const logs = [];
+    setScanLogger({ log: (level, msg, extra) => logs.push({ level, msg, extra }) });
+
+    setAgentRunner(async (prompt, _path) => {
+      // Discovery calls always succeed
+      if (prompt.includes('Discovery Agent') || prompt.includes('structure discovery')) {
+        return minimalDiscovery;
+      }
+      // Deep scan always throws
+      throw new Error("agent crashed");
+    });
+
+    const results = await scanRepos([repoDir], {}, qe);
+    assert.equal(results.length, 1);
+    assert.equal(results[0].skipped, true, "result must have skipped: true");
+
+    const warnLog = logs.find((l) => l.level === 'WARN' && (l.extra.repoName !== undefined));
+    assert.ok(warnLog !== undefined, "must emit a WARN log with repoName in extra");
+    const { basename: _ignored } = await import("node:path");
+    const { basename } = await import("node:path");
+    assert.equal(warnLog.extra.repoName, basename(repoDir), "WARN log repoName must match basename(repoDir)");
+  });
+
+  test("skipped repo does not abort other repos", async () => {
+    const qe = makeQueryEngine({ repoState: null });
+
+    setAgentRunner(async (prompt, path) => {
+      // Discovery calls always succeed
+      if (prompt.includes('Discovery Agent') || prompt.includes('structure discovery')) {
+        return minimalDiscovery;
+      }
+      // repo1 deep scan always throws; repo2 deep scan succeeds
+      if (path === repoDir) {
+        throw new Error("agent crashed");
+      }
+      return `\`\`\`json\n${validFindings("repo2-svc")}\n\`\`\``;
+    });
+
+    const results = await scanRepos([repoDir, repo2Dir], {}, qe);
+    assert.equal(results.length, 2, "results must have an entry for each repo");
+
+    const r1 = results.find((r) => r.repoPath === repoDir);
+    const r2 = results.find((r) => r.repoPath === repo2Dir);
+
+    assert.ok(r1, "result for repo1 must exist");
+    assert.equal(r1.skipped, true, "repo1 must be skipped");
+
+    assert.ok(r2, "result for repo2 must exist");
+    assert.ok(r2.findings !== null, "repo2 must have valid findings");
+  });
+
+  test("no retry on parse failure — only on agentRunner throw", async () => {
+    const qe = makeQueryEngine({ repoState: null });
+    let deepScanCallCount = 0;
+
+    setAgentRunner(async (prompt, _path) => {
+      // Discovery calls always succeed
+      if (prompt.includes('Discovery Agent') || prompt.includes('structure discovery')) {
+        return minimalDiscovery;
+      }
+      // Deep scan: return invalid JSON (does not throw — parse will fail)
+      deepScanCallCount++;
+      return "not json at all";
+    });
+
+    const results = await scanRepos([repoDir], {}, qe);
+    assert.equal(results.length, 1);
+    assert.equal(deepScanCallCount, 1, "agentRunner must be called exactly once — no retry on parse failure");
+    assert.ok(results[0].findings === null, "findings must be null on parse failure");
+    assert.ok("error" in results[0], "result must have error field on parse failure");
   });
 });
 
