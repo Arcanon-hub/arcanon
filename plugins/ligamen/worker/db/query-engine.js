@@ -376,6 +376,7 @@ export class QueryEngine {
     this._stmtUpsertActor = null;
     this._stmtUpsertActorConnection = null;
     this._stmtGetActorByName = null;
+    this._stmtCheckKnownService = null;
     try {
       this._stmtUpsertActor = db.prepare(`
         INSERT INTO actors (name, kind, direction, source)
@@ -393,11 +394,14 @@ export class QueryEngine {
       this._stmtGetActorByName = db.prepare(`
         SELECT id FROM actors WHERE name = ?
       `);
+
+      this._stmtCheckKnownService = db.prepare(`SELECT id FROM services WHERE name = ?`);
     } catch {
       // actors table doesn't exist yet — migration 008 not applied
       this._stmtUpsertActor = null;
       this._stmtUpsertActorConnection = null;
       this._stmtGetActorByName = null;
+      this._stmtCheckKnownService = null;
     }
 
     // --- node_metadata statement (migration 008) ---
@@ -1061,23 +1065,29 @@ export class QueryEngine {
       // Detect external actors: when crossing='external', the target is an
       // external system. Create/upsert an actor for it and link to the source
       // service via actor_connections.
+      // SBUG-01: skip actor creation if target matches a known service in this DB.
       if (conn.crossing === "external" && this._stmtUpsertActor && this._stmtGetActorByName) {
         const actorName = conn.target; // target service name = actor name
-        this._stmtUpsertActor.run({
-          name: actorName,
-          kind: "system",
-          direction: "outbound",
-          source: "scan",
-        });
-        const actorRow = this._stmtGetActorByName.get(actorName);
-        if (actorRow) {
-          this._stmtUpsertActorConnection.run({
-            actor_id: actorRow.id,
-            service_id: sourceId,
+        const knownService = this._stmtCheckKnownService
+          ? this._stmtCheckKnownService.get(actorName)
+          : null;
+        if (!knownService) {
+          this._stmtUpsertActor.run({
+            name: actorName,
+            kind: "system",
             direction: "outbound",
-            protocol: conn.protocol || null,
-            path: conn.path || null,
+            source: "scan",
           });
+          const actorRow = this._stmtGetActorByName.get(actorName);
+          if (actorRow) {
+            this._stmtUpsertActorConnection.run({
+              actor_id: actorRow.id,
+              service_id: sourceId,
+              direction: "outbound",
+              protocol: conn.protocol || null,
+              path: conn.path || null,
+            });
+          }
         }
       }
 
