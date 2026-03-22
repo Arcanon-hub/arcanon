@@ -22,7 +22,7 @@ Requirements for Scan Pipeline Hardening milestone. Each maps to roadmap phases.
 ### Scan Validation
 
 - [x] **SVAL-01**: findings.js validates services[].type as enum (service/library/sdk/infra), validates root_path and language presence as non-empty strings (THE-957)
-- [ ] **SVAL-02**: getChangedFiles and getCurrentHead use execFileSync with argument arrays instead of execSync with string interpolation — eliminates shell injection surface (THE-958)
+- [x] **SVAL-02**: getChangedFiles and getCurrentHead use execFileSync with argument arrays instead of execSync with string interpolation — eliminates shell injection surface (THE-958)
 
 ### Scan Reliability
 
@@ -57,7 +57,7 @@ Requirements for Scan Pipeline Hardening milestone. Each maps to roadmap phases.
 | SBUG-02 | Phase 74 | Pending |
 | SBUG-03 | Phase 74 | Pending |
 | SVAL-01 | Phase 75 | Complete |
-| SVAL-02 | Phase 75 | Pending |
+| SVAL-02 | Phase 75 | Complete |
 | SARC-01 | Phase 76 | Pending |
 | SARC-02 | Phase 77 | Pending |
 | SARC-03 | Phase 77 | Pending |

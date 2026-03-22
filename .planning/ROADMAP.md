@@ -484,7 +484,7 @@ Plans:
   2. When the agent emits a service with a missing or empty `root_path`, findings.js logs a validation warning and skips that service
   3. When the agent emits a service with a missing or empty `language`, findings.js logs a validation warning and skips that service
   4. `getChangedFiles()` and `getCurrentHead()` use execFileSync with argument arrays — no user-controlled string is ever interpolated into a shell command string
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 - [ ] 75-01-PLAN.md — SVAL-01 warn-and-skip validation for service type/root_path/language in findings.js
 - [ ] 75-02-PLAN.md — SVAL-02 replace execSync with execFileSync argument arrays in manager.js
@@ -563,7 +563,7 @@ Phases execute in numeric order: 74 → 75 → 76 → 77 → 78 → 79
 | 63-66 | v5.2.1 | 7/7 | Complete | 2026-03-21 |
 | 67-73 | v5.3.0 | 12/12 | Complete | 2026-03-22 |
 | 74. Scan Bug Fixes | v5.4.0 | 0/2 | Not started | - |
-| 75. Validation Hardening | 1/2 | In Progress|  | - |
+| 75. Validation Hardening | 2/2 | Complete   | 2026-03-22 | - |
 | 76. Discovery Phase Wiring | v5.4.0 | 0/1 | Not started | - |
 | 77. Prompt Debiasing & Dead Code Removal | v5.4.0 | 0/TBD | Not started | - |
 | 78. Scan Reliability | v5.4.0 | 0/TBD | Not started | - |

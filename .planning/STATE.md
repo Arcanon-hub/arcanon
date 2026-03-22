@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 75-01-PLAN.md (validation-hardening, SVAL-01)
-last_updated: "2026-03-22T17:45:11Z"
+stopped_at: Completed 75-02-PLAN.md
+last_updated: "2026-03-22T17:46:47.041Z"
 progress:
-  total_phases: 28
-  completed_phases: 21
-  total_plans: 44
-  completed_plans: 34
+  total_phases: 6
+  completed_phases: 1
+  total_plans: 9
+  completed_plans: 2
 ---
 
 # Project State
@@ -40,6 +40,7 @@ Plan: 1 of 1 (COMPLETE)
 | - | - | - | - |
 
 *Updated after each plan completion*
+| Phase 75-validation-hardening P02 | 10 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -51,6 +52,8 @@ Plan: 1 of 1 (COMPLETE)
 - v5.4.0: Discovery output is ephemeral prompt context only — not persisted to DB
 - v5.4.0: Phase 75 (validation) can run in parallel with Phase 74 (bug fixes); Phase 76 depends on Phase 74
 - v5.4.0 SVAL-01: Warn-and-skip (not hard-fail) for service type/root_path/language in validateFindings; absent type field passes; warnings array initialized before services loop
+- [Phase 75-02]: execFileSync (not shell variant) for all git subprocess invocations in manager.js — eliminates shell injection surface for user-controlled repo paths
+- [Phase 75-02]: Validation warnings from parseAgentOutput logged immediately after valid parse, before persistFindings — operators can see skipped services in logs
 
 ### Pending Todos
 
@@ -62,6 +65,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T17:45:11Z
-Stopped at: Completed 75-01-PLAN.md (validation-hardening, SVAL-01)
+Last session: 2026-03-22T17:46:47.039Z
+Stopped at: Completed 75-02-PLAN.md
 Resume file: None
