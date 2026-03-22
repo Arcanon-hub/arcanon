@@ -563,7 +563,11 @@ Plans:
   2. After an auth-db enrichment pass, no extracted value in `services.auth_mechanism` or `services.db_backend` contains a high-entropy string resembling a secret token or connection string password
   3. Launching `/ligamen:map` on a project while a scan is already in progress for that project returns a clear error message — the second invocation does not corrupt scan bracket state
   4. Near-threshold strings (entropy close to the rejection cutoff) are logged at warn level so the threshold can be tuned without silent data loss
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 80-01-PLAN.md — Path traversal hardening for resolveDb and DB pool (SEC-01)
+- [ ] 80-02-PLAN.md — Shannon entropy credential rejection in auth-db extractor (SEC-02)
+- [ ] 80-03-PLAN.md — Concurrent scan lock with stale detection in manager (SEC-03)
 
 ### Phase 81: Data Integrity Port
 **Goal**: Four fixes already validated in the plugin cache are ported to `plugins/ligamen/` so the source repo matches the deployed behavior
@@ -621,7 +625,7 @@ Phases execute in numeric order: 80 → 81 → 82 → 83
 | 63-66 | v5.2.1 | 7/7 | Complete | 2026-03-21 |
 | 67-73 | v5.3.0 | 12/12 | Complete | 2026-03-22 |
 | 74-79 | v5.4.0 | 9/9 | Complete | 2026-03-22 |
-| 80. Security Hardening | v5.5.0 | 0/TBD | Not started | - |
+| 80. Security Hardening | v5.5.0 | 0/3 | Planned | - |
 | 81. Data Integrity Port | v5.5.0 | 0/TBD | Not started | - |
 | 82. Reliability Hardening | v5.5.0 | 0/TBD | Not started | - |
 | 83. Performance & Quality | v5.5.0 | 0/TBD | Not started | - |
