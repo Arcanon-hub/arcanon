@@ -347,6 +347,36 @@ check(
   'confidenceBadge or confidenceColor+48bb78'
 );
 
+// ── AGENT-03: source_file and target_file display ─────────────────────────
+
+// Outgoing "Calls" section shows source_file when present
+check(
+  src.includes("e.source_file") &&
+    (src.includes('conn-file') || src.includes("conn-file")),
+  "AGENT-03: outgoing section has conn-file row for source_file",
+  "e.source_file ... conn-file"
+);
+
+// Incoming "Called by" section shows target_file when present
+check(
+  src.includes("e.target_file"),
+  "AGENT-03: incoming section has conn-file row for target_file",
+  "e.target_file"
+);
+
+// Both use escapeHtml to prevent XSS
+check(
+  src.includes("escapeHtml(e.source_file)"),
+  "AGENT-03: source_file is XSS-escaped via escapeHtml",
+  "escapeHtml(e.source_file)"
+);
+
+check(
+  src.includes("escapeHtml(e.target_file)"),
+  "AGENT-03: target_file is XSS-escaped via escapeHtml",
+  "escapeHtml(e.target_file)"
+);
+
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);
