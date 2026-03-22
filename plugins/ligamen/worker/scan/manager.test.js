@@ -288,6 +288,7 @@ describe("scanRepos", () => {
       beginScan: (_repoId) => 1,
       persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
       endScan: (_repoId, _scanVersionId) => {},
+      _db: { prepare: () => ({ all: () => [] }) },
     };
   }
 
@@ -908,10 +909,150 @@ describe("detectRepoType", () => {
 });
 
 // ---------------------------------------------------------------------------
-// runDiscoveryPass unit tests (Task 1 TDD — RED)
+// scanRepos — discovery wiring (76-01 SARC-01)
 // ---------------------------------------------------------------------------
 
-describe("runDiscoveryPass — unit", () => {
+describe("scanRepos — discovery wiring", () => {
+  let repoDir;
+
+  before(() => {
+    const { dir } = makeTempRepo();
+    repoDir = dir;
+    writeFileSync(join(dir, "index.js"), "module.exports = {}");
+    execSync("git add index.js", { cwd: dir, stdio: "pipe" });
+    execSync('git commit -m "add index.js"', { cwd: dir, stdio: "pipe" });
+  });
+
+  after(() => cleanupDir(repoDir));
+
+  beforeEach(() => {
+    setAgentRunner(null);
+    setScanLogger(null);
+  });
+
+  function makeDiscoveryQE({ repoState = null } = {}) {
+    return {
+      upsertRepo: (_repoData) => ({ id: 42 }),
+      getRepoState: (_id) => repoState,
+      setRepoState: (_id, _commit) => {},
+      getRepoByPath: (_path) => null,
+      beginScan: (_repoId) => 1,
+      persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
+      endScan: (_repoId, _scanVersionId) => {},
+      _db: { prepare: () => ({ all: () => [] }) },
+    };
+  }
+
+  const validFindingsJson = JSON.stringify({
+    service_name: "test-svc",
+    confidence: "high",
+    services: [
+      {
+        name: "test-svc",
+        root_path: ".",
+        language: "javascript",
+        confidence: "high",
+      },
+    ],
+    connections: [],
+    schemas: [],
+  });
+
+  test("two agent calls per repo — discovery then deep scan", async () => {
+    const qe = makeDiscoveryQE();
+    let callCount = 0;
+
+    setAgentRunner(async (prompt, _repoPath) => {
+      callCount++;
+      if (prompt.includes('Discovery Agent') || prompt.includes('structure discovery')) {
+        return '```json\n{"languages":["javascript"],"frameworks":[],"service_hints":[]}\n```';
+      }
+      return `\`\`\`json\n${validFindingsJson}\n\`\`\``;
+    });
+
+    const results = await scanRepos([repoDir], {}, qe);
+    assert.equal(callCount, 2, "agentRunner must be called twice per repo");
+    assert.equal(results[0].mode, "full");
+    assert.ok(results[0].findings !== null, "findings should be populated");
+  });
+
+  test("discovery failure — deep scan still runs with fallback", async () => {
+    const qe = makeDiscoveryQE();
+
+    setAgentRunner(async (prompt, _repoPath) => {
+      if (prompt.includes('Discovery Agent') || prompt.includes('structure discovery')) {
+        throw new Error('discovery timeout');
+      }
+      return `\`\`\`json\n${validFindingsJson}\n\`\`\``;
+    });
+
+    const results = await scanRepos([repoDir], {}, qe);
+    assert.ok(results[0].findings !== null, "deep scan must produce findings despite discovery failure");
+    assert.equal(results[0].mode, "full");
+  });
+
+  test("discovery pass log entry emitted with languages array", async () => {
+    const qe = makeDiscoveryQE();
+    const loggedMessages = [];
+    const mockLogger = {
+      log: (level, msg, extra = {}) => loggedMessages.push({ level, msg, ...extra }),
+      info: (msg, extra) => mockLogger.log('INFO', msg, extra),
+      warn: (msg, extra) => mockLogger.log('WARN', msg, extra),
+      error: (msg, extra) => mockLogger.log('ERROR', msg, extra),
+      debug: (msg, extra) => mockLogger.log('DEBUG', msg, extra),
+    };
+    setScanLogger(mockLogger);
+
+    setAgentRunner(async (prompt, _repoPath) => {
+      if (prompt.includes('Discovery Agent') || prompt.includes('structure discovery')) {
+        return '```json\n{"languages":["javascript","typescript"],"frameworks":["express"],"service_hints":[]}\n```';
+      }
+      return `\`\`\`json\n${validFindingsJson}\n\`\`\``;
+    });
+
+    await scanRepos([repoDir], {}, qe);
+
+    const logEntry = loggedMessages.find((l) => l.msg === 'discovery pass complete');
+    assert.ok(logEntry, "discovery pass log entry must be emitted");
+    assert.ok(Array.isArray(logEntry.languages), "languages field must be an array");
+    assert.ok(logEntry.languages.includes('javascript'), "languages must include 'javascript'");
+  });
+
+  test("deep scan prompt contains discovery JSON, not raw placeholder", async () => {
+    const qe = makeDiscoveryQE();
+    let capturedDeepScanPrompt = null;
+    let callCount = 0;
+
+    setAgentRunner(async (prompt, _repoPath) => {
+      callCount++;
+      if (callCount === 1) {
+        // Discovery call — return valid discovery JSON
+        return '```json\n{"languages":["javascript"],"frameworks":["express"],"service_hints":[]}\n```';
+      }
+      // Deep scan call — capture the prompt
+      capturedDeepScanPrompt = prompt;
+      return `\`\`\`json\n${validFindingsJson}\n\`\`\``;
+    });
+
+    await scanRepos([repoDir], {}, qe);
+
+    assert.ok(capturedDeepScanPrompt !== null, "deep scan prompt must be captured");
+    assert.ok(
+      !capturedDeepScanPrompt.includes("{{DISCOVERY_JSON}}"),
+      "deep scan prompt must NOT contain literal {{DISCOVERY_JSON}} placeholder",
+    );
+    assert.ok(
+      capturedDeepScanPrompt.includes('"javascript"'),
+      "deep scan prompt must contain discovery output (javascript language)",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runDiscoveryPass unit tests (76-01 SARC-01)
+// ---------------------------------------------------------------------------
+
+describe("runDiscoveryPass", () => {
   let repoDir;
 
   before(() => {
@@ -924,7 +1065,7 @@ describe("runDiscoveryPass — unit", () => {
   test("returns parsed JSON on valid fenced agent output", async () => {
     const result = await runDiscoveryPass(
       repoDir,
-      "Analyze {{REPO_PATH}} now.",
+      "Ligamen Discovery Agent — Analyze {{REPO_PATH}}.",
       async () => '```json\n{"languages":["python"],"frameworks":["fastapi"],"service_hints":[]}\n```',
       () => {},
     );
@@ -936,19 +1077,83 @@ describe("runDiscoveryPass — unit", () => {
     const result = await runDiscoveryPass(
       repoDir,
       "Analyze {{REPO_PATH}}.",
-      async () => "no fenced json here",
+      async () => "no fenced json here at all",
       () => {},
     );
     assert.equal(JSON.stringify(result), "{}");
   });
 
-  test("returns {} when agent throws an error", async () => {
+  test("returns {} when agent throws", async () => {
     const result = await runDiscoveryPass(
       repoDir,
       "Analyze {{REPO_PATH}}.",
-      async () => { throw new Error("agent exploded"); },
+      async () => { throw new Error("discovery timeout"); },
       () => {},
     );
     assert.equal(JSON.stringify(result), "{}");
+  });
+
+  test("interpolates {{REPO_PATH}} into discovery prompt before calling agent", async () => {
+    let capturedPrompt = null;
+    await runDiscoveryPass(
+      "/my/test/repo",
+      "Analyze {{REPO_PATH}} now.",
+      async (prompt) => {
+        capturedPrompt = prompt;
+        return '```json\n{"languages":[],"frameworks":[],"service_hints":[]}\n```';
+      },
+      () => {},
+    );
+    assert.ok(capturedPrompt !== null);
+    assert.ok(capturedPrompt.includes("/my/test/repo"), "prompt must have repoPath substituted");
+    assert.ok(!capturedPrompt.includes("{{REPO_PATH}}"), "prompt must not contain raw placeholder");
+  });
+
+  test("emits INFO log entry with languages, frameworks, service_hints count on success", async () => {
+    const logs = [];
+    const slog = (level, msg, extra = {}) => logs.push({ level, msg, ...extra });
+
+    await runDiscoveryPass(
+      repoDir,
+      "Discovery Agent: analyze {{REPO_PATH}}.",
+      async () => '```json\n{"languages":["go"],"frameworks":["gin"],"service_hints":[{"name":"svc","type":"service"}]}\n```',
+      slog,
+    );
+
+    const infoLog = logs.find((l) => l.msg === 'discovery pass complete');
+    assert.ok(infoLog, "must emit discovery pass complete log");
+    assert.deepEqual(infoLog.languages, ["go"]);
+    assert.equal(infoLog.service_hints, 1);
+  });
+
+  test("emits WARN log when no JSON block found", async () => {
+    const logs = [];
+    const slog = (level, msg, extra = {}) => logs.push({ level, msg, ...extra });
+
+    await runDiscoveryPass(
+      repoDir,
+      "Discovery Agent: {{REPO_PATH}}.",
+      async () => "plain text no json",
+      slog,
+    );
+
+    const warnLog = logs.find((l) => l.msg === 'discovery: no JSON block — using empty context');
+    assert.ok(warnLog, "must emit WARN for no JSON block");
+  });
+
+  test("emits WARN log with error message when agent throws", async () => {
+    const logs = [];
+    const slog = (level, msg, extra = {}) => logs.push({ level, msg, ...extra });
+
+    await runDiscoveryPass(
+      repoDir,
+      "Discovery Agent: {{REPO_PATH}}.",
+      async () => { throw new Error("discovery timeout"); },
+      slog,
+    );
+
+    const warnLog = logs.find((l) => l.msg === 'discovery pass failed — using empty context');
+    assert.ok(warnLog, "must emit WARN for agent failure");
+    assert.equal(warnLog.error, "discovery timeout");
   });
 });
