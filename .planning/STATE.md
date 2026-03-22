@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 74-scan-bug-fixes 74-01-PLAN.md
-last_updated: "2026-03-22T17:53:52.830Z"
+stopped_at: Completed 74-scan-bug-fixes 74-02-PLAN.md
+last_updated: "2026-03-22T17:54:29.740Z"
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 9
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -42,6 +42,7 @@ Plan: 1 of 1 (COMPLETE)
 *Updated after each plan completion*
 | Phase 75-validation-hardening P02 | 10 | 2 tasks | 2 files |
 | Phase 74-scan-bug-fixes P01 | 15 | 2 tasks | 6 files |
+| Phase 74-scan-bug-fixes P02 | 8 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -57,6 +58,8 @@ Plan: 1 of 1 (COMPLETE)
 - [Phase 75-02]: Validation warnings from parseAgentOutput logged immediately after valid parse, before persistFindings — operators can see skipped services in logs
 - [Phase 74-scan-bug-fixes]: SBUG-01: _stmtCheckKnownService guard prevents phantom actor hexagons — checks services table before creating actor row in persistFindings
 - [Phase 74-scan-bug-fixes]: SBUG-03: enricher ctx carries repoAbsPath (absolute repo root, filesystem probe) separate from repoPath (relative service path, pattern matching)
+- [Phase 74-scan-bug-fixes]: SBUG-02: docker-compose.yml is infra ONLY when no service entry-point detected — docker-compose for local dev must not misclassify Node/Python/Go services as infra
+- [Phase 74-scan-bug-fixes]: SBUG-02: Poetry detection uses [tool.poetry] and [tool.poetry.scripts] (not [project]/[project.scripts]) — addresses Poetry-specific pyproject.toml format
 
 ### Pending Todos
 
@@ -68,6 +71,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T17:50:32.318Z
-Stopped at: Completed 74-scan-bug-fixes 74-01-PLAN.md
+Last session: 2026-03-22T17:54:29.738Z
+Stopped at: Completed 74-scan-bug-fixes 74-02-PLAN.md
 Resume file: None
