@@ -111,7 +111,21 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ### Active
 
-(Defined per milestone — see REQUIREMENTS.md when next milestone starts)
+## Current Milestone: v5.4.0 Scan Pipeline Hardening
+
+**Goal:** Fix scan pipeline bugs, wire up the unused discovery phase for language-agnostic scanning, harden validation, and clean up dead code.
+
+**Target features:**
+- Fix persistFindings duplicate actor creation for known services (THE-945)
+- Wire up discovery phase (Phase 1) before deep scan for language-agnostic repo analysis (THE-953)
+- Strip hardcoded Python/JS bias from agent prompts using discovery context (THE-959)
+- Fix detectRepoType misclassification of service repos with docker-compose (THE-955)
+- Fix codeowners enricher absolute path bug (THE-956)
+- Tighten findings.js validation for services[].type and required fields (THE-957)
+- Replace execSync string interpolation with execFileSync argument arrays (THE-958)
+- Add UI-layer actor deduplication as defense in depth (THE-948)
+- Remove dead code: agent-prompt-deep.md and promptDeep variable (THE-954)
+- Scan reliability: parallel agents, error handling, prompt size (THE-952)
 
 ### Out of Scope
 
@@ -188,4 +202,4 @@ Known tech debt: no log rotation, db/database.js has console.log in script-mode 
 | .mcp.json points to wrapper script not node directly | Enables self-healing path; wrapper handles dep check before exec | ✓ Good |
 
 ---
-*Last updated: 2026-03-22 after v5.3.0 milestone*
+*Last updated: 2026-03-22 after v5.4.0 milestone start*
