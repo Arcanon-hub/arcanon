@@ -105,6 +105,13 @@ export async function loadProject(hash, canvas) {
 
   // Store raw actors for detail panel
   state.graphData.actors = raw.actors || [];
+
+  // SREL-02: Filter actors whose name matches a known service — defense in depth
+  // for stale actor data. The serviceNameToId map is already populated above.
+  state.graphData.actors = state.graphData.actors.filter(
+    (actor) => !(actor.name in serviceNameToId)
+  );
+
   state.graphData.schemas_by_connection = raw.schemas_by_connection || {};
 
   // Create synthetic nodes for actors with IDs that won't collide with service IDs.
