@@ -4,10 +4,7 @@
  * Covers:
  *   - upsertConnection writes confidence + evidence to DB
  *   - upsertConnection with no confidence/evidence does not throw (nulls stored)
- *   - persistFindings passes conn.confidence and conn.evidence through to upsertConnection
  *   - getGraph() returns confidence and evidence on each connection object
- *   - getGraph() returns confidence === null / evidence === null when not stored
- *   - getGraph() always includes confidence and evidence keys (even when null)
  *   - getGraph() on a pre-migration-009 DB (no confidence/evidence columns) does not throw
  *
  * Run: node --test plugins/ligamen/worker/db/query-engine-confidence.test.js
@@ -19,16 +16,13 @@ import Database from "better-sqlite3";
 
 // ---------------------------------------------------------------------------
 // Helper: build a fully-migrated in-memory DB (migrations 001-009 applied)
-// Minimal schema — only tables needed for QueryEngine constructor +
-// upsertConnection + getGraph. Omits node_metadata, actors, schemas, fields
-// (QueryEngine handles their absence via try/catch internally).
 // ---------------------------------------------------------------------------
 
 async function buildDb() {
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
 
-  // Migration 001 — initial schema (minimal subset)
+  // Migration 001 — initial schema
   db.exec(`
     CREATE TABLE schema_versions (
       version    INTEGER PRIMARY KEY,
@@ -63,14 +57,20 @@ async function buildDb() {
       target_file       TEXT
     );
 
-    CREATE VIRTUAL TABLE connections_fts USING fts5(
-      path, protocol, source_file, target_file,
-      content='connections', content_rowid='id'
+    CREATE TABLE schemas (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      connection_id INTEGER NOT NULL REFERENCES connections(id),
+      role          TEXT    NOT NULL,
+      name          TEXT    NOT NULL,
+      file          TEXT
     );
 
-    CREATE VIRTUAL TABLE services_fts USING fts5(
-      name,
-      content='services', content_rowid='id'
+    CREATE TABLE fields (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      schema_id INTEGER NOT NULL REFERENCES schemas(id),
+      name      TEXT    NOT NULL,
+      type      TEXT    NOT NULL,
+      required  INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE map_versions (
@@ -87,12 +87,30 @@ async function buildDb() {
       last_scanned_at      TEXT
     );
 
+    CREATE VIRTUAL TABLE connections_fts USING fts5(
+      path, protocol, source_file, target_file,
+      content='connections', content_rowid='id'
+    );
+
+    CREATE VIRTUAL TABLE services_fts USING fts5(
+      name,
+      content='services', content_rowid='id'
+    );
+
+    CREATE VIRTUAL TABLE fields_fts USING fts5(
+      name, type,
+      content='fields', content_rowid='id'
+    );
+
     CREATE TRIGGER services_ai AFTER INSERT ON services BEGIN
       INSERT INTO services_fts(rowid, name) VALUES (new.id, new.name);
     END;
     CREATE TRIGGER connections_ai AFTER INSERT ON connections BEGIN
       INSERT INTO connections_fts(rowid, path, protocol, source_file, target_file)
         VALUES (new.id, new.path, new.protocol, new.source_file, new.target_file);
+    END;
+    CREATE TRIGGER fields_ai AFTER INSERT ON fields BEGIN
+      INSERT INTO fields_fts(rowid, name, type) VALUES (new.id, new.name, new.type);
     END;
   `);
   db.exec("INSERT INTO schema_versions(version) VALUES(1);");
@@ -182,14 +200,20 @@ async function buildDbLegacy() {
       target_file       TEXT
     );
 
-    CREATE VIRTUAL TABLE connections_fts USING fts5(
-      path, protocol, source_file, target_file,
-      content='connections', content_rowid='id'
+    CREATE TABLE schemas (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      connection_id INTEGER NOT NULL REFERENCES connections(id),
+      role          TEXT    NOT NULL,
+      name          TEXT    NOT NULL,
+      file          TEXT
     );
 
-    CREATE VIRTUAL TABLE services_fts USING fts5(
-      name,
-      content='services', content_rowid='id'
+    CREATE TABLE fields (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      schema_id INTEGER NOT NULL REFERENCES schemas(id),
+      name      TEXT    NOT NULL,
+      type      TEXT    NOT NULL,
+      required  INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE map_versions (
@@ -206,12 +230,30 @@ async function buildDbLegacy() {
       last_scanned_at      TEXT
     );
 
+    CREATE VIRTUAL TABLE connections_fts USING fts5(
+      path, protocol, source_file, target_file,
+      content='connections', content_rowid='id'
+    );
+
+    CREATE VIRTUAL TABLE services_fts USING fts5(
+      name,
+      content='services', content_rowid='id'
+    );
+
+    CREATE VIRTUAL TABLE fields_fts USING fts5(
+      name, type,
+      content='fields', content_rowid='id'
+    );
+
     CREATE TRIGGER services_ai AFTER INSERT ON services BEGIN
       INSERT INTO services_fts(rowid, name) VALUES (new.id, new.name);
     END;
     CREATE TRIGGER connections_ai AFTER INSERT ON connections BEGIN
       INSERT INTO connections_fts(rowid, path, protocol, source_file, target_file)
         VALUES (new.id, new.path, new.protocol, new.source_file, new.target_file);
+    END;
+    CREATE TRIGGER fields_ai AFTER INSERT ON fields BEGIN
+      INSERT INTO fields_fts(rowid, name, type) VALUES (new.id, new.name, new.type);
     END;
   `);
   db.exec("INSERT INTO schema_versions(version) VALUES(1);");
@@ -237,7 +279,7 @@ async function buildDbLegacy() {
     db.prepare("INSERT INTO schema_versions(version) VALUES(?)").run(6);
   })();
 
-  // Migration 008 adds crossing column — required for QueryEngine constructor to work
+  // Migration 008 adds crossing column — required for QueryEngine constructor
   const { up: up008 } = await import("./migrations/008_actors_metadata.js");
   db.transaction(() => {
     up008(db);

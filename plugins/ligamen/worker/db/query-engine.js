@@ -294,19 +294,27 @@ export class QueryEngine {
         scan_version_id = excluded.scan_version_id
     `);
 
-    // Try to include the crossing column (migration 008). Fall back to the
-    // pre-migration statement for backward compatibility with older databases.
+    // Try with confidence+evidence columns (migration 009). Fall back to
+    // crossing-only (migration 008), then pre-migration-008 for compatibility.
     try {
       this._stmtUpsertConnection = db.prepare(`
-        INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, source_file, target_file, scan_version_id, crossing)
-        VALUES (@source_service_id, @target_service_id, @protocol, @method, @path, @source_file, @target_file, @scan_version_id, @crossing)
+        INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, source_file, target_file, scan_version_id, crossing, confidence, evidence)
+        VALUES (@source_service_id, @target_service_id, @protocol, @method, @path, @source_file, @target_file, @scan_version_id, @crossing, @confidence, @evidence)
       `);
     } catch {
-      // crossing column not present (pre-migration-008 database)
-      this._stmtUpsertConnection = db.prepare(`
-        INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, source_file, target_file, scan_version_id)
-        VALUES (@source_service_id, @target_service_id, @protocol, @method, @path, @source_file, @target_file, @scan_version_id)
-      `);
+      // confidence/evidence columns not present — try with crossing only (migration 008)
+      try {
+        this._stmtUpsertConnection = db.prepare(`
+          INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, source_file, target_file, scan_version_id, crossing)
+          VALUES (@source_service_id, @target_service_id, @protocol, @method, @path, @source_file, @target_file, @scan_version_id, @crossing)
+        `);
+      } catch {
+        // crossing column not present — pre-migration-008 database
+        this._stmtUpsertConnection = db.prepare(`
+          INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, source_file, target_file, scan_version_id)
+          VALUES (@source_service_id, @target_service_id, @protocol, @method, @path, @source_file, @target_file, @scan_version_id)
+        `);
+      }
     }
 
     this._stmtBeginScan = db.prepare(
@@ -574,6 +582,8 @@ export class QueryEngine {
         target_file: null,
         scan_version_id: null,
         crossing: null,
+        confidence: null,
+        evidence: null,
         ...connData,
       })
     );
@@ -758,17 +768,34 @@ export class QueryEngine {
       }
     }
 
-    const connections = this._db
-      .prepare(
-        `
-      SELECT c.id, c.protocol, c.method, c.path, c.source_file, c.target_file,
-             s_src.name as source, s_tgt.name as target, c.scan_version_id
-      FROM connections c
-      JOIN services s_src ON c.source_service_id = s_src.id
-      JOIN services s_tgt ON c.target_service_id = s_tgt.id
-    `,
-      )
-      .all();
+    let connections;
+    try {
+      connections = this._db
+        .prepare(
+          `
+        SELECT c.id, c.protocol, c.method, c.path, c.source_file, c.target_file,
+               s_src.name as source, s_tgt.name as target, c.scan_version_id,
+               c.confidence, c.evidence
+        FROM connections c
+        JOIN services s_src ON c.source_service_id = s_src.id
+        JOIN services s_tgt ON c.target_service_id = s_tgt.id
+      `,
+        )
+        .all();
+    } catch {
+      // confidence/evidence columns not yet present (migration 009 not applied)
+      connections = this._db
+        .prepare(
+          `
+        SELECT c.id, c.protocol, c.method, c.path, c.source_file, c.target_file,
+               s_src.name as source, s_tgt.name as target, c.scan_version_id
+        FROM connections c
+        JOIN services s_src ON c.source_service_id = s_src.id
+        JOIN services s_tgt ON c.target_service_id = s_tgt.id
+      `,
+        )
+        .all();
+    }
 
     const repos = this._db
       .prepare(
@@ -935,6 +962,8 @@ export class QueryEngine {
         target_file: conn.target_file || null,
         scan_version_id: scanVersionId ?? null,
         crossing: conn.crossing || null,
+        confidence: conn.confidence || null,
+        evidence: conn.evidence || null,
       });
 
       // Detect external actors: when crossing='external', the target is an
