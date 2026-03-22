@@ -45,6 +45,32 @@ function attachConnTargetListeners() {
   content.addEventListener("click", _onConnTargetClick);
 }
 
+function renderServiceMeta(node) {
+  const ownerVal = node.owner
+    ? `<div class="detail-value">${escapeHtml(node.owner)}</div>`
+    : `<div class="detail-value" style="color:#718096">unknown</div>`;
+  const authVal = node.auth_mechanism
+    ? `<div class="detail-value">${escapeHtml(node.auth_mechanism)}</div>`
+    : `<div class="detail-value" style="color:#718096">unknown</div>`;
+  const dbVal = node.db_backend
+    ? `<div class="detail-value">${escapeHtml(node.db_backend)}</div>`
+    : `<div class="detail-value" style="color:#718096">unknown</div>`;
+
+  return `
+    <div class="detail-section">
+      <div class="detail-label">Owner</div>
+      ${ownerVal}
+    </div>
+    <div class="detail-section">
+      <div class="detail-label">Auth Mechanism</div>
+      ${authVal}
+    </div>
+    <div class="detail-section">
+      <div class="detail-label">Database</div>
+      ${dbVal}
+    </div>`;
+}
+
 export function showDetailPanel(node) {
   const panel = document.getElementById("detail-panel");
   const content = document.getElementById("detail-content");
@@ -87,6 +113,8 @@ export function showDetailPanel(node) {
       <div class="detail-value">${escapeHtml(node.repo_name)}</div>
     </div>`;
   }
+
+  html += renderServiceMeta(node);
 
   if (nodeType === 'infra') {
     html += renderInfraConnections(node, outgoing, nameById);
@@ -221,8 +249,12 @@ function renderServiceConnections(outgoing, incoming, nameById) {
       const mismatchFlag = e.mismatch
         ? ' <span style="color:#fc8181;font-weight:bold" title="Endpoint not verified in target">✗</span>'
         : "";
+      const confidenceColor = e.confidence === 'high' ? '#48bb78'
+        : e.confidence === 'low' ? '#ed8936'
+        : '#718096';
+      const confidenceBadge = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${confidenceColor};margin-left:4px" title="Confidence: ${escapeHtml(e.confidence || 'unknown')}"></span>`;
       html += `<div class="connection-item" ${e.mismatch ? 'style="border-left:2px solid #fc8181"' : ""}>
-        <div><span class="conn-method">${escapeHtml(e.method || e.protocol)}</span> <span class="conn-path">${escapeHtml(e.path || "")}</span>${mismatchFlag}</div>
+        <div><span class="conn-method">${escapeHtml(e.method || e.protocol)}</span> <span class="conn-path">${escapeHtml(e.path || "")}</span>${mismatchFlag}${confidenceBadge}</div>
         <div class="conn-direction">→ <span class="conn-target" style="cursor:pointer" data-node-id="${e.target_service_id}">${escapeHtml(target)}</span></div>
         ${e.source_file ? `<div class="conn-file">${escapeHtml(e.source_file)}</div>` : ""}
         ${e.mismatch ? '<div class="conn-file" style="color:#fc8181">⚠ Endpoint handler not found in target</div>' : ""}
@@ -239,8 +271,12 @@ function renderServiceConnections(outgoing, incoming, nameById) {
       const mismatchFlag = e.mismatch
         ? ' <span style="color:#fc8181;font-weight:bold" title="Endpoint not verified">✗</span>'
         : "";
+      const confidenceColor = e.confidence === 'high' ? '#48bb78'
+        : e.confidence === 'low' ? '#ed8936'
+        : '#718096';
+      const confidenceBadge = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${confidenceColor};margin-left:4px" title="Confidence: ${escapeHtml(e.confidence || 'unknown')}"></span>`;
       html += `<div class="connection-item" ${e.mismatch ? 'style="border-left:2px solid #fc8181"' : ""}>
-        <div><span class="conn-method">${escapeHtml(e.method || e.protocol)}</span> <span class="conn-path">${escapeHtml(e.path || "")}</span>${mismatchFlag}</div>
+        <div><span class="conn-method">${escapeHtml(e.method || e.protocol)}</span> <span class="conn-path">${escapeHtml(e.path || "")}</span>${mismatchFlag}${confidenceBadge}</div>
         <div class="conn-direction">← <span class="conn-target" style="cursor:pointer" data-node-id="${e.source_service_id}">${escapeHtml(source)}</span></div>
         ${e.target_file ? `<div class="conn-file">${escapeHtml(e.target_file)}</div>` : ""}
         ${e.mismatch ? '<div class="conn-file" style="color:#fc8181">⚠ Endpoint handler not found in target</div>' : ""}
