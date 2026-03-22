@@ -323,6 +323,33 @@ console.log("Test 5: query-engine.js has no INSERT OR REPLACE for services (ON C
 console.log("  PASS");
 
 // ---------------------------------------------------------------------------
+// Test 6: upsertRepo returns correct id on both insert and update (ON CONFLICT)
+// Regression: lastInsertRowid is 0 when ON CONFLICT triggers an UPDATE,
+// which caused beginScan(0) to fail with FOREIGN KEY constraint.
+// ---------------------------------------------------------------------------
+console.log("Test 6: upsertRepo returns correct id on insert AND update");
+{
+  const db = await buildDbWithScanVersions();
+  const { QueryEngine } = await import("./query-engine.js?v=T6");
+  const qe = new QueryEngine(db);
+
+  // First call — insert
+  const first = qe.upsertRepo({ path: "/tmp/test-repo-6", name: "repo-6", type: "single" });
+  assert.ok(first.id > 0, `upsertRepo insert must return id > 0, got ${first.id}`);
+
+  // Second call — same path, triggers ON CONFLICT UPDATE
+  const second = qe.upsertRepo({ path: "/tmp/test-repo-6", name: "repo-6-renamed", type: "single" });
+  assert.strictEqual(second.id, first.id, `upsertRepo update must return same id (${first.id}), got ${second.id}`);
+
+  // Verify beginScan works with the returned id
+  const scanId = qe.beginScan(second.id);
+  assert.ok(scanId > 0, `beginScan must succeed with upsertRepo id, got scanId ${scanId}`);
+
+  db.close();
+}
+console.log("  PASS");
+
+// ---------------------------------------------------------------------------
 // Test A: endScan() removes a service with scan_version_id IS NULL for the scanned repo
 // ---------------------------------------------------------------------------
 console.log("Test A: endScan() removes legacy NULL scan_version_id service for the scanned repo");
@@ -394,6 +421,59 @@ console.log("Test B: endScan() removes connections referencing NULL scan_version
   assert.strictEqual(connCount, 0, `Expected 0 connections after endScan, got ${connCount}`);
 
   // NULL services should also be deleted
+  const svcNullCount = db
+    .prepare("SELECT COUNT(*) FROM services WHERE scan_version_id IS NULL")
+    .pluck()
+    .get();
+  assert.strictEqual(svcNullCount, 0, `Expected 0 NULL services after endScan, got ${svcNullCount}`);
+  db.close();
+}
+console.log("  PASS");
+
+// ---------------------------------------------------------------------------
+// Test B2: endScan() removes schemas referencing NULL-versioned connections
+// Regression: schemas with FK to null-versioned connections caused
+// SQLITE_CONSTRAINT_FOREIGNKEY when endScan deleted the connections first.
+// ---------------------------------------------------------------------------
+console.log("Test B2: endScan() removes schemas on NULL-versioned connections without FK error");
+{
+  const db = await buildDbWithScanVersions();
+  const { QueryEngine } = await import("./query-engine.js?v=B2");
+  const qe = new QueryEngine(db);
+
+  const repoId = db
+    .prepare("INSERT INTO repos(path, name, type) VALUES(?,?,?)")
+    .run("/tmp/rB2", "repoB2", "single").lastInsertRowid;
+
+  // Insert two legacy services with scan_version_id = NULL
+  const svc1Id = db
+    .prepare("INSERT INTO services(repo_id, name, root_path, language, type, scan_version_id) VALUES (?,?,?,?,?,?)")
+    .run(repoId, "legacy-src", "/tmp", "node", "service", null).lastInsertRowid;
+  const svc2Id = db
+    .prepare("INSERT INTO services(repo_id, name, root_path, language, type, scan_version_id) VALUES (?,?,?,?,?,?)")
+    .run(repoId, "legacy-tgt", "/tmp", "go", "service", null).lastInsertRowid;
+
+  // Insert a legacy connection between them
+  const connId = db
+    .prepare("INSERT INTO connections(source_service_id, target_service_id, protocol, scan_version_id) VALUES (?,?,?,?)")
+    .run(svc1Id, svc2Id, "http", null).lastInsertRowid;
+
+  // Insert schemas referencing the legacy connection (this is the trigger for the bug)
+  db.prepare("INSERT INTO schemas(connection_id, role, name, file) VALUES (?,?,?,?)")
+    .run(connId, "request", "TestSchema", "test.js");
+  db.prepare("INSERT INTO schemas(connection_id, role, name, file) VALUES (?,?,?,?)")
+    .run(connId, "response", "TestResponse", "test.js");
+
+  // This must NOT throw SQLITE_CONSTRAINT_FOREIGNKEY
+  const scanId = qe.beginScan(repoId);
+  qe.endScan(repoId, scanId);
+
+  const connCount = db.prepare("SELECT COUNT(*) FROM connections").pluck().get();
+  assert.strictEqual(connCount, 0, `Expected 0 connections after endScan, got ${connCount}`);
+
+  const schemaCount = db.prepare("SELECT COUNT(*) FROM schemas").pluck().get();
+  assert.strictEqual(schemaCount, 0, `Expected 0 schemas after endScan, got ${schemaCount}`);
+
   const svcNullCount = db
     .prepare("SELECT COUNT(*) FROM services WHERE scan_version_id IS NULL")
     .pluck()
