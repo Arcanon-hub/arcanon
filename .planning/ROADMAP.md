@@ -394,7 +394,9 @@ Plans:
   1. After a scan where the agent emits confidence and evidence fields, `SELECT confidence FROM connections WHERE confidence IS NOT NULL LIMIT 5` returns real rows — not zero results
   2. Each connection object in the /graph API response includes `confidence` and `evidence` fields (null if not emitted by the agent)
   3. Re-scanning without confidence/evidence in agent output leaves existing confidence/evidence values in place rather than overwriting with null (ON CONFLICT DO UPDATE preserves existing non-null values)
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 70-01-PLAN.md — Extend upsertConnection + getGraph() to write and return confidence/evidence with migration-009-aware fallback
 
 ### Phase 71: Schema Storage & API Extension
 **Goal**: Schema and field data collected during scans is persisted in the schemas/schema_fields tables and the /graph response includes schemas_by_connection plus all enrichment fields pivoted from node_metadata
@@ -454,7 +456,7 @@ Phases execute in numeric order: 67 → 68 → 69 → 70 → 71 → 72 → 73
 | 67. DB Foundation | v5.3.0 | 0/TBD | Not started | - |
 | 68. Enrichment Architecture & CODEOWNERS | v5.3.0 | 0/TBD | Not started | - |
 | 69. Auth & DB Extraction | v5.3.0 | 0/TBD | Not started | - |
-| 70. Confidence & Evidence Pipeline | v5.3.0 | 0/TBD | Not started | - |
+| 70. Confidence & Evidence Pipeline | v5.3.0 | 0/1 | Not started | - |
 | 71. Schema Storage & API Extension | v5.3.0 | 0/TBD | Not started | - |
 | 72. Detail Panel UI | v5.3.0 | 0/TBD | Not started | - |
 | 73. Agent Prompts & Quality-Gate Spinout | v5.3.0 | 0/TBD | Not started | - |
