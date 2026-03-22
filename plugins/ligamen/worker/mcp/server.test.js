@@ -441,3 +441,142 @@ test("resolveDb path traversal: valid 12-char hex hash does not false-positive",
   // Either null (no DB on disk) or a QueryEngine — should not throw
   assert.ok(result === null || typeof result === "object", "valid hex hash should not throw");
 });
+
+// ─────────────────────────────────────────────────────────────
+// impact_query depth limit (REL-02)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Build a linear chain of N services: svc-1 -> svc-2 -> ... -> svc-N
+ * Returns a fresh in-memory DB.
+ */
+function createChainDb(length) {
+  const db = new Database(":memory:");
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+
+  db.exec(`
+    CREATE TABLE repos (
+      id INTEGER PRIMARY KEY,
+      path TEXT NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT,
+      last_commit TEXT,
+      scanned_at TEXT
+    );
+    CREATE TABLE services (
+      id INTEGER PRIMARY KEY,
+      repo_id INTEGER REFERENCES repos(id),
+      name TEXT NOT NULL,
+      root_path TEXT,
+      language TEXT
+    );
+    CREATE TABLE connections (
+      id INTEGER PRIMARY KEY,
+      source_service_id INTEGER REFERENCES services(id),
+      target_service_id INTEGER REFERENCES services(id),
+      protocol TEXT,
+      method TEXT,
+      path TEXT,
+      source_file TEXT,
+      target_file TEXT
+    );
+    CREATE VIRTUAL TABLE connections_fts USING fts5(
+      path, protocol, source_file, target_file,
+      content=connections,
+      content_rowid=id
+    );
+    CREATE TRIGGER connections_ai AFTER INSERT ON connections BEGIN
+      INSERT INTO connections_fts(rowid, path, protocol, source_file, target_file)
+      VALUES (new.id, new.path, new.protocol, new.source_file, new.target_file);
+    END;
+  `);
+
+  db.prepare("INSERT INTO repos VALUES (1, ?, ?, ?, ?, ?)").run(
+    "/chain-repo", "chain-repo", "monorepo", null, null,
+  );
+
+  for (let i = 1; i <= length; i++) {
+    db.prepare("INSERT INTO services VALUES (?, ?, ?, ?, ?)").run(
+      i, 1, `svc-${i}`, `/chain-repo/svc-${i}`, "javascript",
+    );
+  }
+
+  for (let i = 1; i < length; i++) {
+    db.prepare("INSERT INTO connections VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
+      i, i, i + 1, "http", "GET", `/api/${i}`, `/svc-${i}/index.js`, `/svc-${i + 1}/index.js`,
+    );
+  }
+
+  return db;
+}
+
+test("impact_query depth limit: transitive query caps at depth 7 by default", async () => {
+  // Chain of 10 services: svc-1 -> svc-2 -> ... -> svc-10
+  const db = createChainDb(10);
+  const result = await queryImpact(db, {
+    service: "svc-1",
+    direction: "consumes",
+    transitive: true,
+  });
+  db.close();
+  const depths = result.results.map((r) => r.depth);
+  const maxDepth = Math.max(...depths, 0);
+  assert.ok(
+    maxDepth <= 7,
+    `max depth should be <= 7, got ${maxDepth}`,
+  );
+});
+
+test("impact_query depth limit: truncated flag is set when chain exceeds depth 7", async () => {
+  const db = createChainDb(10);
+  const result = await queryImpact(db, {
+    service: "svc-1",
+    direction: "consumes",
+    transitive: true,
+  });
+  db.close();
+  assert.equal(
+    result.truncated,
+    true,
+    "truncated should be true when chain length > 7",
+  );
+  assert.ok(
+    typeof result.notice === "string" && result.notice.includes("truncat"),
+    "notice should include 'truncat'",
+  );
+});
+
+test("impact_query depth limit: non-transitive query is unaffected by depth limit changes", async () => {
+  const db = createChainDb(10);
+  const result = await queryImpact(db, {
+    service: "svc-1",
+    direction: "consumes",
+    transitive: false,
+  });
+  db.close();
+  assert.ok(Array.isArray(result.results), "results should be array");
+  assert.equal(result.results.length, 1, "non-transitive returns only direct connection");
+  assert.equal(result.results[0].service, "svc-2");
+  assert.equal(result.truncated, undefined, "truncated should not be set for non-transitive");
+});
+
+test("impact_query depth limit: short chain (4 hops) has no truncation", async () => {
+  const db = createChainDb(4);
+  const result = await queryImpact(db, {
+    service: "svc-1",
+    direction: "consumes",
+    transitive: true,
+  });
+  db.close();
+  // 4-service chain: svc-1 -> svc-2 -> svc-3 -> svc-4 (max depth 3)
+  assert.equal(
+    result.truncated,
+    undefined,
+    "no truncation for short chain within depth limit",
+  );
+  assert.ok(
+    result.results.length >= 3,
+    "all services in short chain should be returned",
+  );
+});
