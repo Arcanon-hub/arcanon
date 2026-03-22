@@ -11,7 +11,6 @@ claude plugin install ligamen@ligamen --scope user
 
 ## Commands
 
-- `/ligamen:quality-gate` — run lint, format, tests, and typecheck in one step
 - `/ligamen:map` — scan repos and build the service dependency graph
 - `/ligamen:cross-impact` — find what breaks when you change something
 - `/ligamen:drift` — check dependency version alignment across repos

@@ -8,7 +8,6 @@
   "repository": "https://github.com/chilleregeravi/ligamen",
   "license": "AGPL-3.0-only",
   "keywords": [
-    "quality-gates",
     "auto-format",
     "auto-lint",
     "cross-repo",

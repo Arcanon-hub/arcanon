@@ -89,7 +89,7 @@ CONTEXT="Ligamen active."
 if [[ -n "$PROJECT_TYPES" ]]; then
   CONTEXT="Ligamen active. Detected: ${PROJECT_TYPES}."
 fi
-CONTEXT="${CONTEXT} Commands: /ligamen:quality-gate, /ligamen:cross-impact, /ligamen:drift."
+CONTEXT="${CONTEXT} Commands: /ligamen:cross-impact, /ligamen:drift."
 [[ -n "$WORKER_STATUS" ]] && CONTEXT="${CONTEXT} ${WORKER_STATUS}"
 
 # SSTH-01: Output hookSpecificOutput.additionalContext JSON to stdout
