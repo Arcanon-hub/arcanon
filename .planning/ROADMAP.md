@@ -484,9 +484,13 @@ Plans:
   2. When the agent emits a service with a missing or empty `root_path`, findings.js logs a validation warning and skips that service
   3. When the agent emits a service with a missing or empty `language`, findings.js logs a validation warning and skips that service
   4. `getChangedFiles()` and `getCurrentHead()` use execFileSync with argument arrays — no user-controlled string is ever interpolated into a shell command string
-**Plans:** 1 plan
+**Plans:** 2 plans
 Plans:
-- [ ] 79-01-PLAN.md — Bump all manifest version fields to 5.4.0
+- [ ] 75-01-PLAN.md — SVAL-01 warn-and-skip validation for service type/root_path/language in findings.js
+- [ ] 75-02-PLAN.md — SVAL-02 replace execSync with execFileSync argument arrays in manager.js
+
+
+
 
 ### Phase 76: Discovery Phase Wiring
 **Goal**: A discovery agent runs before the deep scan agent for each repo, producing structured language/framework/entry-point context that is injected into the deep scan prompt as {{DISCOVERY_JSON}}
