@@ -31,7 +31,7 @@ Requirements for Scan Pipeline Hardening milestone. Each maps to roadmap phases.
 
 ### Release
 
-- [ ] **REL-01**: All manifest files (package.json, marketplace.json, plugin.json) version-bumped to 5.4.0
+- [x] **REL-01**: All manifest files (package.json, marketplace.json, plugin.json) version-bumped to 5.4.0
 
 ## Future Requirements
 
@@ -63,7 +63,7 @@ Requirements for Scan Pipeline Hardening milestone. Each maps to roadmap phases.
 | SARC-03 | Phase 77 | Complete |
 | SREL-01 | Phase 78 | Complete |
 | SREL-02 | Phase 78 | Complete |
-| REL-01 | Phase 79 | Pending |
+| REL-01 | Phase 79 | Complete |
 
 **Coverage:**
 - v5.4.0 requirements: 11 total
