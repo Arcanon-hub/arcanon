@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 76-discovery-phase-wiring 76-01-PLAN.md
-last_updated: "2026-03-22T18:04:09.078Z"
+stopped_at: Completed 78-scan-reliability 78-02-PLAN.md
+last_updated: "2026-03-22T18:07:16.156Z"
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 9
-  completed_plans: 5
+  completed_plans: 7
 ---
 
 # Project State
@@ -44,6 +44,8 @@ Plan: 1 of 1
 | Phase 74-scan-bug-fixes P01 | 15 | 2 tasks | 6 files |
 | Phase 74-scan-bug-fixes P02 | 8 | 1 tasks | 2 files |
 | Phase 76-discovery-phase-wiring P01 | 4 | 2 tasks | 2 files |
+| Phase 78-scan-reliability P02 | 4 | 1 tasks | 6 files |
+| Phase 77-prompt-debiasing-dead-code-removal P01 | 210 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -63,6 +65,7 @@ Plan: 1 of 1
 - [Phase 74-scan-bug-fixes]: SBUG-02: Poetry detection uses [tool.poetry] and [tool.poetry.scripts] (not [project]/[project.scripts]) — addresses Poetry-specific pyproject.toml format
 - [Phase 76-discovery-phase-wiring]: promptDeep (agent-prompt-deep.md) used for all deep scans — type-specific prompts not used (SARC-03 Phase 77 cleanup)
 - [Phase 76-discovery-phase-wiring]: beginScan bracket opens AFTER runDiscoveryPass completes — no orphaned scan_versions rows on discovery failure
+- [Phase 78-scan-reliability]: SREL-02: Actor dedup filter at UI layer using existing serviceNameToId map in graph.js loadProject() — no new DB fetch, filter between raw assignment and synthetic node loop
 
 ### Pending Todos
 
@@ -74,6 +77,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22T18:01:25.216Z
-Stopped at: Completed 76-discovery-phase-wiring 76-01-PLAN.md
+Last session: 2026-03-22T18:07:09.994Z
+Stopped at: Completed 78-scan-reliability 78-02-PLAN.md
 Resume file: None

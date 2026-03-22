@@ -27,7 +27,7 @@ Requirements for Scan Pipeline Hardening milestone. Each maps to roadmap phases.
 ### Scan Reliability
 
 - [ ] **SREL-01**: Discovery agents run in parallel across repos; deep scan agents run in parallel where possible; failed agents retry once then skip with user warning (THE-952)
-- [ ] **SREL-02**: Graph UI /graph endpoint filters out actors whose name matches a known service, redirecting connections to the service node — defense in depth for stale actor data (THE-948)
+- [x] **SREL-02**: Graph UI /graph endpoint filters out actors whose name matches a known service, redirecting connections to the service node — defense in depth for stale actor data (THE-948)
 
 ### Release
 
@@ -62,7 +62,7 @@ Requirements for Scan Pipeline Hardening milestone. Each maps to roadmap phases.
 | SARC-02 | Phase 77 | Pending |
 | SARC-03 | Phase 77 | Pending |
 | SREL-01 | Phase 78 | Pending |
-| SREL-02 | Phase 78 | Pending |
+| SREL-02 | Phase 78 | Complete |
 | REL-01 | Phase 79 | Pending |
 
 **Coverage:**

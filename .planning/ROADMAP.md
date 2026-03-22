@@ -524,7 +524,7 @@ Plans:
   2. When a deep scan agent call fails on first attempt, a single retry is automatically issued before the repo is skipped — the user sees a warning identifying the skipped repo by name
   3. A skipped repo (after retry failure) does not cause the entire `/ligamen:map` command to error out — remaining repos complete normally
   4. When the /graph endpoint returns an actor whose name exactly matches a known service name, the actor node is absent from the rendered graph and its connections point to the service node instead
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 Plans:
 - [ ] 78-01-PLAN.md — Parallel scan fan-out with retry-once error handling
 - [ ] 78-02-PLAN.md — Graph UI actor dedup filter (defense in depth)
@@ -566,5 +566,5 @@ Phases execute in numeric order: 74 → 75 → 76 → 77 → 78 → 79
 | 75. Validation Hardening | 2/2 | Complete    | 2026-03-22 | - |
 | 76. Discovery Phase Wiring | 1/1 | Complete    | 2026-03-22 | - |
 | 77. Prompt Debiasing & Dead Code Removal | v5.4.0 | 0/TBD | Not started | - |
-| 78. Scan Reliability | v5.4.0 | 0/TBD | Not started | - |
+| 78. Scan Reliability | 1/2 | In Progress|  | - |
 | 79. Version Bump | v5.4.0 | 0/TBD | Not started | - |
