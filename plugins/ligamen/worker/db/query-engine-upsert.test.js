@@ -539,4 +539,89 @@ console.log("Test F: cross-repo: ambiguous name across repos emits console.warn"
 }
 console.log("  PASS");
 
+// ---------------------------------------------------------------------------
+// Test G: upsertNodeMetadata — insert, update, no scan_versions side-effect
+// ---------------------------------------------------------------------------
+console.log("Test G: upsertNodeMetadata — insert/update/no-scan-bracket");
+{
+  const db = await buildDb();
+  const { QueryEngine } = await import("./query-engine.js?v=G");
+
+  const repoId = db
+    .prepare("INSERT INTO repos(path, name, type) VALUES(?,?,?)")
+    .run("/tmp/rG", "repoG", "single").lastInsertRowid;
+
+  // Ensure node_metadata table exists in the in-memory db (migration 008 schema)
+  const nm_ddl = `
+    CREATE TABLE IF NOT EXISTS node_metadata (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      service_id INTEGER NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+      view       TEXT    NOT NULL,
+      key        TEXT    NOT NULL,
+      value      TEXT,
+      source     TEXT,
+      updated_at TEXT    NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(service_id, view, key)
+    );
+  `;
+  db.exec(nm_ddl);
+
+  // Re-instantiate QueryEngine so _stmtUpsertNodeMetadata is prepared against updated schema
+  const qeNm = new QueryEngine(db);
+
+  const svcId = db
+    .prepare("INSERT INTO services(repo_id, name, root_path, language, type) VALUES(?,?,?,?,?)")
+    .run(repoId, "svc-nm", "/tmp", "node", "service").lastInsertRowid;
+
+  // Insert
+  const nmRowId = qeNm.upsertNodeMetadata(svcId, "ownership", "owner", "@team-platform");
+  assert.ok(typeof nmRowId === "number" && nmRowId > 0, "upsertNodeMetadata returns rowId on insert");
+
+  // Read back
+  const nmRow = db.prepare("SELECT value FROM node_metadata WHERE service_id = ? AND view = ? AND key = ?")
+    .get(svcId, "ownership", "owner");
+  assert.strictEqual(nmRow.value, "@team-platform", "node_metadata value written correctly");
+
+  // ON CONFLICT DO UPDATE
+  qeNm.upsertNodeMetadata(svcId, "ownership", "owner", "@team-security");
+  const nmUpdated = db.prepare("SELECT value FROM node_metadata WHERE service_id = ? AND view = ? AND key = ?")
+    .get(svcId, "ownership", "owner");
+  assert.strictEqual(nmUpdated.value, "@team-security", "upsertNodeMetadata updates existing value");
+
+  // Only one row (no duplicate)
+  const nmCount = db.prepare("SELECT COUNT(*) FROM node_metadata WHERE service_id = ? AND view = ? AND key = ?")
+    .pluck()
+    .get(svcId, "ownership", "owner");
+  assert.strictEqual(nmCount, 1, "upsertNodeMetadata does not create duplicate rows");
+
+  // No scan bracket created
+  const scanCount = db.prepare("SELECT COUNT(*) FROM scan_versions").pluck().get();
+  assert.strictEqual(scanCount, 0, "upsertNodeMetadata does not create scan_versions rows");
+
+  db.close();
+}
+console.log("  PASS");
+
+// ---------------------------------------------------------------------------
+// Test H: upsertNodeMetadata on pre-migration-008 db returns null, no throw
+// ---------------------------------------------------------------------------
+console.log("Test H: upsertNodeMetadata on pre-migration-008 db (no node_metadata) returns null");
+{
+  // Use buildDb() which includes migrations 001-006 but NOT migration 008 (no node_metadata)
+  const db = await buildDb();
+  const { QueryEngine } = await import("./query-engine.js?v=H");
+  // Constructor must NOT throw even without node_metadata table
+  const qe = new QueryEngine(db);
+
+  const repoId = db.prepare("INSERT INTO repos(path, name, type) VALUES(?,?,?)").run("/tmp/rH", "repoH", "single").lastInsertRowid;
+  const svcId = qe.upsertService({ repo_id: repoId, name: "svc-h", root_path: "/tmp", language: "node" });
+
+  // Method returns null when node_metadata table is absent
+  const result = qe.upsertNodeMetadata(svcId, "ownership", "owner", "@team");
+  assert.strictEqual(result, null, "upsertNodeMetadata returns null when node_metadata absent");
+
+  db.close();
+}
+console.log("  PASS");
+
 console.log("\nAll query-engine upsert rewrite tests PASS");

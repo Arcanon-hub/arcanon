@@ -391,6 +391,21 @@ export class QueryEngine {
       this._stmtUpsertActorConnection = null;
       this._stmtGetActorByName = null;
     }
+
+    // --- node_metadata statement (migration 008) ---
+    this._stmtUpsertNodeMetadata = null;
+    try {
+      this._stmtUpsertNodeMetadata = db.prepare(`
+        INSERT INTO node_metadata (service_id, view, key, value, updated_at)
+        VALUES (@service_id, @view, @key, @value, datetime('now'))
+        ON CONFLICT(service_id, view, key) DO UPDATE SET
+          value = excluded.value,
+          updated_at = excluded.updated_at
+      `);
+    } catch {
+      // node_metadata table not present (pre-migration-008 db)
+      this._stmtUpsertNodeMetadata = null;
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -587,6 +602,29 @@ export class QueryEngine {
     const result = this._stmtUpsertField.run({
       required: 0,
       ...fieldData,
+    });
+    return result.lastInsertRowid;
+  }
+
+  /**
+   * Inserts or updates a metadata key/value for a service in the given view.
+   *
+   * MUST NOT call beginScan/endScan - enrichment passes write metadata after
+   * the scan bracket closes. This method creates no scan_versions rows.
+   *
+   * @param {number} serviceId - services.id
+   * @param {string} view - Logical namespace (e.g., "ownership", "auth", "db")
+   * @param {string} key - Key within the view (e.g., "owner", "auth_mechanism")
+   * @param {string|null} value - Value to store (null clears the value)
+   * @returns {number|null} lastInsertRowid, or null if node_metadata table absent
+   */
+  upsertNodeMetadata(serviceId, view, key, value) {
+    if (!this._stmtUpsertNodeMetadata) return null;
+    const result = this._stmtUpsertNodeMetadata.run({
+      service_id: serviceId,
+      view,
+      key,
+      value: value ?? null,
     });
     return result.lastInsertRowid;
   }
