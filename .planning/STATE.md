@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: "Completed 80-03-PLAN.md"
-last_updated: "2026-03-22T20:42:00Z"
+stopped_at: Completed 80-01-PLAN.md
+last_updated: "2026-03-22T20:31:08.020Z"
 progress:
-  total_phases: 32
-  completed_phases: 27
-  total_plans: 47
-  completed_plans: 46
+  total_phases: 4
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
@@ -47,6 +47,7 @@ Plan: 3 of 3
 - v5.5.0: QUAL-02 (map project name) is partially implemented in the command file already
 - v5.5.0: Shannon entropy >= 4.0 bits/char rejects (>=, not >); 'abcdefghijkl' (3.585 entropy) is the correct near-threshold test fixture
 - v5.5.0: SEC-03 scan lock scope is the full repoPaths array; lock dir is $LIGAMEN_DATA_DIR or ~/.ligamen; stale detection via process.kill(pid, 0)
+- [Phase 80-security-hardening]: SEC-01: path.resolve + startsWith base-dir guard replaces includes('..') in resolveDb() — handles all normalization variants
 
 ### Pending Todos
 
@@ -58,6 +59,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-22
-Stopped at: Completed 80-03-PLAN.md
+Last session: 2026-03-22T20:31:08.017Z
+Stopped at: Completed 80-01-PLAN.md
 Resume file: None

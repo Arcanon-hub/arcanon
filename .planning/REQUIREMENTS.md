@@ -9,7 +9,7 @@ Requirements for Security & Data Integrity Hardening. Each maps to roadmap phase
 
 ### Security
 
-- [ ] **SEC-01**: MCP resolveDb() uses path.normalize() + base directory validation to prevent path traversal attacks
+- [x] **SEC-01**: MCP resolveDb() uses path.normalize() + base directory validation to prevent path traversal attacks
 - [x] **SEC-02**: Auth-db enricher rejects high-entropy strings and logs near-threshold values for credential leak prevention
 - [x] **SEC-03**: Scan manager acquires project lock before scanning, rejects concurrent scans with clear error message
 
@@ -60,7 +60,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SEC-01 | Phase 80 | Pending |
+| SEC-01 | Phase 80 | Complete |
 | SEC-02 | Phase 80 | Complete |
 | SEC-03 | Phase 80 | Complete |
 | DINT-01 | Phase 81 | Pending |
