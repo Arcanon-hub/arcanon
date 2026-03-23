@@ -24,6 +24,18 @@ Only report services/libraries whose **source code is in `{{REPO_PATH}}`**. If t
 
 Every connection **must** include an `evidence` field: the exact code snippet (≤ 3 lines) that proves this connection. Not optional.
 
+## Crossing Semantics
+
+Every connection must include a `crossing` field. Use exactly one of these three values:
+
+| Value | Meaning | When to use |
+|-------|---------|-------------|
+| `internal` | Within the same deployable unit | Source and target are in the same repo and the same service boundary (e.g., one microservice calling its own internal module) |
+| `cross-service` | Different service in a linked repo | Target is a named service that exists in another repo in the same project (e.g., user-api calling auth-service when both repos are linked) |
+| `external` | Outside the project entirely | Target is a third-party API, SaaS, or any service NOT found in any linked repo (e.g., stripe.com, sendgrid, Twilio) |
+
+**Default conservatively:** If you cannot confirm the target is a known linked-repo service, use `external`. Post-scan reconciliation will upgrade misclassified values automatically.
+
 ## Service Naming Convention
 
 The `name` field must be **lowercase-hyphenated**, derived from the package manifest:
