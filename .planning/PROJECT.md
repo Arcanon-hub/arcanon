@@ -146,7 +146,13 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ### Active
 
-(No active requirements — start next milestone with `/gsd:new-milestone`)
+## Current Milestone: v5.7.0 Scan Accuracy
+
+**Goal:** Improve scan accuracy with proper crossing semantics, cross-repo reconciliation, mono-repo detection, and client file identification.
+
+**Linear issues:**
+- THE-949: Redefine crossing semantics (external/cross-service/internal) + post-scan reconciliation step
+- THE-951: Mono-repo detection heuristic + client_files field in discovery schema
 
 ### Out of Scope
 

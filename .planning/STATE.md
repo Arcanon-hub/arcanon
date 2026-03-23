@@ -1,12 +1,12 @@
 ---
 gsd_state_version: 1.0
-milestone: v5.6.0
-milestone_name: Logging & Observability
-status: v5.6.0 milestone complete
-stopped_at: Completed 85-02-PLAN.md
-last_updated: "2026-03-23T11:10:46.159Z"
+milestone: v5.7.0
+milestone_name: Scan Accuracy
+status: defining_requirements
+stopped_at: Milestone started, defining requirements
+last_updated: "2026-03-23T11:30:00.000Z"
 progress:
-  total_phases: 32
+  total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -19,44 +19,30 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-23)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** Phase 84 — Logger Infrastructure
+**Current focus:** Defining requirements for v5.7.0
 
 ## Current Position
 
-Phase: 84 (Logger Infrastructure) — EXECUTING
-Plan: 1 of 1
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-23 — Milestone v5.7.0 started
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 146 (across v1.0–v5.5.0)
-- Total milestones shipped: 15
+- Total plans completed: 153 (across v1.0–v5.6.0)
+- Total milestones shipped: 16
 
 ## Accumulated Context
 
 ### Decisions
 
-- v5.6.0: Log rotation is size-based (10MB max, keep 3 rotated files), self-implemented (zero deps)
-- v5.6.0: Logger skips stderr in daemon mode (no TTY detection) — single source of truth in log file
-- v5.6.0: Scan logging at moderate verbosity (~6 lines/repo) — BEGIN/END + per-repo progress
-- v5.6.0: QueryEngine gets injected logger replacing console.warn — backward-compatible optional param
-- v5.6.0: All error logging adds err.stack alongside err.message
-- [Phase 84-logger-infrastructure]: Rotation deletes .3 (oldest) on each rotation to keep exactly .1, .2, .3 — no .4 ever created
-- [Phase 84-logger-infrastructure]: rotateIfNeeded() called after level-filter so suppressed messages do not trigger rotation
-- [Phase 85-error-logging]: stack: err.stack added to all 6 catch blocks in http.js that return 500
-- [Phase 86-scan-observability]: enricherCount in 'enrichment done' uses services.length (services enriched per run), not registered enricher count
-- [Phase 87-logger-adoption]: pool.js passes null explicitly to document logger injection deferred to future phase when pool-level logger context is available
-- [Phase 87-logger-adoption]: Optional chaining (this._logger?.warn ?? console.warn) guards against loggers missing .warn method
-- [Phase 86-scan-observability]: setExtractorLogger called immediately after setScanLogger(logger) — all logger wiring in section 5 of worker/index.js
-- [Phase 85-error-logging]: All 7 MCP tool handlers wrapped in try/catch with logger.error and stack: err.stack — zero unguarded logger.error calls remain in the worker
-
-### Phase Structure
-
-- Phase 84: LOG-01 + LOG-02 (both in logger.js — rotation + stderr dedup)
-- Phase 85: ERR-01 + ERR-02 + LOG-03 (error logging in http.js, mcp/server.js, all error call sites)
-- Phase 86: SCAN-01 + SCAN-02 + SCAN-03 (scan lifecycle in manager.js + extractor logger in worker/index.js)
-- Phase 87: ADOPT-01 (QueryEngine optional logger param — standalone, independent of other phases)
+- v5.7.0: THE-949 redefines crossing to external/cross-service/internal (not just external/internal)
+- v5.7.0: THE-949 adds post-scan reconciliation step between Step 2 and Step 3 in map.md
+- v5.7.0: THE-951 adds multi-manifest detection heuristic for mono-repo discovery
+- v5.7.0: THE-951 adds client_files field to discovery schema for outbound call identification
 
 ### Pending Todos
 
@@ -68,6 +54,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T11:09:11.834Z
-Stopped at: Completed 85-02-PLAN.md
+Last session: 2026-03-23
+Stopped at: Milestone v5.7.0 started — defining requirements
 Resume file: None
