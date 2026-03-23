@@ -562,6 +562,11 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
 
   try {
 
+  // SCAN-01: Record start time and emit BEGIN event
+  const scanStart = Date.now();
+  const scanMode = options.full === true ? 'full' : 'incremental';
+  slog('INFO', 'scan BEGIN', { repoCount: repoPaths.length, mode: scanMode });
+
   // Load shared prompt components once
   const commonRules = readFileSync(join(__dirname, "agent-prompt-common.md"), "utf8");
   const schemaJson = readFileSync(join(__dirname, "agent-schema.json"), "utf8");
@@ -608,6 +613,13 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     // 4. Discovery pass — Phase 1: structure analysis (SARC-01)
     // Runs BEFORE beginScan — does not open a scan bracket.
     const discoveryContext = await runDiscoveryPass(repoPath, promptComponents.promptDiscovery, agentRunner, slog);
+
+    // SCAN-02: Log discovery done with detected languages/frameworks
+    slog('INFO', 'discovery done', {
+      repoPath,
+      languages: Array.isArray(discoveryContext.languages) ? discoveryContext.languages : [],
+      frameworks: Array.isArray(discoveryContext.frameworks) ? discoveryContext.frameworks : [],
+    });
 
     // 5. Open scan version bracket — records scan start in scan_versions table
     const scanVersionId = queryEngine.beginScan(repo.id);
@@ -669,6 +681,13 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
         error: result.error,
       };
     }
+
+    // SCAN-02: Log deep scan done with service/connection counts
+    slog('INFO', 'deep scan done', {
+      repoPath,
+      services: Array.isArray(result.findings?.services) ? result.findings.services.length : 0,
+      connections: Array.isArray(result.findings?.connections) ? result.findings.connections.length : 0,
+    });
 
     // 9b. Log validation warnings (e.g., skipped services from SVAL-01)
     for (const w of result.warnings) {
@@ -735,6 +754,8 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       for (const service of services) {
         await runEnrichmentPass(service, queryEngine._db, _logger, r.repoPath);
       }
+      // SCAN-02: Log enrichment done with number of services enriched
+      slog('INFO', 'enrichment done', { repoPath: r.repoPath, enricherCount: services.length });
     } catch (err) {
       slog('WARN', 'enrichment pass error', { repoPath: r.repoPath, error: err.message });
     }
@@ -742,6 +763,11 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     slog('INFO', 'scan complete', { repoPath: r.repoPath, mode: r.mode });
     results.push({ repoPath: r.repoPath, mode: r.mode, findings: r.findings });
   }
+
+  // SCAN-01: Emit END event with totals and wall-clock duration
+  const totalServices = results.reduce((n, r) => n + (Array.isArray(r.findings?.services) ? r.findings.services.length : 0), 0);
+  const totalConnections = results.reduce((n, r) => n + (Array.isArray(r.findings?.connections) ? r.findings.connections.length : 0), 0);
+  slog('INFO', 'scan END', { totalServices, totalConnections, durationMs: Date.now() - scanStart });
 
   return results;
 
