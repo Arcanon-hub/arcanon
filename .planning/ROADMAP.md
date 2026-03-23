@@ -675,7 +675,10 @@ Plans:
   1. When QueryEngine is constructed with an injected logger, a cross-repo service name collision produces a structured warn log entry visible in the log terminal — not a bare console.warn line
   2. When QueryEngine is constructed without a logger (backward-compatible path), the collision warning falls back to console.warn — no TypeError or silent failure
   3. The injected logger is used for the collision warning at line 1257 of query-engine.js — no other console.warn calls are introduced or left unreplaced in that file
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 87-01-PLAN.md — Add optional logger to QueryEngine, replace console.warn with structured logger fallback
 
 ### Phase 88: Version Bump
 **Goal**: All manifest files reflect version 5.6.0 so the marketplace and plugin install surfaces present the correct version
