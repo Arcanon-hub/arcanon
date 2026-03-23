@@ -38,17 +38,17 @@ Requirements for Scan Accuracy milestone. Derived from Linear issues THE-949 and
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CROSS-01 | — | Pending |
-| CROSS-02 | — | Pending |
-| CROSS-03 | — | Pending |
-| DISC-01 | — | Pending |
-| DISC-02 | — | Pending |
-| VER-01 | — | Pending |
+| CROSS-01 | Phase 89 | Pending |
+| CROSS-02 | Phase 89 | Pending |
+| CROSS-03 | Phase 89 | Pending |
+| DISC-01 | Phase 90 | Pending |
+| DISC-02 | Phase 90 | Pending |
+| VER-01 | Phase 91 | Pending |
 
 **Coverage:**
 - v5.7.0 requirements: 6 total
-- Mapped to phases: 0
-- Unmapped: 6
+- Mapped to phases: 6
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-23*

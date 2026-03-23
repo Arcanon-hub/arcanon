@@ -18,6 +18,7 @@
 - ✅ **v5.4.0 Scan Pipeline Hardening** — Phases 74-79 (shipped 2026-03-22)
 - ✅ **v5.5.0 Security & Data Integrity Hardening** — Phases 80-83 (shipped 2026-03-22)
 - 🚧 **v5.6.0 Logging & Observability** — Phases 84-88 (in progress)
+- 📋 **v5.7.0 Scan Accuracy** — Phases 89-91 (planned)
 
 ## Phases
 
@@ -165,6 +166,14 @@ Full details: see Phase Details below (archived)
 - [ ] **Phase 86: Scan Observability** - Scan lifecycle logging (BEGIN/END/per-repo progress) and extractor logger wiring
 - [ ] **Phase 87: Logger Adoption** - QueryEngine accepts injected logger to replace console.warn
 - [ ] **Phase 88: Version Bump** - Bump all 5 manifest files (package.json, plugin.json, runtime-deps.json, 2x marketplace.json) to v5.6.0
+
+### 📋 v5.7.0 Scan Accuracy (Planned)
+
+**Milestone Goal:** Improve scan accuracy with proper crossing semantics, cross-repo reconciliation, mono-repo detection, and client file identification.
+
+- [ ] **Phase 89: Crossing Semantics** - Define external/cross-service/internal crossing values in agent prompts and add post-scan reconciliation in map.md
+- [ ] **Phase 90: Discovery Improvements** - Mono-repo multi-manifest detection and client_files field in discovery schema
+- [ ] **Phase 91: Version Bump** - Bump all 5 manifest files to v5.7.0
 
 ## Phase Details
 
@@ -695,10 +704,41 @@ Plans:
   2. Running `claude plugin marketplace add` offers version 5.6.0
 **Plans**: TBD
 
+### Phase 89: Crossing Semantics
+**Goal**: Agent prompts produce accurate crossing values and a post-scan reconciliation step downgrades false external crossings to cross-service where both endpoints are known services
+**Depends on**: Phase 88 (v5.6.0 complete)
+**Requirements**: CROSS-01, CROSS-02, CROSS-03
+**Success Criteria** (what must be TRUE):
+  1. Scanning a service that calls another known service within a linked repo produces a connection with crossing value "cross-service" — not "external"
+  2. Scanning a service that calls a third-party API produces a connection with crossing value "external" after reconciliation
+  3. Scanning a service that calls an endpoint within the same deployable unit produces a connection with crossing value "internal"
+  4. Every example connection in the agent scan prompt includes a non-null crossing field — no omissions in examples
+  5. The post-scan reconciliation step in map.md runs after all repos are scanned and before the summary is printed
+**Plans**: TBD
+
+### Phase 90: Discovery Improvements
+**Goal**: The discovery agent detects mono-repos with per-subdirectory hints and surfaces client files so the deep scan can identify outbound callers
+**Depends on**: Phase 88 (v5.6.0 complete — can run in parallel with Phase 89)
+**Requirements**: DISC-01, DISC-02
+**Success Criteria** (what must be TRUE):
+  1. Scanning a mono-repo with subdirectory manifests (package.json, pyproject.toml, Cargo.toml, go.mod) produces a discovery result with multiple service_hints entries — one per subdirectory
+  2. Scanning a repo that contains files named *client*, *api*, or *http*, or files importing fetch/requests/reqwest/httpx produces a discovery result with a non-empty client_files array
+  3. Scanning a repo with no client-like files produces a discovery result with an empty (or absent) client_files array — no false positives
+**Plans**: TBD
+
+### Phase 91: Version Bump
+**Goal**: All manifest files reflect version 5.7.0 so the marketplace and plugin install surfaces present the correct version
+**Depends on**: Phase 89, Phase 90 (must be last — version bump is the release gate)
+**Requirements**: VER-01
+**Success Criteria** (what must be TRUE):
+  1. All 5 manifest files (package.json, plugin.json, runtime-deps.json, plugins/ligamen/.claude-plugin/marketplace.json, .claude-plugin/marketplace.json) contain version "5.7.0"
+  2. Running  offers version 5.7.0
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phase 84 first (logger infrastructure), then 85/86/87 in any order (parallel), then Phase 88 last (version bump release gate).
+Phase 84 first (logger infrastructure), then 85/86/87 in any order (parallel), then Phase 88 last (version bump release gate). For v5.7.0: Phase 89 (crossing semantics) and Phase 90 (discovery improvements) can run in parallel, then Phase 91 last (version bump release gate).
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -722,3 +762,6 @@ Phase 84 first (logger infrastructure), then 85/86/87 in any order (parallel), t
 | 86. Scan Observability | v5.6.0 | 2/2 | Complete   | 2026-03-23 |
 | 87. Logger Adoption | v5.6.0 | 1/1 | Complete   | 2026-03-23 |
 | 88. Version Bump | v5.6.0 | 0/? | Not started | - |
+| 89. Crossing Semantics | v5.7.0 | 0/? | Not started | - |
+| 90. Discovery Improvements | v5.7.0 | 0/? | Not started | - |
+| 91. Version Bump | v5.7.0 | 0/? | Not started | - |
