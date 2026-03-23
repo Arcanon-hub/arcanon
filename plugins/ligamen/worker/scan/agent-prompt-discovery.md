@@ -49,6 +49,7 @@ Return ONLY a fenced JSON code block:
   "proto_files": ["string — .proto files found"],
   "openapi_files": ["string — openapi/swagger files found"],
   "event_config_files": ["string — files with event/queue configuration"],
+  "client_files": ["string — files matching *client*, *api*, *http* patterns or importing fetch/requests/reqwest/httpx"],
   "has_dockerfile": true,
   "has_docker_compose": true,
   "mono_repo": false,
