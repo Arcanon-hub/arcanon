@@ -85,6 +85,7 @@ async function createHttpServer(queryEngine, options = {}) {
     try {
       return reply.send(listProjects());
     } catch (err) {
+      httpLog('ERROR', err.message, { route: '/projects', stack: err.stack });
       return reply.code(500).send({ error: err.message });
     }
   });
@@ -122,7 +123,7 @@ async function createHttpServer(queryEngine, options = {}) {
 
       return reply.send({ ...graph, boundaries });
     } catch (err) {
-      httpLog('ERROR', err.message, { route: '/graph' });
+      httpLog('ERROR', err.message, { route: '/graph', stack: err.stack });
       return reply.code(500).send({ error: err.message });
     }
   });
@@ -140,7 +141,7 @@ async function createHttpServer(queryEngine, options = {}) {
     try {
       return reply.send(qe.getImpact(change));
     } catch (err) {
-      httpLog('ERROR', err.message, { route: '/impact' });
+      httpLog('ERROR', err.message, { route: '/impact', stack: err.stack });
       return reply.code(500).send({ error: err.message });
     }
   });
@@ -158,7 +159,7 @@ async function createHttpServer(queryEngine, options = {}) {
       }
       return reply.send(result);
     } catch (err) {
-      httpLog('ERROR', err.message, { route: '/service/:name' });
+      httpLog('ERROR', err.message, { route: '/service/:name', stack: err.stack });
       return reply.code(500).send({ error: err.message });
     }
   });
@@ -198,7 +199,7 @@ async function createHttpServer(queryEngine, options = {}) {
       }
       return reply.code(200).send({ status: "persisted", repo_id: repoId });
     } catch (err) {
-      httpLog('ERROR', err.message, { route: '/scan' });
+      httpLog('ERROR', err.message, { route: '/scan', stack: err.stack });
       return reply.code(500).send({ error: err.message });
     }
   });
@@ -212,7 +213,7 @@ async function createHttpServer(queryEngine, options = {}) {
     try {
       return reply.send(qe.getVersions());
     } catch (err) {
-      httpLog('ERROR', err.message, { route: '/versions' });
+      httpLog('ERROR', err.message, { route: '/versions', stack: err.stack });
       return reply.code(500).send({ error: err.message });
     }
   });
