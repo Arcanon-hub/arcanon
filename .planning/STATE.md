@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v5.6.0
 milestone_name: Logging & Observability
-status: ready_to_plan
-stopped_at: Roadmap created — 4 phases (84-87), ready to plan Phase 84
-last_updated: "2026-03-23T00:00:00.000Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 84-01-PLAN.md
+last_updated: "2026-03-23T10:46:34.849Z"
 progress:
-  total_phases: 4
+  total_phases: 32
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -23,12 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-23)
 
 ## Current Position
 
-Phase: 84 of 87 (Logger Infrastructure)
-Plan: — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-03-23 — Roadmap created for v5.6.0
-
-Progress: [░░░░░░░░░░] 0%
+Phase: 84 (Logger Infrastructure) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -46,6 +42,8 @@ Progress: [░░░░░░░░░░] 0%
 - v5.6.0: Scan logging at moderate verbosity (~6 lines/repo) — BEGIN/END + per-repo progress
 - v5.6.0: QueryEngine gets injected logger replacing console.warn — backward-compatible optional param
 - v5.6.0: All error logging adds err.stack alongside err.message
+- [Phase 84-logger-infrastructure]: Rotation deletes .3 (oldest) on each rotation to keep exactly .1, .2, .3 — no .4 ever created
+- [Phase 84-logger-infrastructure]: rotateIfNeeded() called after level-filter so suppressed messages do not trigger rotation
 
 ### Phase Structure
 
@@ -64,6 +62,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23
-Stopped at: Roadmap written — ready to plan Phase 84
+Last session: 2026-03-23T10:46:34.845Z
+Stopped at: Completed 84-01-PLAN.md
 Resume file: None

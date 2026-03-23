@@ -9,8 +9,8 @@ Requirements for Logging & Observability milestone. Each maps to roadmap phases.
 
 ### Log Infrastructure
 
-- [ ] **LOG-01**: Logger implements size-based rotation — rotates at 10MB, keeps 3 old files (worker.log.1, .2, .3), rename-before-write check on each log call
-- [ ] **LOG-02**: Logger skips stderr writes when process has no TTY (daemon mode) — eliminates double-write when nohup captures stderr to the same log file
+- [x] **LOG-01**: Logger implements size-based rotation — rotates at 10MB, keeps 3 old files (worker.log.1, .2, .3), rename-before-write check on each log call
+- [x] **LOG-02**: Logger skips stderr writes when process has no TTY (daemon mode) — eliminates double-write when nohup captures stderr to the same log file
 - [ ] **LOG-03**: All error log calls include err.stack alongside err.message — stack traces visible in structured log output for post-mortem debugging
 
 ### Scan Observability
@@ -53,8 +53,8 @@ Requirements for Logging & Observability milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOG-01 | Phase 84 | Pending |
-| LOG-02 | Phase 84 | Pending |
+| LOG-01 | Phase 84 | Complete |
+| LOG-02 | Phase 84 | Complete |
 | LOG-03 | Phase 85 | Pending |
 | SCAN-01 | Phase 86 | Pending |
 | SCAN-02 | Phase 86 | Pending |

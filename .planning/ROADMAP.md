@@ -643,7 +643,7 @@ Plans:
   4. When the worker is run interactively with a TTY attached, stderr output continues to work as before
 **Plans**: 1 plan
 Plans:
-- [ ] 84-01-PLAN.md — Implement LOG-01 size-based rotation and LOG-02 TTY-aware stderr suppression in logger.js
+- [x] 84-01-PLAN.md — Implement LOG-01 size-based rotation and LOG-02 TTY-aware stderr suppression in logger.js
 
 ### Phase 85: Error Logging
 **Goal**: All catch blocks in HTTP routes and MCP tool handlers log structured errors with stack traces to the worker logger, and every error log call site across all modules includes err.stack
@@ -708,7 +708,7 @@ Phase 84 first (logger infrastructure), then 85/86/87 in any order (parallel), t
 | 67-73 | v5.3.0 | 12/12 | Complete | 2026-03-22 |
 | 74-79 | v5.4.0 | 9/9 | Complete | 2026-03-22 |
 | 80-83 | v5.5.0 | 9/9 | Complete | 2026-03-22 |
-| 84. Logger Infrastructure | v5.6.0 | 0/? | Not started | - |
+| 84. Logger Infrastructure | v5.6.0 | 1/1 | Complete   | 2026-03-23 |
 | 85. Error Logging | v5.6.0 | 0/? | Not started | - |
 | 86. Scan Observability | v5.6.0 | 0/? | Not started | - |
 | 87. Logger Adoption | v5.6.0 | 0/? | Not started | - |
