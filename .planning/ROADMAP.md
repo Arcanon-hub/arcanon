@@ -173,8 +173,8 @@ Full details: see Phase Details below (archived)
 
 - [ ] **Phase 89: Crossing Semantics** - Define external/cross-service/internal crossing values in agent prompts and add post-scan reconciliation in map.md
   - **Plans:** 2 plans
-  - [ ] 89-01-PLAN.md — Update agent-prompt-common.md with crossing semantics definition; fix crossing values in all three type-specific prompt examples (CROSS-01, CROSS-02)
-  - [ ] 89-02-PLAN.md — Insert post-scan reconciliation step into map.md between scan and confirm (CROSS-03)
+  - [x] 89-01-PLAN.md — Update agent-prompt-common.md with crossing semantics definition; fix crossing values in all three type-specific prompt examples (CROSS-01, CROSS-02)
+  - [x] 89-02-PLAN.md — Insert post-scan reconciliation step into map.md between scan and confirm (CROSS-03)
 - [ ] **Phase 90: Discovery Improvements** - Mono-repo multi-manifest detection and client_files field in discovery schema
 - [ ] **Phase 91: Version Bump** - Bump all 5 manifest files to v5.7.0
 
@@ -767,6 +767,6 @@ Phase 84 first (logger infrastructure), then 85/86/87 in any order (parallel), t
 | 86. Scan Observability | v5.6.0 | 2/2 | Complete   | 2026-03-23 |
 | 87. Logger Adoption | v5.6.0 | 1/1 | Complete   | 2026-03-23 |
 | 88. Version Bump | v5.6.0 | 0/? | Not started | - |
-| 89. Crossing Semantics | v5.7.0 | 0/? | Not started | - |
+| 89. Crossing Semantics | v5.7.0 | 2/2 | Complete   | 2026-03-23 |
 | 90. Discovery Improvements | v5.7.0 | 1/1 | Complete   | 2026-03-23 |
 | 91. Version Bump | v5.7.0 | 0/? | Not started | - |

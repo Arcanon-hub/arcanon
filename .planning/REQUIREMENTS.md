@@ -9,9 +9,9 @@ Requirements for Scan Accuracy milestone. Derived from Linear issues THE-949 and
 
 ### Crossing Semantics (THE-949)
 
-- [ ] **CROSS-01**: Agent scan prompts define three crossing values — `external` (target not in any linked repo), `cross-service` (target is a different service in a linked repo), `internal` (within the same deployable unit)
-- [ ] **CROSS-02**: Agent prompt examples include the `crossing` field on every connection (no omissions)
-- [ ] **CROSS-03**: Post-scan reconciliation step in map.md collects all discovered service names across repos and downgrades `external` → `cross-service` for connections where both source and target resolve to known services
+- [x] **CROSS-01**: Agent scan prompts define three crossing values — `external` (target not in any linked repo), `cross-service` (target is a different service in a linked repo), `internal` (within the same deployable unit)
+- [x] **CROSS-02**: Agent prompt examples include the `crossing` field on every connection (no omissions)
+- [x] **CROSS-03**: Post-scan reconciliation step in map.md collects all discovered service names across repos and downgrades `external` → `cross-service` for connections where both source and target resolve to known services
 
 ### Discovery Improvements (THE-951)
 
@@ -38,9 +38,9 @@ Requirements for Scan Accuracy milestone. Derived from Linear issues THE-949 and
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CROSS-01 | Phase 89 | Pending |
-| CROSS-02 | Phase 89 | Pending |
-| CROSS-03 | Phase 89 | Pending |
+| CROSS-01 | Phase 89 | Complete |
+| CROSS-02 | Phase 89 | Complete |
+| CROSS-03 | Phase 89 | Complete |
 | DISC-01 | Phase 90 | Complete |
 | DISC-02 | Phase 90 | Complete |
 | VER-01 | Phase 91 | Pending |

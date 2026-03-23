@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v5.6.0
 milestone_name: Logging & Observability
 status: planning
-stopped_at: Completed 90-01-PLAN.md
-last_updated: "2026-03-23T11:39:06.048Z"
+stopped_at: "Completed Phase 89: 89-01 and 89-02 (Crossing Semantics)"
+last_updated: "2026-03-23T11:40:11.663Z"
 last_activity: 2026-03-23 — Roadmap created for v5.7.0
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -51,6 +51,8 @@ Progress: [░░░░░░░░░░] 0%
 - v5.7.0: DISC-01/02 grouped into Phase 90 (both touch discovery prompt)
 - v5.7.0: Phase 89 and Phase 90 can execute in parallel (different files)
 - [Phase 90-discovery-improvements]: Subdirectory manifest scan limited to one level deep; client_files import scan scoped to already-opened files
+- [Phase 89]: CROSS-01/02: crossing enum uses internal/cross-service/external; default conservatively to external
+- [Phase 89]: CROSS-03: post-scan reconciliation in map.md Step 3 corrects false-external crossings using knownServices Set
 
 ### Pending Todos
 
@@ -62,6 +64,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-23T11:39:06.044Z
-Stopped at: Completed 90-01-PLAN.md
+Last session: 2026-03-23T11:40:11.660Z
+Stopped at: Completed Phase 89: 89-01 and 89-02 (Crossing Semantics)
 Resume file: None
