@@ -1560,3 +1560,167 @@ describe("concurrent scan locking (SEC-03)", () => {
     assert.ok(!existsSync(lockPath), "lock file must be cleaned up even after agent error");
   });
 });
+
+// ---------------------------------------------------------------------------
+// scanRepos — scan lifecycle logging (SCAN-01, SCAN-02)
+// ---------------------------------------------------------------------------
+
+describe("scanRepos — scan lifecycle logging (SCAN-01, SCAN-02)", () => {
+  let repoDir;
+
+  before(() => {
+    const { dir } = makeTempRepo();
+    repoDir = dir;
+    writeFileSync(join(dir, "index.js"), "module.exports = {}");
+    execSync("git add index.js", { cwd: dir, stdio: "pipe" });
+    execSync('git commit -m "add index.js"', { cwd: dir, stdio: "pipe" });
+  });
+
+  after(() => {
+    cleanupDir(repoDir);
+  });
+
+  beforeEach(() => {
+    setAgentRunner(null);
+    setScanLogger(null);
+    clearEnrichers();
+  });
+
+  function makeQE() {
+    return {
+      upsertRepo: (_repoData) => ({ id: 42 }),
+      getRepoState: (_id) => null,
+      setRepoState: (_id, _commit) => {},
+      getRepoByPath: (_path) => null,
+      beginScan: (_repoId) => 1,
+      persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
+      endScan: (_repoId, _scanVersionId) => {},
+      _db: { prepare: () => ({ all: () => [] }) },
+    };
+  }
+
+  const validFindingsForLifecycle = JSON.stringify({
+    service_name: "test-svc",
+    confidence: "high",
+    services: [
+      { name: "test-svc", root_path: ".", language: "javascript", confidence: "high" },
+    ],
+    connections: [],
+    schemas: [],
+  });
+
+  const minimalDiscoveryForLifecycle =
+    '```json\n{"languages":["javascript"],"frameworks":["express"],"service_hints":[]}\n```';
+
+  test("logs BEGIN event with repoCount and mode at start of scanRepos", async () => {
+    const logs = [];
+    setScanLogger({ log: (level, msg, extra) => logs.push({ level, msg, extra }) });
+
+    setAgentRunner(async (prompt) => {
+      if (prompt.includes('Discovery Agent') || prompt.includes('structure discovery')) {
+        return minimalDiscoveryForLifecycle;
+      }
+      return `\`\`\`json\n${validFindingsForLifecycle}\n\`\`\``;
+    });
+
+    const qe = makeQE();
+    await scanRepos([repoDir], {}, qe);
+
+    const beginLog = logs.find((l) => l.msg === 'scan BEGIN');
+    assert.ok(beginLog !== undefined, "logs must contain a 'scan BEGIN' entry");
+    assert.equal(beginLog.extra.repoCount, 1, "repoCount must be 1");
+    assert.equal(typeof beginLog.extra.mode, 'string', "mode must be a string");
+    assert.equal(beginLog.level, 'INFO', "level must be INFO");
+  });
+
+  test("logs END event with totalServices, totalConnections, and durationMs after scanRepos completes", async () => {
+    const logs = [];
+    setScanLogger({ log: (level, msg, extra) => logs.push({ level, msg, extra }) });
+
+    setAgentRunner(async (prompt) => {
+      if (prompt.includes('Discovery Agent') || prompt.includes('structure discovery')) {
+        return minimalDiscoveryForLifecycle;
+      }
+      return `\`\`\`json\n${validFindingsForLifecycle}\n\`\`\``;
+    });
+
+    const qe = makeQE();
+    await scanRepos([repoDir], {}, qe);
+
+    const endLog = logs.find((l) => l.msg === 'scan END');
+    assert.ok(endLog !== undefined, "logs must contain a 'scan END' entry");
+    assert.equal(endLog.extra.totalServices, 1, "totalServices must be 1");
+    assert.equal(endLog.extra.totalConnections, 0, "totalConnections must be 0");
+    assert.equal(typeof endLog.extra.durationMs, 'number', "durationMs must be a number");
+    assert.ok(endLog.extra.durationMs >= 0, "durationMs must be >= 0");
+    assert.equal(endLog.level, 'INFO', "level must be INFO");
+  });
+
+  test("logs discovery done with languages and frameworks per repo", async () => {
+    const logs = [];
+    setScanLogger({ log: (level, msg, extra) => logs.push({ level, msg, extra }) });
+
+    setAgentRunner(async (prompt) => {
+      if (prompt.includes('Discovery Agent') || prompt.includes('structure discovery')) {
+        return '```json\n{"languages":["javascript"],"frameworks":["express"],"service_hints":[]}\n```';
+      }
+      return `\`\`\`json\n${validFindingsForLifecycle}\n\`\`\``;
+    });
+
+    const qe = makeQE();
+    await scanRepos([repoDir], {}, qe);
+
+    const discoveryLog = logs.find((l) => l.msg === 'discovery done');
+    assert.ok(discoveryLog !== undefined, "logs must contain a 'discovery done' entry");
+    assert.ok(Array.isArray(discoveryLog.extra.languages), "languages must be an array");
+    assert.ok(Array.isArray(discoveryLog.extra.frameworks), "frameworks must be an array");
+    assert.equal(discoveryLog.level, 'INFO', "level must be INFO");
+  });
+
+  test("logs deep scan done with services and connections counts per repo", async () => {
+    const logs = [];
+    setScanLogger({ log: (level, msg, extra) => logs.push({ level, msg, extra }) });
+
+    setAgentRunner(async (prompt) => {
+      if (prompt.includes('Discovery Agent') || prompt.includes('structure discovery')) {
+        return minimalDiscoveryForLifecycle;
+      }
+      return `\`\`\`json\n${validFindingsForLifecycle}\n\`\`\``;
+    });
+
+    const qe = makeQE();
+    await scanRepos([repoDir], {}, qe);
+
+    const deepScanLog = logs.find((l) => l.msg === 'deep scan done');
+    assert.ok(deepScanLog !== undefined, "logs must contain a 'deep scan done' entry");
+    assert.equal(deepScanLog.extra.services, 1, "services count must be 1");
+    assert.equal(deepScanLog.extra.connections, 0, "connections count must be 0");
+    assert.equal(deepScanLog.level, 'INFO', "level must be INFO");
+  });
+
+  test("logs enrichment done with enricherCount after enrichment pass", async () => {
+    const logs = [];
+    setScanLogger({ log: (level, msg, extra) => logs.push({ level, msg, extra }) });
+
+    const enrichDb = buildEnrichmentDb();
+    const qe = makeEnrichmentQueryEngine(enrichDb);
+
+    registerEnricher('test', async () => ({}));
+
+    setAgentRunner(async (prompt) => {
+      if (prompt.includes('Discovery Agent') || prompt.includes('structure discovery')) {
+        return minimalDiscoveryForLifecycle;
+      }
+      return `\`\`\`json\n${validFindingsForLifecycle}\n\`\`\``;
+    });
+
+    await scanRepos([repoDir], {}, qe);
+
+    const enrichLog = logs.find((l) => l.msg === 'enrichment done');
+    assert.ok(enrichLog !== undefined, "logs must contain an 'enrichment done' entry");
+    assert.equal(typeof enrichLog.extra.enricherCount, 'number', "enricherCount must be a number");
+    assert.equal(enrichLog.level, 'INFO', "level must be INFO");
+
+    enrichDb.close();
+  });
+});
