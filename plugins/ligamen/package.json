@@ -1,6 +1,6 @@
 {
   "name": "@ligamen/cli",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "description": "Ligamen — auto-format, auto-lint, and cross-repo quality gates for Claude Code",
   "license": "AGPL-3.0-only",
   "type": "module",
