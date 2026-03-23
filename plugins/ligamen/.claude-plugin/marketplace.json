@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "ligamen",
-      "version": "5.5.1",
+      "version": "5.6.0",
       "source": "./plugins/ligamen",
       "description": "Auto-format, auto-lint, and cross-repo quality gates for Claude Code"
     }
