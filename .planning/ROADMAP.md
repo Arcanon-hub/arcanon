@@ -641,7 +641,9 @@ Plans:
   2. At most 3 rotated files exist alongside the active log (worker.log.1, worker.log.2, worker.log.3) — worker.log.4 and beyond are deleted
   3. When the worker process has no TTY (daemon mode), log lines are written only to the log file — not duplicated to stderr
   4. When the worker is run interactively with a TTY attached, stderr output continues to work as before
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 84-01-PLAN.md — Implement LOG-01 size-based rotation and LOG-02 TTY-aware stderr suppression in logger.js
 
 ### Phase 85: Error Logging
 **Goal**: All catch blocks in HTTP routes and MCP tool handlers log structured errors with stack traces to the worker logger, and every error log call site across all modules includes err.stack
