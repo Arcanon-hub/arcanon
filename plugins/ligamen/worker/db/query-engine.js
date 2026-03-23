@@ -233,9 +233,11 @@ function sanitizeBindings(obj) {
 export class QueryEngine {
   /**
    * @param {import('better-sqlite3').Database} db - An open better-sqlite3 instance.
+   * @param {{ warn: (msg: string) => void } | null} [logger=null] - Optional structured logger.
    */
-  constructor(db) {
+  constructor(db, logger = null) {
     this._db = db;
+    this._logger = logger;
 
     // --------------------------------------------------------------------
     // Prepare all statements once for reuse
@@ -1227,7 +1229,7 @@ export class QueryEngine {
    *    that name globally.
    * 3. Zero rows → return null.
    * 4. Exactly one row → return its id (unambiguous cross-repo reference, no warning).
-   * 5. Multiple rows → emit console.warn and return the first match's id.
+   * 5. Multiple rows → emit logger.warn (or console.warn fallback) and return the first match's id.
    *
    * @param {string} name
    * @param {number|null} [repoId=null]
@@ -1254,7 +1256,7 @@ export class QueryEngine {
     if (rows.length === 1) return rows[0].id;
 
     // Step 5: ambiguous — warn and return first match
-    console.warn(
+    (this._logger?.warn ?? console.warn)(
       '[ligamen] Ambiguous service name "' + name + '" matches ' + rows.length +
       ' repos — using id ' + rows[0].id + '. Scope your connection to avoid collisions.'
     );
