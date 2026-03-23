@@ -102,7 +102,7 @@ export async function initChromaSync(settings = {}, mockClient = null, logger = 
     return true;
   } catch (err) {
     if (_logger) {
-      _logger.error('chroma init failed', { error: err.message });
+      _logger.error('chroma init failed', { error: err.message, stack: err.stack });
     } else {
       process.stderr.write('[chroma] init failed: ' + err.message + '\n');
     }
@@ -172,7 +172,7 @@ export async function syncFindings(findings, enrichment = {}) {
   } catch (err) {
     // Log but never rethrow — fire-and-forget contract
     if (_logger) {
-      _logger.error('chroma syncFindings error', { error: err.message });
+      _logger.error('chroma syncFindings error', { error: err.message, stack: err.stack });
     } else {
       process.stderr.write('[chroma] syncFindings error: ' + err.message + '\n');
     }
