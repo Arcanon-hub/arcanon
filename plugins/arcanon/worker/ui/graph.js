@@ -1,22 +1,34 @@
 /**
- * graph.js — Entry point for Ligamen service dependency graph UI.
+ * graph.js — Entry point for Arcanon service dependency graph UI.
  *
  * Orchestrates: project selection → data loading → force simulation → rendering.
  * All logic is in modules/ — this file is just the init flow.
  */
 
-import { state } from "./modules/state.js";
+import { state, refreshColors } from "./modules/state.js";
 import { render } from "./modules/renderer.js";
 import { computeLayout } from "./modules/layout.js";
 import { setupInteractions, teardownInteractions, setupControls } from "./modules/interactions.js";
 import { hideDetailPanel } from "./modules/detail-panel.js";
 import { showProjectPicker } from "./modules/project-picker.js";
 import { initLogTerminal } from "./modules/log-terminal.js";
-// Stub — will be implemented in Plan 02
 import { initProjectSwitcher } from "./modules/project-switcher.js";
 import { populateFilterDropdowns } from "./modules/filter-panel.js";
 import { initKeyboard } from "./modules/keyboard.js";
 import { initExport } from "./modules/export.js";
+import { toggleTheme } from "./styles/theme.js";
+
+// Theme: read color tokens on first paint and whenever the theme changes.
+refreshColors();
+document.addEventListener("arcanon:theme", () => {
+  refreshColors();
+  // Trigger a re-render so the canvas picks up the new palette.
+  const canvas = document.getElementById("graph-canvas");
+  if (canvas && state.graphData.nodes.length > 0) render(canvas);
+});
+
+// Wire the theme toggle button once at module load.
+document.getElementById("theme-btn")?.addEventListener("click", toggleTheme);
 
 // Guard: detail-close listener is wired once across multiple loadProject calls
 let _detailCloseWired = false;
