@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-manifests:
+    name: Lint manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Validate plugin.json / marketplace.json / hooks.json
+        run: |
+          jq empty plugins/arcanon/.claude-plugin/plugin.json
+          jq empty plugins/arcanon/.claude-plugin/marketplace.json
+          jq empty plugins/arcanon/hooks/hooks.json
+          jq empty .claude-plugin/marketplace.json
+          jq empty plugins/arcanon/package.json
+          echo "all JSON manifests parse"
+      - name: Assert plugin and marketplace names are "arcanon"
+        run: |
+          test "$(jq -r .name plugins/arcanon/.claude-plugin/plugin.json)" = "arcanon"
+          test "$(jq -r .name plugins/arcanon/.claude-plugin/marketplace.json)" = "arcanon"
+          test "$(jq -r .plugins[0].name plugins/arcanon/.claude-plugin/marketplace.json)" = "arcanon"
+          echo "manifest names match"
+
+  shell-lint:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Shellcheck scripts and libs
+        run: shellcheck -x --severity=error -e SC1091 plugins/arcanon/scripts/*.sh plugins/arcanon/lib/*.sh
+
+  test-hub-sync:
+    name: Hub-sync tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: plugins/arcanon/package-lock.json
+      - name: Install plugin dependencies
+        working-directory: plugins/arcanon
+        run: npm ci --no-audit --no-fund
+      - name: Run hub-sync tests
+        working-directory: plugins/arcanon
+        run: node --test worker/hub-sync/
+
+  test-bats:
+    name: Bats integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install plugin dependencies
+        working-directory: plugins/arcanon
+        run: npm ci --no-audit --no-fund
+      - name: Run bats suite
+        run: |
+          if [ -x tests/bats/bin/bats ]; then
+            tests/bats/bin/bats tests/*.bats
+          else
+            echo "bats binary not present — skipping"
+          fi

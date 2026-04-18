@@ -1,6 +1,6 @@
 .PHONY: test lint check install uninstall dev help
 
-PLUGIN_NAME := ligamen
+PLUGIN_NAME := arcanon
 PLUGIN_DIR  := $(shell pwd)/plugins/$(PLUGIN_NAME)
 BATS        := ./tests/bats/bin/bats
 

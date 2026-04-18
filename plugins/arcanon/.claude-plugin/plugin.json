@@ -1,0 +1,44 @@
+{
+  "name": "arcanon",
+  "version": "6.0.0",
+  "description": "Cross-repo service dependency scanner for Claude Code — maps your architecture, detects drift, and syncs to Arcanon Hub",
+  "author": {
+    "name": "Arcanon"
+  },
+  "homepage": "https://arcanon.dev",
+  "repository": "https://github.com/Arcanon-hub/arcanon",
+  "license": "AGPL-3.0-only",
+  "keywords": [
+    "arcanon",
+    "service-graph",
+    "cross-repo",
+    "dependency-mapping",
+    "architecture",
+    "drift-detection"
+  ],
+  "userConfig": {
+    "api_token": {
+      "type": "string",
+      "description": "Arcanon Hub API key (starts with arc_). Get one at https://app.arcanon.dev/settings/api-keys",
+      "sensitive": true,
+      "required": false
+    },
+    "hub_url": {
+      "type": "string",
+      "description": "Arcanon Hub base URL. Defaults to https://api.arcanon.dev",
+      "required": false,
+      "default": "https://api.arcanon.dev"
+    },
+    "auto_upload": {
+      "type": "boolean",
+      "description": "Upload scan findings to Arcanon Hub automatically after every scan. Requires api_token.",
+      "required": false,
+      "default": false
+    },
+    "project_slug": {
+      "type": "string",
+      "description": "Project slug on Arcanon Hub (only required when using an org-scoped API key).",
+      "required": false
+    }
+  }
+}

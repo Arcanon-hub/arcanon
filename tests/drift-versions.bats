@@ -3,7 +3,7 @@
 # Requirements: DRFT-01 (version extraction), DRFT-05 (report with repo details), DRFT-06 (severity filtering)
 
 TEST_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")" && pwd)"
-PLUGIN_ROOT="$(cd "$TEST_DIR/../plugins/ligamen" && pwd)"
+PLUGIN_ROOT="$(cd "$TEST_DIR/../plugins/arcanon" && pwd)"
 DRIFT_VERSIONS="${PLUGIN_ROOT}/scripts/drift-versions.sh"
 FIXTURES="${TEST_DIR}/fixtures/drift"
 
@@ -87,10 +87,10 @@ load "$TEST_DIR/test_helper/bats-assert/load"
 # ---------------------------------------------------------------------------
 
 @test "report shows CRITICAL for pinned version mismatch across repos" {
-  # Create fake ligamen.config.json pointing to fixture repos
+  # Create fake arcanon.config.json pointing to fixture repos
   local tmpdir
   tmpdir=$(mktemp -d)
-  cat > "${tmpdir}/ligamen.config.json" <<'EOF'
+  cat > "${tmpdir}/arcanon.config.json" <<'EOF'
 {"linked-repos": []}
 EOF
   # Run drift-versions with SIBLINGS pointing to both fixture repos

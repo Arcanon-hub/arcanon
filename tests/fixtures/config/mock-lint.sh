@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Mock lint hook — tests CONF-02 disable + CONF-03 throttle
-if [[ -n "${LIGAMEN_DISABLE_LINT:-}" ]]; then
+if [[ -n "${ARCANON_DISABLE_LINT:-}" ]]; then
   exit 0
 fi
 LINT_THROTTLE="${LIGAMEN_LINT_THROTTLE:-30}"

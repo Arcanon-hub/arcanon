@@ -1,7 +1,7 @@
 [project]
 name = "repo-a"
 version = "0.1.0"
-
-[project.dependencies]
-"fastapi>=0.103.0"
-"pydantic==2.3.0"
+dependencies = [
+  "fastapi>=0.103.0",
+  "pydantic==2.3.0",
+]

@@ -13,8 +13,8 @@
 setup() {
   load 'test_helper/bats-support/load'
   load 'test_helper/bats-assert/load'
-  SCRIPT="${BATS_TEST_DIRNAME}/../plugins/ligamen/scripts/file-guard.sh"
-  export CLAUDE_PLUGIN_ROOT="${BATS_TEST_DIRNAME}/../plugins/ligamen"
+  SCRIPT="${BATS_TEST_DIRNAME}/../plugins/arcanon/scripts/file-guard.sh"
+  export CLAUDE_PLUGIN_ROOT="${BATS_TEST_DIRNAME}/../plugins/arcanon"
 }
 
 # ---------------------------------------------------------------------------
@@ -155,10 +155,10 @@ setup() {
 # stderr carries the human-readable message; use 2>&1 to capture it.
 # ---------------------------------------------------------------------------
 
-@test "guard hook - block message contains Ligamen prefix" {
+@test "guard hook - block message contains Arcanon prefix" {
   local json='{"tool_name":"Write","tool_input":{"file_path":"/project/.env"}}'
   run bash -c "printf '%s' '${json}' | bash '${SCRIPT}' 2>&1"
-  assert_output --partial "Ligamen"
+  assert_output --partial "Arcanon"
 }
 
 # ---------------------------------------------------------------------------
@@ -176,7 +176,7 @@ setup() {
   local json='{"tool_name":"Write","tool_input":{"file_path":"/project/migrations/001_init.sql"}}'
   run bash -c "printf '%s' '${json}' | bash '${SCRIPT}' 2>&1"
   refute_output ""
-  assert_output --partial "Ligamen"
+  assert_output --partial "Arcanon"
 }
 
 @test "guard hook - exits 0 for Python migration file (GRDH-05)" {
@@ -281,17 +281,17 @@ setup() {
 
 # ---------------------------------------------------------------------------
 # Disable guard via env var (CONF-02)
-# LIGAMEN_DISABLE_GUARD=1 bypasses all blocking.
+# ARCANON_DISABLE_GUARD=1 bypasses all blocking.
 # ---------------------------------------------------------------------------
 
-@test "guard hook - LIGAMEN_DISABLE_GUARD=1 bypasses block on .env" {
+@test "guard hook - ARCANON_DISABLE_GUARD=1 bypasses block on .env" {
   local json='{"tool_name":"Write","tool_input":{"file_path":"/project/.env"}}'
-  run bash -c "LIGAMEN_DISABLE_GUARD=1 bash '${SCRIPT}' <<< '${json}'"
+  run bash -c "ARCANON_DISABLE_GUARD=1 bash '${SCRIPT}' <<< '${json}'"
   assert_success
 }
 
-@test "guard hook - LIGAMEN_DISABLE_GUARD=1 bypasses block on Cargo.lock" {
+@test "guard hook - ARCANON_DISABLE_GUARD=1 bypasses block on Cargo.lock" {
   local json='{"tool_name":"Write","tool_input":{"file_path":"/project/Cargo.lock"}}'
-  run bash -c "LIGAMEN_DISABLE_GUARD=1 bash '${SCRIPT}' <<< '${json}'"
+  run bash -c "ARCANON_DISABLE_GUARD=1 bash '${SCRIPT}' <<< '${json}'"
   assert_success
 }

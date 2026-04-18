@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, "../../plugins/ligamen/worker/ui/graph.js"), "utf8");
+const src = readFileSync(join(__dirname, "../../plugins/arcanon/worker/ui/graph.js"), "utf8");
 
 test("graph.js filters actors whose name matches a known service", () => {
   assert.ok(

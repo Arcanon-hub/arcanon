@@ -1,6 +1,6 @@
 # Architecture
 
-> **Audience:** Contributors to the Arcanon codebase. If you're a user looking to get started, see [Commands](commands.md) and [Service Map](service-map.md).
+> **Audience:** Contributors to the Arcanon codebase. If you're a user looking to get started, see [Getting started](getting-started.md) and [Commands](commands.md).
 
 ## System Overview
 
@@ -54,6 +54,8 @@ Arcanon is a Claude Code marketplace plugin. Repo root has `marketplace.json`; a
 | `scripts/` | Shell implementations for hooks, drift checks, and worker lifecycle. |
 | `lib/` | Shared bash libraries (config, detect, linked-repos, worker-client). |
 | `worker/` | Node.js background daemon — DB, HTTP API, MCP server, scan agents, graph UI. |
+| `worker/hub-sync/` | Optional Arcanon Hub upload client — payload transformer, Bearer auth, retry client, SQLite offline queue. Gated on `ARCANON_API_KEY` + `hub.auto-upload` config. |
+| `worker/cli/` | Small Node CLIs dispatched by slash commands (`hub.js`, `export.js`, `drift-local.js`). |
 
 ## Worker Process
 
@@ -72,6 +74,12 @@ Separate stdio process (not part of the worker). Reads SQLite directly via per-c
 - **Drift** (3): `drift_versions`, `drift_types`, `drift_openapi`
 
 Drift tools query the filesystem directly — repo paths from SQLite, actual files from disk.
+
+## Hub sync (optional)
+
+When `ARCANON_API_KEY` is set and `arcanon.config.json` has `hub.auto-upload: true`, `worker/scan/manager.js` calls `syncFindings()` after every successful `endScan()`. Findings are reconciled against the hub's `ScanPayloadV1` envelope (`payload.js`), POSTed with Bearer auth and exponential backoff (`client.js`), and on retriable failure enqueued to a SQLite queue at `<data-dir>/hub-queue.db` (`queue.js`) for later `/arcanon:sync` drain. A hub failure never fails a scan — findings are persisted locally first.
+
+See [hub-integration.md](hub-integration.md) for the full endpoint contract.
 
 ## Storage
 

@@ -1,0 +1,9 @@
+{
+  "linked-repos": ["../arcanon"],
+  "impact-map": { "history": true },
+  "project-name": "arcanon",
+  "hub": {
+    "auto-upload": false,
+    "url": "https://api.arcanon.dev"
+  }
+}

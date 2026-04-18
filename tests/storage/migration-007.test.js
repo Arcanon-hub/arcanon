@@ -29,7 +29,7 @@ import * as migration007 from "../../worker/db/migrations/007_expose_kind.js";
  * Does NOT run migration 007 — tests need to insert seed data before running it.
  */
 function makeTestDb() {
-  const dir = path.join(os.tmpdir(), "ligamen-test-" + crypto.randomUUID());
+  const dir = path.join(os.tmpdir(), "arcanon-test-" + crypto.randomUUID());
   fs.mkdirSync(dir, { recursive: true });
   const dbPath = path.join(dir, "test.db");
 

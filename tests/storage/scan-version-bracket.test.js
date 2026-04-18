@@ -29,7 +29,7 @@ import * as migration005 from "../../worker/db/migrations/005_scan_versions.js";
  * Returns { db, qe }.
  */
 function makeQE() {
-  const dir = path.join(os.tmpdir(), "ligamen-svb-" + crypto.randomUUID());
+  const dir = path.join(os.tmpdir(), "arcanon-svb-" + crypto.randomUUID());
   fs.mkdirSync(dir, { recursive: true });
   const dbPath = path.join(dir, "test.db");
 

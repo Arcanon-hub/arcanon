@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Mock guard hook — tests CONF-02 disable + CONF-04 extra blocked
-# LIGAMEN_DISABLE_GUARD: exit 0 = allow all writes (guard disabled)
-if [[ -n "${LIGAMEN_DISABLE_GUARD:-}" ]]; then
+# ARCANON_DISABLE_GUARD: exit 0 = allow all writes (guard disabled)
+if [[ -n "${ARCANON_DISABLE_GUARD:-}" ]]; then
   exit 0
 fi
 FILE="${1:-}"

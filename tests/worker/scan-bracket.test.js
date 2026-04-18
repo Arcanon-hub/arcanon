@@ -22,7 +22,7 @@ import { scanRepos, setAgentRunner } from "../../worker/scan/manager.js";
 
 /** Create a minimal temp git repo and return its path. */
 function makeTempRepo() {
-  const dir = mkdtempSync(join(tmpdir(), "ligamen-bracket-test-"));
+  const dir = mkdtempSync(join(tmpdir(), "arcanon-bracket-test-"));
   execSync("git init", { cwd: dir, stdio: "pipe" });
   execSync('git config user.email "test@test.com"', { cwd: dir, stdio: "pipe" });
   execSync('git config user.name "Test"', { cwd: dir, stdio: "pipe" });

@@ -14,7 +14,7 @@ setup() {
   mkdir -p "$MOCK_PLUGIN_ROOT/lib"
 
   # Copy the real hook script into the isolated root
-  cp "$PROJECT_ROOT/plugins/ligamen/scripts/session-start.sh" "$MOCK_PLUGIN_ROOT/scripts/session-start.sh"
+  cp "$PROJECT_ROOT/plugins/arcanon/scripts/session-start.sh" "$MOCK_PLUGIN_ROOT/scripts/session-start.sh"
 
   # Write a mock lib/detect.sh that returns MOCK_PROJECT_TYPE
   cat > "$MOCK_PLUGIN_ROOT/lib/detect.sh" <<'MOCK'
@@ -54,7 +54,7 @@ teardown() {
     printf '{\"session_id\":\"bats-ss-01\",\"cwd\":\"/tmp/test-project\",\"hook_event_name\":\"SessionStart\"}' \
     | CLAUDE_PLUGIN_ROOT=\"\$MOCK_PLUGIN_ROOT\" bash \"\$MOCK_PLUGIN_ROOT/scripts/session-start.sh\""
   [ "$status" -eq 0 ]
-  rm -f /tmp/ligamen_session_bats-ss-01.initialized
+  rm -f /tmp/arcanon_session_bats-ss-01.initialized
 }
 
 @test "SSTH-01: exits 0 on UserPromptSubmit event" {
@@ -62,7 +62,7 @@ teardown() {
     printf '{\"session_id\":\"bats-ss-02\",\"cwd\":\"/tmp/test-project\",\"hook_event_name\":\"UserPromptSubmit\"}' \
     | CLAUDE_PLUGIN_ROOT=\"\$MOCK_PLUGIN_ROOT\" bash \"\$MOCK_PLUGIN_ROOT/scripts/session-start.sh\""
   [ "$status" -eq 0 ]
-  rm -f /tmp/ligamen_session_bats-ss-02.initialized
+  rm -f /tmp/arcanon_session_bats-ss-02.initialized
 }
 
 @test "SSTH-01: emits additionalContext JSON on SessionStart" {
@@ -76,7 +76,7 @@ d = json.load(sys.stdin)
 assert 'hookSpecificOutput' in d, 'missing hookSpecificOutput'
 assert 'additionalContext' in d['hookSpecificOutput'], 'missing additionalContext'
 "
-  rm -f /tmp/ligamen_session_bats-ss-03.initialized
+  rm -f /tmp/arcanon_session_bats-ss-03.initialized
 }
 
 @test "SSTH-01: hookEventName matches triggering event — SessionStart" {
@@ -90,7 +90,7 @@ d = json.load(sys.stdin)
 assert d['hookSpecificOutput']['hookEventName'] == 'SessionStart', \
     'expected SessionStart, got: ' + d['hookSpecificOutput']['hookEventName']
 "
-  rm -f /tmp/ligamen_session_bats-ss-04.initialized
+  rm -f /tmp/arcanon_session_bats-ss-04.initialized
 }
 
 @test "SSTH-01: hookEventName matches triggering event — UserPromptSubmit" {
@@ -104,7 +104,7 @@ d = json.load(sys.stdin)
 assert d['hookSpecificOutput']['hookEventName'] == 'UserPromptSubmit', \
     'expected UserPromptSubmit, got: ' + d['hookSpecificOutput']['hookEventName']
 "
-  rm -f /tmp/ligamen_session_bats-ss-05.initialized
+  rm -f /tmp/arcanon_session_bats-ss-05.initialized
 }
 
 # ---------------------------------------------------------------------------
@@ -123,10 +123,10 @@ d = json.load(sys.stdin)
 ctx = d['hookSpecificOutput']['additionalContext']
 assert 'Python' in ctx, 'expected Python in context: ' + ctx
 "
-  rm -f /tmp/ligamen_session_bats-pt-01.initialized
+  rm -f /tmp/arcanon_session_bats-pt-01.initialized
 }
 
-@test "SSTH-02: output includes ligamen command list" {
+@test "SSTH-02: output includes arcanon command list" {
   run bash -c "$(declare -p MOCK_PROJECT_TYPE); $(declare -p MOCK_PLUGIN_ROOT); \
     printf '{\"session_id\":\"bats-pt-02\",\"cwd\":\"/tmp/test-project\",\"hook_event_name\":\"SessionStart\"}' \
     | CLAUDE_PLUGIN_ROOT=\"\$MOCK_PLUGIN_ROOT\" bash \"\$MOCK_PLUGIN_ROOT/scripts/session-start.sh\""
@@ -135,9 +135,9 @@ assert 'Python' in ctx, 'expected Python in context: ' + ctx
 import sys, json
 d = json.load(sys.stdin)
 ctx = d['hookSpecificOutput']['additionalContext']
-assert '/ligamen:cross-impact' in ctx, 'expected /ligamen:cross-impact in context: ' + ctx
+assert '/arcanon:cross-impact' in ctx, 'expected /arcanon:cross-impact in context: ' + ctx
 "
-  rm -f /tmp/ligamen_session_bats-pt-02.initialized
+  rm -f /tmp/arcanon_session_bats-pt-02.initialized
 }
 
 @test "SSTH-02: handles empty project type gracefully" {
@@ -150,10 +150,10 @@ assert '/ligamen:cross-impact' in ctx, 'expected /ligamen:cross-impact in contex
 import sys, json
 d = json.load(sys.stdin)
 ctx = d['hookSpecificOutput']['additionalContext']
-assert 'Ligamen active.' in ctx, 'expected Ligamen active. in context: ' + ctx
+assert 'Arcanon active.' in ctx, 'expected Arcanon active. in context: ' + ctx
 assert 'Detected:' not in ctx, 'should not have Detected: when project type is empty: ' + ctx
 "
-  rm -f /tmp/ligamen_session_bats-pt-03.initialized
+  rm -f /tmp/arcanon_session_bats-pt-03.initialized
 }
 
 @test "SSTH-02: handles mixed project types" {
@@ -169,7 +169,7 @@ ctx = d['hookSpecificOutput']['additionalContext']
 assert 'Python' in ctx, 'expected Python in context: ' + ctx
 assert 'Node/TS' in ctx, 'expected Node/TS in context: ' + ctx
 "
-  rm -f /tmp/ligamen_session_bats-pt-04.initialized
+  rm -f /tmp/arcanon_session_bats-pt-04.initialized
 }
 
 # ---------------------------------------------------------------------------
@@ -187,22 +187,22 @@ assert 'Node/TS' in ctx, 'expected Node/TS in context: ' + ctx
 # SSTH-04: Disable env var
 # ---------------------------------------------------------------------------
 
-@test "SSTH-04: LIGAMEN_DISABLE_SESSION_START suppresses hook output" {
+@test "SSTH-04: ARCANON_DISABLE_SESSION_START suppresses hook output" {
   run bash -c "$(declare -p MOCK_PLUGIN_ROOT); \
     printf '{\"session_id\":\"bats-dis-01\",\"cwd\":\"/tmp/test-project\",\"hook_event_name\":\"SessionStart\"}' \
-    | LIGAMEN_DISABLE_SESSION_START=1 CLAUDE_PLUGIN_ROOT=\"\$MOCK_PLUGIN_ROOT\" bash \"\$MOCK_PLUGIN_ROOT/scripts/session-start.sh\""
+    | ARCANON_DISABLE_SESSION_START=1 CLAUDE_PLUGIN_ROOT=\"\$MOCK_PLUGIN_ROOT\" bash \"\$MOCK_PLUGIN_ROOT/scripts/session-start.sh\""
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
 
-@test "SSTH-04: LIGAMEN_DISABLE_SESSION_START exits 0 with empty value unset" {
+@test "SSTH-04: ARCANON_DISABLE_SESSION_START exits 0 with empty value unset" {
   # Without the env var set, output should be present
   run bash -c "$(declare -p MOCK_PROJECT_TYPE); $(declare -p MOCK_PLUGIN_ROOT); \
     printf '{\"session_id\":\"bats-dis-02\",\"cwd\":\"/tmp/test-project\",\"hook_event_name\":\"SessionStart\"}' \
     | CLAUDE_PLUGIN_ROOT=\"\$MOCK_PLUGIN_ROOT\" bash \"\$MOCK_PLUGIN_ROOT/scripts/session-start.sh\""
   [ "$status" -eq 0 ]
   [ -n "$output" ]
-  rm -f /tmp/ligamen_session_bats-dis-02.initialized
+  rm -f /tmp/arcanon_session_bats-dis-02.initialized
 }
 
 # ---------------------------------------------------------------------------
@@ -224,7 +224,7 @@ assert 'Node/TS' in ctx, 'expected Node/TS in context: ' + ctx
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 
-  rm -f /tmp/ligamen_session_bats-dup-01.initialized
+  rm -f /tmp/arcanon_session_bats-dup-01.initialized
 }
 
 @test "SSTH-05: different session_id produces output again" {
@@ -242,8 +242,8 @@ assert 'Node/TS' in ctx, 'expected Node/TS in context: ' + ctx
   [ "$status" -eq 0 ]
   [ -n "$output" ]
 
-  rm -f /tmp/ligamen_session_bats-dup-02a.initialized
-  rm -f /tmp/ligamen_session_bats-dup-02b.initialized
+  rm -f /tmp/arcanon_session_bats-dup-02a.initialized
+  rm -f /tmp/arcanon_session_bats-dup-02b.initialized
 }
 
 @test "SSTH-05: dedup flag file created in /tmp after first call" {
@@ -251,8 +251,8 @@ assert 'Node/TS' in ctx, 'expected Node/TS in context: ' + ctx
     printf '{\"session_id\":\"bats-dup-03\",\"cwd\":\"/tmp/test-project\",\"hook_event_name\":\"SessionStart\"}' \
     | CLAUDE_PLUGIN_ROOT=\"\$MOCK_PLUGIN_ROOT\" bash \"\$MOCK_PLUGIN_ROOT/scripts/session-start.sh\""
   [ "$status" -eq 0 ]
-  [ -f "/tmp/ligamen_session_bats-dup-03.initialized" ]
-  rm -f /tmp/ligamen_session_bats-dup-03.initialized
+  [ -f "/tmp/arcanon_session_bats-dup-03.initialized" ]
+  rm -f /tmp/arcanon_session_bats-dup-03.initialized
 }
 
 # ---------------------------------------------------------------------------
@@ -280,60 +280,60 @@ assert 'Node/TS' in ctx, 'expected Node/TS in context: ' + ctx
 # ---------------------------------------------------------------------------
 
 @test "INTG-01a: worker_start_background called when config has impact-map section" {
-  # Set up a temp CWD with ligamen.config.json containing impact-map
+  # Set up a temp CWD with arcanon.config.json containing impact-map
   MOCK_CWD="$(mktemp -d)"
-  cat > "$MOCK_CWD/ligamen.config.json" <<'JSON'
+  cat > "$MOCK_CWD/arcanon.config.json" <<'JSON'
 {"impact-map": {}}
 JSON
 
   # Install mock worker-client.sh that writes a sentinel file
   cat > "$MOCK_PLUGIN_ROOT/lib/worker-client.sh" <<'MOCK'
 worker_running() { return 1; }
-worker_start_background() { touch /tmp/ligamen_test_worker_started_intg01a; return 0; }
-worker_status_line() { echo "Ligamen worker: running (port 37888)"; }
+worker_start_background() { touch /tmp/arcanon_test_worker_started_intg01a; return 0; }
+worker_status_line() { echo "Arcanon worker: running (port 37888)"; }
 MOCK
 
   # Clean up sentinel if it exists from a prior run
-  rm -f /tmp/ligamen_test_worker_started_intg01a
+  rm -f /tmp/arcanon_test_worker_started_intg01a
 
   run bash -c "$(declare -p MOCK_PROJECT_TYPE); $(declare -p MOCK_PLUGIN_ROOT); $(declare -p MOCK_CWD); \
     printf '{\"session_id\":\"bats-intg-01a\",\"cwd\":\"'\"$MOCK_CWD\"'\",\"hook_event_name\":\"SessionStart\"}' \
     | CLAUDE_PLUGIN_ROOT=\"\$MOCK_PLUGIN_ROOT\" bash \"\$MOCK_PLUGIN_ROOT/scripts/session-start.sh\""
   [ "$status" -eq 0 ]
-  [ -f "/tmp/ligamen_test_worker_started_intg01a" ]
+  [ -f "/tmp/arcanon_test_worker_started_intg01a" ]
 
-  rm -f /tmp/ligamen_test_worker_started_intg01a
-  rm -f /tmp/ligamen_session_bats-intg-01a.initialized
+  rm -f /tmp/arcanon_test_worker_started_intg01a
+  rm -f /tmp/arcanon_session_bats-intg-01a.initialized
   rm -rf "$MOCK_CWD"
 }
 
 @test "INTG-01b: worker_start_background NOT called when config has no impact-map section" {
   MOCK_CWD="$(mktemp -d)"
-  cat > "$MOCK_CWD/ligamen.config.json" <<'JSON'
+  cat > "$MOCK_CWD/arcanon.config.json" <<'JSON'
 {"linked-repos": []}
 JSON
 
   cat > "$MOCK_PLUGIN_ROOT/lib/worker-client.sh" <<'MOCK'
 worker_running() { return 1; }
-worker_start_background() { touch /tmp/ligamen_test_worker_started_intg01b; return 0; }
-worker_status_line() { echo "Ligamen worker: running (port 37888)"; }
+worker_start_background() { touch /tmp/arcanon_test_worker_started_intg01b; return 0; }
+worker_status_line() { echo "Arcanon worker: running (port 37888)"; }
 MOCK
 
-  rm -f /tmp/ligamen_test_worker_started_intg01b
+  rm -f /tmp/arcanon_test_worker_started_intg01b
 
   run bash -c "$(declare -p MOCK_PROJECT_TYPE); $(declare -p MOCK_PLUGIN_ROOT); $(declare -p MOCK_CWD); \
     printf '{\"session_id\":\"bats-intg-01b\",\"cwd\":\"'\"$MOCK_CWD\"'\",\"hook_event_name\":\"SessionStart\"}' \
     | CLAUDE_PLUGIN_ROOT=\"\$MOCK_PLUGIN_ROOT\" bash \"\$MOCK_PLUGIN_ROOT/scripts/session-start.sh\""
   [ "$status" -eq 0 ]
-  [ ! -f "/tmp/ligamen_test_worker_started_intg01b" ]
+  [ ! -f "/tmp/arcanon_test_worker_started_intg01b" ]
 
-  rm -f /tmp/ligamen_session_bats-intg-01b.initialized
+  rm -f /tmp/arcanon_session_bats-intg-01b.initialized
   rm -rf "$MOCK_CWD"
 }
 
 @test "INTG-01c: hook exits 0 even if worker_start_background fails" {
   MOCK_CWD="$(mktemp -d)"
-  cat > "$MOCK_CWD/ligamen.config.json" <<'JSON'
+  cat > "$MOCK_CWD/arcanon.config.json" <<'JSON'
 {"impact-map": {}}
 JSON
 
@@ -348,13 +348,13 @@ MOCK
     | CLAUDE_PLUGIN_ROOT=\"\$MOCK_PLUGIN_ROOT\" bash \"\$MOCK_PLUGIN_ROOT/scripts/session-start.sh\""
   [ "$status" -eq 0 ]
 
-  rm -f /tmp/ligamen_session_bats-intg-01c.initialized
+  rm -f /tmp/arcanon_session_bats-intg-01c.initialized
   rm -rf "$MOCK_CWD"
 }
 
 @test "INTG-01d: hook exits 0 even if lib/worker-client.sh is absent" {
   MOCK_CWD="$(mktemp -d)"
-  cat > "$MOCK_CWD/ligamen.config.json" <<'JSON'
+  cat > "$MOCK_CWD/arcanon.config.json" <<'JSON'
 {"impact-map": {}}
 JSON
 
@@ -366,13 +366,13 @@ JSON
     | CLAUDE_PLUGIN_ROOT=\"\$MOCK_PLUGIN_ROOT\" bash \"\$MOCK_PLUGIN_ROOT/scripts/session-start.sh\""
   [ "$status" -eq 0 ]
 
-  rm -f /tmp/ligamen_session_bats-intg-01d.initialized
+  rm -f /tmp/arcanon_session_bats-intg-01d.initialized
   rm -rf "$MOCK_CWD"
 }
 
 @test "INTG-02: hook still outputs additionalContext JSON when impact-map present" {
   MOCK_CWD="$(mktemp -d)"
-  cat > "$MOCK_CWD/ligamen.config.json" <<'JSON'
+  cat > "$MOCK_CWD/arcanon.config.json" <<'JSON'
 {"impact-map": {}}
 JSON
 
@@ -392,10 +392,10 @@ d = json.load(sys.stdin)
 assert 'hookSpecificOutput' in d, 'missing hookSpecificOutput'
 assert 'additionalContext' in d['hookSpecificOutput'], 'missing additionalContext'
 ctx = d['hookSpecificOutput']['additionalContext']
-assert 'Ligamen active' in ctx, 'expected Ligamen active in context: ' + ctx
-assert '/ligamen:cross-impact' in ctx, 'expected commands in context: ' + ctx
+assert 'Arcanon active' in ctx, 'expected Arcanon active in context: ' + ctx
+assert '/arcanon:cross-impact' in ctx, 'expected commands in context: ' + ctx
 "
 
-  rm -f /tmp/ligamen_session_bats-intg-02.initialized
+  rm -f /tmp/arcanon_session_bats-intg-02.initialized
   rm -rf "$MOCK_CWD"
 }

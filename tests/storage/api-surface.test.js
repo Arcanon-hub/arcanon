@@ -30,7 +30,7 @@ import * as migration007 from "../../worker/db/migrations/007_expose_kind.js";
  * This is the full migration chain for Phase 31 tests.
  */
 function makeQE() {
-  const dir = path.join(os.tmpdir(), "ligamen-test-" + crypto.randomUUID());
+  const dir = path.join(os.tmpdir(), "arcanon-test-" + crypto.randomUUID());
   fs.mkdirSync(dir, { recursive: true });
   const dbPath = path.join(dir, "test.db");
 
@@ -68,7 +68,7 @@ function makeQE() {
  * Used to test graceful degradation when migration 007 (kind column) has not run.
  */
 function makeQEWithout007() {
-  const dir = path.join(os.tmpdir(), "ligamen-test-" + crypto.randomUUID());
+  const dir = path.join(os.tmpdir(), "arcanon-test-" + crypto.randomUUID());
   fs.mkdirSync(dir, { recursive: true });
   const dbPath = path.join(dir, "test.db");
 

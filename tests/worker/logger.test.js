@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { createLogger } from "../../plugins/ligamen/worker/lib/logger.js";
+import { createLogger } from "../../plugins/arcanon/worker/lib/logger.js";
 
 // Helper: create a temporary dataDir with logs/ subdirectory
 function makeTmpDir() {

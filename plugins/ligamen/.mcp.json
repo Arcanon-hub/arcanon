@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "ligamen-impact": {
-      "type": "stdio",
-      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-wrapper.sh",
-      "args": []
-    }
-  }
-}
