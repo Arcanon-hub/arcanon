@@ -30,6 +30,7 @@ import {
   drainQueue,
   queueStats,
   listAllUploads,
+  pruneDead,
   resolveCredentials,
   storeCredentials,
 } from "../hub-sync/index.js";
@@ -223,19 +224,26 @@ async function cmdUpload(flags) {
 }
 
 async function cmdSync(flags) {
+  let pruned = 0;
+  if (flags["prune-dead"]) {
+    pruned = pruneDead();
+  }
+
   const report = await drainQueue({
     apiKey: flags["api-key"],
     hubUrl: flags["hub-url"],
     limit: Number(flags.limit) || 50,
   });
+  const withPrune = { ...report, pruned };
   if (flags.json) {
-    emit(report, flags);
+    emit(withPrune, flags);
     return;
   }
+  const prunePart = pruned > 0 ? ` pruned=${pruned}` : "";
   emit(
-    report,
+    withPrune,
     flags,
-    `drain: attempted=${report.attempted} succeeded=${report.succeeded} failed=${report.failed} dead=${report.dead} (pending=${report.stats.pending})`,
+    `drain:${prunePart} attempted=${report.attempted} succeeded=${report.succeeded} failed=${report.failed} dead=${report.dead} (pending=${report.stats.pending})`,
   );
 }
 

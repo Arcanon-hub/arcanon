@@ -38,7 +38,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * columns added by migration 005).
  */
 function makeQE() {
-  const dir = path.join(os.tmpdir(), "ligamen-test-" + crypto.randomUUID());
+  const dir = path.join(os.tmpdir(), "arcanon-test-" + crypto.randomUUID());
   fs.mkdirSync(dir, { recursive: true });
   const dbPath = path.join(dir, "test.db");
 
@@ -83,7 +83,7 @@ describe("database setup", () => {
 
   it("openDb is idempotent — same instance returned on repeat call", () => {
     // openDb() is a module-level singleton; calling it twice returns the same instance
-    const dir = path.join(os.tmpdir(), "ligamen-test-" + crypto.randomUUID());
+    const dir = path.join(os.tmpdir(), "arcanon-test-" + crypto.randomUUID());
     fs.mkdirSync(dir, { recursive: true });
     const db1 = openDb(dir);
     const db2 = openDb(dir);

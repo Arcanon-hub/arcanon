@@ -1,14 +1,14 @@
 #!/usr/bin/env bats
-# Ligamen — lint.bats
+# Arcanon — lint.bats
 # Tests: TEST-02 (per-language linter invocation), TEST-07 (non-blocking guarantee)
 # Covers: LNTH-06 (systemMessage output when issues found), LNTH-08 (silent skip when absent)
 
 setup() {
   load 'test_helper/bats-support/load'
   load 'test_helper/bats-assert/load'
-  SCRIPT="${BATS_TEST_DIRNAME}/../plugins/ligamen/scripts/lint.sh"
+  SCRIPT="${BATS_TEST_DIRNAME}/../plugins/arcanon/scripts/lint.sh"
   STUB_DIR="$(mktemp -d)"
-  export CLAUDE_PLUGIN_ROOT="${BATS_TEST_DIRNAME}/../plugins/ligamen"
+  export CLAUDE_PLUGIN_ROOT="${BATS_TEST_DIRNAME}/../plugins/arcanon"
 }
 
 teardown() {
@@ -125,7 +125,7 @@ STUBEOF
   local testfile="${STUB_DIR}/test.rs"
   touch "$testfile"
   # Clear any throttle file so clippy actually runs
-  rm -f /tmp/ligamen_clippy_*
+  rm -f /tmp/arcanon_clippy_*
   local json='{"tool_name":"Write","tool_input":{"file_path":"'"${testfile}"'"}}'
   run bash -c "export PATH='${STUB_DIR}:${PATH}'; printf '%s' '${json}' | bash '${SCRIPT}'"
   assert_success

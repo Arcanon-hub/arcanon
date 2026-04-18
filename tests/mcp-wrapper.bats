@@ -11,7 +11,7 @@ setup() {
   mkdir -p "$MOCK_PLUGIN_ROOT/worker/mcp"
 
   # Copy the wrapper into mock plugin root
-  cp "$PROJECT_ROOT/plugins/ligamen/scripts/mcp-wrapper.sh" "$MOCK_PLUGIN_ROOT/scripts/"
+  cp "$PROJECT_ROOT/plugins/arcanon/scripts/mcp-wrapper.sh" "$MOCK_PLUGIN_ROOT/scripts/"
 
   # Create a mock server.js that just exits 0 (avoids actually starting the server)
   printf 'process.exit(0)\n' > "$MOCK_PLUGIN_ROOT/worker/mcp/server.js"
@@ -54,7 +54,7 @@ teardown() {
   # Wrapper should still exit 0 (exec node server.js succeeds with mock)
   [ "$status" -eq 0 ]
   # All install messages go to stderr (captured in $output by bats for stderr)
-  [[ "$output" == *"[ligamen]"* ]]
+  [[ "$output" == *"[arcanon]"* ]]
 }
 
 # ---------------------------------------------------------------------------
@@ -90,14 +90,14 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "MCP-02: .mcp.json command field ends with mcp-wrapper.sh" {
-  local mcp_json="$PROJECT_ROOT/plugins/ligamen/.mcp.json"
+  local mcp_json="$PROJECT_ROOT/plugins/arcanon/.mcp.json"
   [ -f "$mcp_json" ]
 
   COMMAND=$(python3 -c "
 import json, sys
 with open('$mcp_json') as f:
     d = json.load(f)
-print(d['mcpServers']['ligamen-impact']['command'])
+print(d['mcpServers']['arcanon']['command'])
 ")
 
   [[ "$COMMAND" == *"mcp-wrapper.sh" ]]

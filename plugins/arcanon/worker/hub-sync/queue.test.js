@@ -10,6 +10,7 @@ import {
   listAllUploads,
   markUploadFailure,
   deleteUpload,
+  pruneDead,
   queueStats,
   getQueueDb,
   _resetQueueDb,
@@ -91,4 +92,27 @@ test("deleteUpload removes the row", () => {
 
 test("RETRY_SCHEDULE_SECONDS matches documented policy", () => {
   assert.deepEqual(RETRY_SCHEDULE_SECONDS, [30, 120, 600, 3600, 21600]);
+});
+
+test("pruneDead deletes status='dead' rows and leaves pending rows alone", () => {
+  const dir = freshQueueDir();
+  const pendingId = enqueueUpload({ repoName: "r-pending", commitSha: "c1", body: "{}" }, dir);
+  const doomedId = enqueueUpload({ repoName: "r-dead", commitSha: "c2", body: "{}" }, dir);
+  // Force the doomed row to dead.
+  for (let i = 0; i < MAX_ATTEMPTS; i++) markUploadFailure(doomedId, "sim", dir);
+  assert.equal(queueStats(dir).dead, 1);
+
+  const deleted = pruneDead(dir);
+  assert.equal(deleted, 1);
+
+  const stats = queueStats(dir);
+  assert.equal(stats.dead, 0);
+  assert.equal(stats.pending, 1);
+  assert.equal(listAllUploads(dir)[0].id, pendingId);
+});
+
+test("pruneDead returns 0 when there are no dead rows", () => {
+  const dir = freshQueueDir();
+  enqueueUpload({ repoName: "r", commitSha: "c", body: "{}" }, dir);
+  assert.equal(pruneDead(dir), 0);
 });

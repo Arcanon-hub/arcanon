@@ -57,6 +57,12 @@ function classify(status) {
   return { ok: false, retriable: false };
 }
 
+// readBodySafe captures the server response body into HubError.body so
+// callers can surface the RFC 7807 `detail` field to users. The server's
+// current Pydantic error responses do NOT echo submitted fields — if
+// that ever changes, this body is logged by the scan manager and could
+// end up in worker logs. If a future server version starts echoing
+// request fields, redact Authorization before logging.
 async function readBodySafe(response) {
   try {
     const text = await response.text();

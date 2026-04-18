@@ -1,11 +1,11 @@
 #!/usr/bin/env bats
-# tests/config.bats — Ligamen configuration layer tests
+# tests/config.bats — Arcanon configuration layer tests
 # Covers: CONF-01 (config loading), CONF-02 (disable toggles),
 #         CONF-03 (throttle override), CONF-04 (extra blocked patterns)
 
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 FIXTURE_DIR="$REPO_ROOT/tests/fixtures/config"
-LIB_CONFIG="$REPO_ROOT/plugins/ligamen/lib/config.sh"
+LIB_CONFIG="$REPO_ROOT/plugins/arcanon/lib/config.sh"
 
 setup() {
   # Reset the guard variable before each test so lib/config.sh re-loads
@@ -29,7 +29,7 @@ teardown() {
 # CONF-01: lib/config.sh loading behavior
 # ---------------------------------------------------------------------------
 
-@test "config.sh loads siblings from ligamen.config.json" {
+@test "config.sh loads siblings from arcanon.config.json" {
   cd "$FIXTURE_DIR"
   source "$LIB_CONFIG"
   [ "${#LIGAMEN_CONFIG_LINKED_REPOS[@]}" -eq 3 ]
@@ -47,7 +47,7 @@ teardown() {
 @test "config.sh warns on malformed JSON" {
   local tmpdir="$BATS_TEST_TMPDIR/malformed"
   mkdir -p "$tmpdir"
-  echo "{ this is not valid json" > "$tmpdir/ligamen.config.json"
+  echo "{ this is not valid json" > "$tmpdir/arcanon.config.json"
   cd "$tmpdir"
   output=$(source "$LIB_CONFIG" 2>&1)
   # Warning should be on stderr, captured via redirect
@@ -72,7 +72,7 @@ teardown() {
 @test "config.sh respects LIGAMEN_CONFIG_FILE override" {
   # Source from a different dir but point config at fixture
   cd "$BATS_TEST_TMPDIR"
-  export LIGAMEN_CONFIG_FILE="$FIXTURE_DIR/ligamen.config.json"
+  export LIGAMEN_CONFIG_FILE="$FIXTURE_DIR/arcanon.config.json"
   source "$LIB_CONFIG"
   [ "${#LIGAMEN_CONFIG_LINKED_REPOS[@]}" -eq 3 ]
   [ "${LIGAMEN_CONFIG_LINKED_REPOS[0]}" = "../api" ]
@@ -91,26 +91,26 @@ teardown() {
 # CONF-02: Disable env var toggles
 # ---------------------------------------------------------------------------
 
-@test "LIGAMEN_DISABLE_FORMAT exits 0 without formatting" {
-  run env LIGAMEN_DISABLE_FORMAT=1 bash "$FIXTURE_DIR/mock-format.sh"
+@test "ARCANON_DISABLE_FORMAT exits 0 without formatting" {
+  run env ARCANON_DISABLE_FORMAT=1 bash "$FIXTURE_DIR/mock-format.sh"
   [ "$status" -eq 0 ]
   [[ "$output" != *"format-ran"* ]]
 }
 
-@test "format runs when LIGAMEN_DISABLE_FORMAT unset" {
-  run env -u LIGAMEN_DISABLE_FORMAT bash "$FIXTURE_DIR/mock-format.sh"
+@test "format runs when ARCANON_DISABLE_FORMAT unset" {
+  run env -u ARCANON_DISABLE_FORMAT bash "$FIXTURE_DIR/mock-format.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"format-ran"* ]]
 }
 
-@test "LIGAMEN_DISABLE_LINT exits 0 without linting" {
-  run env LIGAMEN_DISABLE_LINT=1 bash "$FIXTURE_DIR/mock-lint.sh"
+@test "ARCANON_DISABLE_LINT exits 0 without linting" {
+  run env ARCANON_DISABLE_LINT=1 bash "$FIXTURE_DIR/mock-lint.sh"
   [ "$status" -eq 0 ]
   [[ "$output" != *"throttle="* ]]
 }
 
-@test "LIGAMEN_DISABLE_GUARD exits 0 allowing all writes" {
-  run env LIGAMEN_DISABLE_GUARD=1 bash "$FIXTURE_DIR/mock-guard.sh" ".env"
+@test "ARCANON_DISABLE_GUARD exits 0 allowing all writes" {
+  run env ARCANON_DISABLE_GUARD=1 bash "$FIXTURE_DIR/mock-guard.sh" ".env"
   [ "$status" -eq 0 ]
 }
 

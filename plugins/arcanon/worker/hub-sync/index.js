@@ -29,8 +29,8 @@ import {
 
 export { PayloadError } from "./payload.js";
 export { HubError } from "./client.js";
-export { AuthError, resolveCredentials, storeCredentials } from "./auth.js";
-export { queueStats, listAllUploads } from "./queue.js";
+export { AuthError, resolveCredentials, hasCredentials, storeCredentials } from "./auth.js";
+export { queueStats, listAllUploads, pruneDead } from "./queue.js";
 
 /**
  * Build payload, POST to the hub, optionally enqueue on retriable failures.

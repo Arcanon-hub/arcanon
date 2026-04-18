@@ -119,6 +119,20 @@ export function deleteUpload(id, dataDir) {
   db.prepare(`DELETE FROM uploads WHERE id = ?`).run(id);
 }
 
+/**
+ * Delete every row with status='dead'. Returns the number deleted.
+ * Used by `/arcanon:sync --prune-dead` so dead rows don't accumulate
+ * forever in the local queue DB.
+ *
+ * @param {string} [dataDir]
+ * @returns {number}
+ */
+export function pruneDead(dataDir) {
+  const db = getQueueDb(dataDir);
+  const info = db.prepare(`DELETE FROM uploads WHERE status = 'dead'`).run();
+  return info.changes ?? 0;
+}
+
 export function markUploadFailure(id, errorMessage, dataDir) {
   const db = getQueueDb(dataDir);
   const row = db.prepare(`SELECT attempts FROM uploads WHERE id = ?`).get(id);

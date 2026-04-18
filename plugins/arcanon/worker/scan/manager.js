@@ -36,7 +36,7 @@ import { createCodeownersEnricher } from "./codeowners.js";
 import { resolveDataDir } from "../lib/data-dir.js";
 import { resolveConfigPath } from "../lib/config-path.js";
 import { extractAuthAndDb } from "./enrichment/auth-db-extractor.js";
-import { syncFindings } from "../hub-sync/index.js";
+import { syncFindings, hasCredentials } from "../hub-sync/index.js";
 
 // Register CODEOWNERS enricher once at module load (OWN-01).
 // Module-level registration runs before the first scan.
@@ -789,10 +789,10 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
   // Runs per-repo, fire-and-log — a hub failure never fails the scan.
   try {
     const { hubAutoUpload, hubUrl, projectSlug } = _readHubConfig();
-    const hasCredentials = Boolean(
-      process.env.ARCANON_API_KEY || process.env.ARCANON_API_TOKEN,
-    );
-    if (hasCredentials && hubAutoUpload) {
+    // Credential check spans env vars AND ~/.arcanon/config.json so that
+    // users who ran /arcanon:login (without exporting an env var) still
+    // get auto-uploads.
+    if (hasCredentials() && hubAutoUpload) {
       for (const r of results) {
         if (!r.findings) continue;
         try {

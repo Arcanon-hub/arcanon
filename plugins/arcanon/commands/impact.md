@@ -21,7 +21,9 @@ hop limit.
    - `--direction upstream` → "what affects me?"
    - `--hops N` → max traversal depth (default: 3).
 
-2. Prefer MCP — call the `mcp__arcanon__impact` tool with:
+2. Prefer MCP — call `mcp__arcanon__impact_query` (for transitive
+   consumer walks) or `mcp__arcanon__impact_graph` (for a bounded
+   subgraph). Payload:
    ```json
    { "target": "<name>", "direction": "downstream", "hops": 3 }
    ```

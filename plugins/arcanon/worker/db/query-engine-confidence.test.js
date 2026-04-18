@@ -7,7 +7,7 @@
  *   - getGraph() returns confidence and evidence on each connection object
  *   - getGraph() on a pre-migration-009 DB (no confidence/evidence columns) does not throw
  *
- * Run: node --test plugins/ligamen/worker/db/query-engine-confidence.test.js
+ * Run: node --test plugins/arcanon/worker/db/query-engine-confidence.test.js
  */
 
 import { test } from "node:test";

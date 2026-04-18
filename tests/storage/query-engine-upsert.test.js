@@ -35,7 +35,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * so that the kind column is present in exposed_endpoints.
  */
 function makeQE() {
-  const dir = path.join(os.tmpdir(), "ligamen-upsert-test-" + crypto.randomUUID());
+  const dir = path.join(os.tmpdir(), "arcanon-upsert-test-" + crypto.randomUUID());
   fs.mkdirSync(dir, { recursive: true });
   const dbPath = path.join(dir, "test.db");
 

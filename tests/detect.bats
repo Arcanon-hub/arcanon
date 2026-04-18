@@ -11,7 +11,7 @@ setup() {
   load 'test_helper/bats-support/load'
   load 'test_helper/bats-assert/load'
   FIXTURES_DIR="$(mktemp -d)"
-  export CLAUDE_PLUGIN_ROOT="${BATS_TEST_DIRNAME}/../plugins/ligamen"
+  export CLAUDE_PLUGIN_ROOT="${BATS_TEST_DIRNAME}/../plugins/arcanon"
 }
 
 teardown() {
@@ -25,7 +25,7 @@ teardown() {
 @test "detect.sh - detects Python from pyproject.toml" {
   touch "${FIXTURES_DIR}/pyproject.toml"
   # shellcheck source=lib/detect.sh
-  source "${BATS_TEST_DIRNAME}/../plugins/ligamen/lib/detect.sh"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
   run detect_project_type "${FIXTURES_DIR}"
   assert_success
   assert_output --partial "python"
@@ -33,7 +33,7 @@ teardown() {
 
 @test "detect.sh - detects Rust from Cargo.toml" {
   touch "${FIXTURES_DIR}/Cargo.toml"
-  source "${BATS_TEST_DIRNAME}/../plugins/ligamen/lib/detect.sh"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
   run detect_project_type "${FIXTURES_DIR}"
   assert_success
   assert_output --partial "rust"
@@ -41,7 +41,7 @@ teardown() {
 
 @test "detect.sh - detects Node/TS from package.json" {
   touch "${FIXTURES_DIR}/package.json"
-  source "${BATS_TEST_DIRNAME}/../plugins/ligamen/lib/detect.sh"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
   run detect_project_type "${FIXTURES_DIR}"
   assert_success
   # Accepts both "node" and "typescript" per RESEARCH.md open question 2
@@ -50,7 +50,7 @@ teardown() {
 
 @test "detect.sh - detects Go from go.mod" {
   touch "${FIXTURES_DIR}/go.mod"
-  source "${BATS_TEST_DIRNAME}/../plugins/ligamen/lib/detect.sh"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
   run detect_project_type "${FIXTURES_DIR}"
   assert_success
   assert_output --partial "go"
@@ -60,7 +60,7 @@ teardown() {
   # detect_project_type returns single type; Python has highest priority per lib
   touch "${FIXTURES_DIR}/pyproject.toml"
   touch "${FIXTURES_DIR}/package.json"
-  source "${BATS_TEST_DIRNAME}/../plugins/ligamen/lib/detect.sh"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
   run detect_project_type "${FIXTURES_DIR}"
   assert_success
   assert_output --partial "python"
@@ -68,7 +68,7 @@ teardown() {
 
 @test "detect.sh - returns unknown for directory with no manifest" {
   # Empty FIXTURES_DIR — no manifest files present
-  source "${BATS_TEST_DIRNAME}/../plugins/ligamen/lib/detect.sh"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
   run detect_project_type "${FIXTURES_DIR}"
   assert_success
   refute_output --partial "python"
@@ -84,7 +84,7 @@ teardown() {
 @test "detect.sh - detects mixed Python+Node via detect_all_project_types" {
   touch "${FIXTURES_DIR}/pyproject.toml"
   touch "${FIXTURES_DIR}/package.json"
-  source "${BATS_TEST_DIRNAME}/../plugins/ligamen/lib/detect.sh"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
   run detect_all_project_types "${FIXTURES_DIR}"
   assert_success
   assert_output --partial "python"
@@ -96,7 +96,7 @@ teardown() {
   touch "${FIXTURES_DIR}/Cargo.toml"
   touch "${FIXTURES_DIR}/package.json"
   touch "${FIXTURES_DIR}/go.mod"
-  source "${BATS_TEST_DIRNAME}/../plugins/ligamen/lib/detect.sh"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
   run detect_all_project_types "${FIXTURES_DIR}"
   assert_success
   assert_output --partial "python"
@@ -106,7 +106,7 @@ teardown() {
 }
 
 @test "detect.sh - detect_all_project_types returns empty string for no-manifest dir" {
-  source "${BATS_TEST_DIRNAME}/../plugins/ligamen/lib/detect.sh"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
   run detect_all_project_types "${FIXTURES_DIR}"
   assert_success
   assert_output ""
@@ -114,7 +114,7 @@ teardown() {
 
 @test "detect.sh - detects Python from setup.py (alternate manifest)" {
   touch "${FIXTURES_DIR}/setup.py"
-  source "${BATS_TEST_DIRNAME}/../plugins/ligamen/lib/detect.sh"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
   run detect_project_type "${FIXTURES_DIR}"
   assert_success
   assert_output --partial "python"

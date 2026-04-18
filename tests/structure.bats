@@ -3,7 +3,7 @@
 # Structural validation tests for plugin layout (PLGN-01, PLGN-04, PLGN-06)
 
 TEST_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")" && pwd)"
-PLUGIN_ROOT="$(cd "$TEST_DIR/../plugins/ligamen" && pwd)"
+PLUGIN_ROOT="$(cd "$TEST_DIR/../plugins/arcanon" && pwd)"
 
 load "$TEST_DIR/test_helper.bash"
 

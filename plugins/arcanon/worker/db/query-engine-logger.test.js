@@ -1,7 +1,7 @@
 /**
  * Tests for logger injection in QueryEngine._resolveServiceId().
  *
- * Run: node plugins/ligamen/worker/db/query-engine-logger.test.js
+ * Run: node plugins/arcanon/worker/db/query-engine-logger.test.js
  */
 
 import assert from "assert";

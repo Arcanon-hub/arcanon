@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '../../plugins/ligamen/worker/ui/modules/renderer.js'), 'utf8');
+const src = readFileSync(join(__dirname, '../../plugins/arcanon/worker/ui/modules/renderer.js'), 'utf8');
 
 test('render() reads devicePixelRatio with fallback to 1', () => {
   assert.ok(

@@ -37,10 +37,14 @@ Upload the latest local scan for the current (or specified) repo.
 Exit codes: `0` on 202 / 409, `1` on any other hub failure. A retriable
 failure auto-enqueues and still exits `1` — the user gets a queue id.
 
-### `/arcanon:sync [--limit N]`
+### `/arcanon:sync [--limit N] [--prune-dead]`
 
 Drain the offline queue. Prints `attempted/succeeded/failed/dead`
 counts. Default limit: 50 rows per call.
+
+`--prune-dead` deletes every row with `status='dead'` before draining —
+useful when dead rows have accumulated and you don't want to inspect
+them individually.
 
 ### `/arcanon:status`
 

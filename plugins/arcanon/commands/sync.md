@@ -1,7 +1,7 @@
 ---
 description: Drain the offline upload queue — retry scans that couldn't sync earlier.
 allowed-tools: Bash
-argument-hint: "[--limit N]"
+argument-hint: "[--limit N] [--prune-dead]"
 ---
 
 # Arcanon Sync
@@ -30,8 +30,11 @@ If the user wants a full row-level view of the queue, run:
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/hub.sh queue
 ```
 
-If dead rows look unrecoverable, suggest deleting them with:
+If dead rows look unrecoverable, clear them in one step:
 
 ```bash
-sqlite3 ~/.arcanon/hub-queue.db "DELETE FROM uploads WHERE status='dead'"
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/hub.sh sync --prune-dead
 ```
+
+The prune runs before the drain, so the report will show
+`drain: pruned=N attempted=… (pending=…)`.

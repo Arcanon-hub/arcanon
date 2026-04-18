@@ -7,11 +7,11 @@
 setup() {
   load 'test_helper/bats-support/load'
   load 'test_helper/bats-assert/load'
-  cd "$BATS_TEST_DIRNAME/../plugins/ligamen"
+  cd "$BATS_TEST_DIRNAME/../plugins/arcanon"
 }
 
 teardown() {
-  cd "$BATS_TEST_DIRNAME/../plugins/ligamen"
+  cd "$BATS_TEST_DIRNAME/../plugins/arcanon"
   local embed_dir="node_modules/@chroma-core/default-embed"
   if [ -d "${embed_dir}.bak" ]; then
     mv "${embed_dir}.bak" "$embed_dir"
@@ -31,7 +31,7 @@ teardown() {
   fi
 
   local init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-  run bash -c "printf '%s\n' '$init' | LIGAMEN_DB_PATH='.ligamen/nonexistent-test.db' timeout 5 node worker/mcp/server.js 2>/dev/null"
+  run bash -c "printf '%s\n' '$init' | ARCANON_DB_PATH='.arcanon/nonexistent-test.db' timeout 5 node worker/mcp/server.js 2>/dev/null"
 
   if [ "$renamed" = true ]; then
     mv "${embed_dir}.bak" "$embed_dir"
@@ -51,7 +51,7 @@ teardown() {
 
   local init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
   local list='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
-  run bash -c "printf '%s\n%s\n' '$init' '$list' | LIGAMEN_DB_PATH='.ligamen/nonexistent-test.db' timeout 5 node worker/mcp/server.js 2>/dev/null"
+  run bash -c "printf '%s\n%s\n' '$init' '$list' | ARCANON_DB_PATH='.arcanon/nonexistent-test.db' timeout 5 node worker/mcp/server.js 2>/dev/null"
 
   if [ "$renamed" = true ]; then
     mv "${embed_dir}.bak" "$embed_dir"
@@ -78,7 +78,7 @@ teardown() {
 
   local init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
   local call='{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"impact_query","arguments":{"service":"nonexistent"}}}'
-  run bash -c "printf '%s\n%s\n' '$init' '$call' | LIGAMEN_DB_PATH='.ligamen/nonexistent-test.db' timeout 5 node worker/mcp/server.js 2>/dev/null"
+  run bash -c "printf '%s\n%s\n' '$init' '$call' | ARCANON_DB_PATH='.arcanon/nonexistent-test.db' timeout 5 node worker/mcp/server.js 2>/dev/null"
 
   if [ "$renamed" = true ]; then
     mv "${embed_dir}.bak" "$embed_dir"

@@ -105,6 +105,24 @@ export function resolveCredentials(opts = {}) {
  * @param {{ hubUrl?: string }} [opts]
  * @returns {string} path to the config file written
  */
+/**
+ * Non-throwing credential presence check.
+ * True iff resolveCredentials() would succeed right now.
+ *
+ * Used by the scan manager's auto-upload gate so that users who ran
+ * /arcanon:login but never set ARCANON_API_KEY still get auto-uploads.
+ *
+ * @returns {boolean}
+ */
+export function hasCredentials() {
+  try {
+    resolveCredentials();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function storeCredentials(apiKey, opts = {}) {
   if (!apiKey || !apiKey.startsWith(API_KEY_PREFIX)) {
     throw new AuthError(`api_key must start with "${API_KEY_PREFIX}"`);

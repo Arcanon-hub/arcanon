@@ -199,8 +199,8 @@ db.close();
 @test "INTG-E2E-02: incremental scan returns only changed files" {
   # Init a real git repo in TEST_DIR
   git -C "$TEST_DIR" init --quiet
-  git -C "$TEST_DIR" config user.email "test@ligamen"
-  git -C "$TEST_DIR" config user.name "Ligamen Test"
+  git -C "$TEST_DIR" config user.email "test@arcanon"
+  git -C "$TEST_DIR" config user.name "Arcanon Test"
 
   # Create two files and commit them
   echo "content-a" > "$TEST_DIR/service-a.ts"
@@ -241,8 +241,8 @@ console.log('PASS: only service-a.ts in changed files');
 
 @test "INTG-E2E-02: full scan (sinceCommit=null) returns all tracked files" {
   git -C "$TEST_DIR" init --quiet
-  git -C "$TEST_DIR" config user.email "test@ligamen"
-  git -C "$TEST_DIR" config user.name "Ligamen Test"
+  git -C "$TEST_DIR" config user.email "test@arcanon"
+  git -C "$TEST_DIR" config user.name "Arcanon Test"
 
   echo "a" > "$TEST_DIR/file-a.ts"
   echo "b" > "$TEST_DIR/file-b.ts"
@@ -396,17 +396,17 @@ detect_project_type() { echo "Node/TS"; }
 MOCK
 
   # Write a mock worker-client.sh that writes a sentinel file
-  SENTINEL="/tmp/ligamen_test_intg_worker_started"
+  SENTINEL="/tmp/arcanon_test_intg_worker_started"
   rm -f "$SENTINEL"
 
   cat > "$MOCK_PLUGIN_ROOT/lib/worker-client.sh" <<MOCK
 worker_running() { return 1; }
 worker_start_background() { touch ${SENTINEL}; return 0; }
-worker_status_line() { echo "Ligamen worker: running (port 37888)"; }
+worker_status_line() { echo "Arcanon worker: running (port 37888)"; }
 MOCK
 
-  # Create ligamen.config.json WITH impact-map key in TEST_DIR
-  cat > "$TEST_DIR/ligamen.config.json" <<'JSON'
+  # Create arcanon.config.json WITH impact-map key in TEST_DIR
+  cat > "$TEST_DIR/arcanon.config.json" <<'JSON'
 {"impact-map": {}}
 JSON
 
@@ -420,7 +420,7 @@ JSON
   [ -f "$SENTINEL" ]
 
   rm -f "$SENTINEL"
-  rm -f "/tmp/ligamen_session_intg-e2e-04a.initialized"
+  rm -f "/tmp/arcanon_session_intg-e2e-04a.initialized"
   rm -rf "$MOCK_PLUGIN_ROOT"
 }
 
@@ -435,7 +435,7 @@ JSON
 detect_project_type() { echo "Node/TS"; }
 MOCK
 
-  SENTINEL="/tmp/ligamen_test_intg_worker_no_impact_map"
+  SENTINEL="/tmp/arcanon_test_intg_worker_no_impact_map"
   rm -f "$SENTINEL"
 
   cat > "$MOCK_PLUGIN_ROOT/lib/worker-client.sh" <<MOCK
@@ -445,7 +445,7 @@ worker_status_line() { return 0; }
 MOCK
 
   # Config WITHOUT impact-map key
-  cat > "$TEST_DIR/ligamen.config.json" <<'JSON'
+  cat > "$TEST_DIR/arcanon.config.json" <<'JSON'
 {"linked-repos": []}
 JSON
 
@@ -459,7 +459,7 @@ JSON
   [ ! -f "$SENTINEL" ]
 
   rm -f "$SENTINEL"
-  rm -f "/tmp/ligamen_session_intg-e2e-04b.initialized"
+  rm -f "/tmp/arcanon_session_intg-e2e-04b.initialized"
   rm -rf "$MOCK_PLUGIN_ROOT"
 }
 
@@ -479,7 +479,7 @@ import { _resetForTest } from '${PROJECT_ROOT}/worker/chroma-sync.js';
 _resetForTest();
 
 // Use a real file-backed DB so VACUUM INTO works (requires file path, not :memory:)
-const testDbDir = path.join(os.tmpdir(), 'ligamen-intg-e2e-05-' + Date.now());
+const testDbDir = path.join(os.tmpdir(), 'arcanon-intg-e2e-05-' + Date.now());
 fs.mkdirSync(testDbDir, { recursive: true });
 const dbPath = path.join(testDbDir, 'impact-map.db');
 
@@ -552,8 +552,8 @@ fs.rmSync(testDbDir, { recursive: true, force: true });
 # INTG-E2E-06: First-run recommendation in SKILL.md
 # ---------------------------------------------------------------------------
 
-@test "INTG-E2E-06: SKILL.md contains LIGAMEN_CHROMA_MODE recommendation" {
-  run grep -q 'LIGAMEN_CHROMA_MODE' "$PROJECT_ROOT/skills/impact/SKILL.md"
+@test "INTG-E2E-06: SKILL.md contains ARCANON_CHROMA_MODE recommendation" {
+  run grep -q 'ARCANON_CHROMA_MODE' "$PROJECT_ROOT/skills/impact/SKILL.md"
   [ "$status" -eq 0 ]
 }
 

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { resolveCredentials, storeCredentials, AuthError, DEFAULT_HUB_URL } from "./auth.js";
+import { resolveCredentials, storeCredentials, hasCredentials, AuthError, DEFAULT_HUB_URL } from "./auth.js";
 
 function withTempHome(fn) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "arcanon-auth-"));
@@ -112,5 +112,31 @@ test("storeCredentials writes an 0600 config file and round-trips", () => {
 test("storeCredentials rejects keys without arc_ prefix", () => {
   withTempHome(() => {
     assert.throws(() => storeCredentials("bogus"), AuthError);
+  });
+});
+
+test("hasCredentials returns false when nothing is configured", () => {
+  withTempHome(() => {
+    clearEnv();
+    assert.equal(hasCredentials(), false);
+  });
+});
+
+test("hasCredentials returns true when env var is set", () => {
+  withTempHome(() => {
+    clearEnv();
+    process.env.ARCANON_API_KEY = "arc_env";
+    assert.equal(hasCredentials(), true);
+  });
+});
+
+test("hasCredentials returns true after storeCredentials (regression: auto-upload gate)", () => {
+  // This guards the scan-manager auto-upload path: a user who ran
+  // /arcanon:login but never exported ARCANON_API_KEY must still be
+  // treated as authenticated.
+  withTempHome(() => {
+    clearEnv();
+    storeCredentials("arc_fromlogin");
+    assert.equal(hasCredentials(), true);
   });
 });
