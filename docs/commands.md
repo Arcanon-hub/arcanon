@@ -1,68 +1,116 @@
-# Commands
+# Command reference
 
-Arcanon adds slash commands to Claude Code. Type `/arcanon:<command>` in any Claude Code session where the plugin is installed.
+Every `/arcanon:*` command, what it does, and its exit-code contract.
 
-## `/arcanon:map` — Build Your Service Dependency Map
+## Scanning
 
-Use this when you want to see how your services connect to each other. Arcanon scans your repositories with Claude agents, extracts services, endpoints, and connections, and builds an interactive graph you can explore in your browser.
+### `/arcanon:map [view|full]`
 
-```
-/arcanon:map              # scan repos and build dependency graph
-/arcanon:map full         # force full re-scan of all repos
-/arcanon:map view         # open graph UI without scanning
-```
+Scan linked repos and (re)build the local service graph.
 
-After scanning, open `http://localhost:37888` to explore the graph. See [Service Map](service-map.md) for a full walkthrough.
+- No argument → incremental scan when possible, full otherwise.
+- `view` → open the local graph UI without scanning.
+- `full` → force a full re-scan.
 
-## `/arcanon:cross-impact` — See What Your Changes Affect
+Side effects: writes to `~/.arcanon/projects/<hash>/impact-map.db`. With
+`hub.auto-upload: true` + credentials, also POSTs to the hub.
 
-Use this before making changes to a shared service or after modifying code to understand the blast radius. Arcanon traces dependencies through your service graph (up to 10 hops deep) and flags every downstream service that could be affected, grouped by severity:
+---
 
-- **CRITICAL** — an endpoint was removed or renamed that other services depend on
-- **WARN** — a type or schema changed that consumers rely on
-- **INFO** — an additive change (new field, new endpoint) that existing consumers can safely ignore
+## Hub sync
 
-```
-/arcanon:cross-impact                    # auto-detect changes from git diff
-/arcanon:cross-impact UserService        # query impact for a specific symbol
-/arcanon:cross-impact --changed          # explicit flag for git diff detection
-/arcanon:cross-impact --exclude legacy   # exclude a repo from results
-```
+### `/arcanon:login <arc_…>`
 
-If you haven't built a dependency map yet, Arcanon falls back to grep-based symbol scanning across your linked repos — still useful for finding references, but without the transitive dependency tracing.
+Store an API key in `~/.arcanon/config.json` (mode `0600`). Prompts
+interactively when no argument is supplied.
 
-## `/arcanon:drift` — Catch Inconsistencies Across Repos
+### `/arcanon:whoami`
 
-Use this to find places where your repos have drifted out of sync. Arcanon runs three checks:
+Calls `GET /api/v1/auth/whoami` and reports the bound org / project.
+Non-zero exit when credentials are missing or the hub rejects them.
 
-- **Versions** — compares dependency versions across repos (npm, pip, Cargo, go.mod). Reports CRITICAL when exact versions differ, WARN when range specifiers disagree (e.g., `^2.0` vs `~2.0`).
-- **Types** — finds shared type/interface/struct definitions across same-language repos and flags fields that have diverged.
-- **OpenAPI** — compares API specifications for breaking changes. Uses `oasdiff` when available, falls back to structural comparison.
+### `/arcanon:upload [--project <slug>] [--repo <path>]`
 
-For large repo sets (more than 5), Arcanon uses a hub-and-spoke comparison strategy to keep results manageable.
+Upload the latest local scan for the current (or specified) repo.
 
-```
-/arcanon:drift                # run all three checks
-/arcanon:drift versions       # dependency version alignment only
-/arcanon:drift types          # type/interface/struct consistency only
-/arcanon:drift openapi        # OpenAPI spec alignment only
-/arcanon:drift --all          # include INFO-level findings (default hides them)
-```
+Exit codes: `0` on 202 / 409, `1` on any other hub failure. A retriable
+failure auto-enqueues and still exits `1` — the user gets a queue id.
 
-## `/arcanon:quality-gate` — Run Quality Checks
+### `/arcanon:sync [--limit N]`
 
-Use this to run linting, formatting, type checking, and tests for your project. Arcanon auto-detects your project type and uses the right tools. If your project has a Makefile, it prefers those targets.
+Drain the offline queue. Prints `attempted/succeeded/failed/dead`
+counts. Default limit: 50 rows per call.
 
-```
-/arcanon:quality-gate              # run all checks
-/arcanon:quality-gate lint         # lint only
-/arcanon:quality-gate format       # format check (dry-run)
-/arcanon:quality-gate test         # tests only
-/arcanon:quality-gate typecheck    # type checking only
-/arcanon:quality-gate quick        # lint + format (fast)
-/arcanon:quality-gate fix          # auto-fix lint and format
-```
+### `/arcanon:status`
 
-## Graph UI
+Single-screen health: plugin version, config file path, project slug,
+credential presence, auto-upload flag, queue stats, data dir.
 
-After running `/arcanon:map`, open the graph at `http://localhost:37888` to explore your service dependencies visually. See [Service Map](service-map.md) for full details on the graph UI including node colors, interactions, keyboard shortcuts, subgraph isolation, and export.
+---
+
+## Drift
+
+### `/arcanon:drift [graph|versions|types|openapi] [--all]`
+
+- `graph` *(new in v6)* — diff the two most recent scan snapshots.
+- `versions` — cross-repo dependency version drift.
+- `types` — shared type/interface drift (best-effort, same-language).
+- `openapi` — OpenAPI spec diff via `oasdiff` when available.
+
+With no subcommand, runs all four and groups output by severity
+(`CRITICAL`, `WARN`, `INFO`). `--all` shows `INFO` lines too.
+
+---
+
+## Impact & cross-impact
+
+### `/arcanon:impact <target> [--direction downstream|upstream] [--hops N]`
+
+Cross-repo impact query. Answers *"If I change this, what breaks?"*.
+
+- `<target>` → service name, endpoint path, or schema name.
+- `--direction downstream` *(default)* → what does `<target>` affect?
+- `--direction upstream` → what affects `<target>`?
+- `--hops N` *(default 3)* → transitive traversal depth.
+
+Prefers the MCP tool (`mcp__arcanon__impact`), falls back to the HTTP
+worker endpoint.
+
+### `/arcanon:cross-impact [file-or-symbol]`
+
+Legacy repo-local transitive impact query from the v5 line.
+`/arcanon:impact` is the preferred command going forward.
+
+---
+
+## Export
+
+### `/arcanon:export [--format mermaid|dot|json|html|all] [--out <dir>]`
+
+Emit the local service graph. The HTML output is a single self-contained
+page backed by cytoscape.js + fcose layout — open it in any browser
+without a server.
+
+Defaults: `--format all`, `--out .arcanon/reports/<timestamp>/`.
+
+---
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success |
+| `1` | Command-level error (missing scan, bad input, hub failure) |
+| `2` | Usage error (wrong subcommand, missing required arg) |
+| `127` | Missing system dependency (Node, jq, git) |
+
+## Environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `ARCANON_API_KEY` | Bearer token for the hub (starts with `arc_`). |
+| `ARCANON_API_TOKEN` | Alias for `ARCANON_API_KEY` (preferred by CI vendors). |
+| `ARCANON_HUB_URL` | Override the hub URL (default `https://api.arcanon.dev`). |
+| `ARCANON_DATA_DIR` | Override `~/.arcanon/`. |
+| `ARCANON_DISABLE_SESSION_START` | Silence the session-start banner. |
+| `LIGAMEN_*` | Legacy aliases — still honored, deprecated. |
