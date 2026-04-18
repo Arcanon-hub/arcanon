@@ -1,41 +1,60 @@
-# Arcanon
+# Arcanon plugin
 
-Quality gates, cross-repo impact analysis, and service dependency intelligence for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
+> You're inside the plugin source directory. For user docs, marketplace install instructions, and the full command reference, see the [repo root README](https://github.com/Arcanon-hub/arcanon#readme).
 
-## Installation
+## Install
 
 ```bash
-claude plugin marketplace add https://github.com/chilleregeravi/ligamen
-claude plugin install ligamen@ligamen --scope user
+claude plugin marketplace add https://github.com/Arcanon-hub/arcanon
+claude plugin install arcanon@arcanon --scope user
 ```
 
-## Commands
+## Commands shipped by this plugin
 
-- `/arcanon:map` — scan repos and build the service dependency graph
-- `/arcanon:cross-impact` — find what breaks when you change something
-- `/arcanon:drift` — check dependency version alignment across repos
+**Scanning & graph**
+- `/arcanon:map` — scan linked repos and build the service graph
+- `/arcanon:export` — emit Mermaid / DOT / JSON / self-contained HTML
+- `/arcanon:impact` — cross-repo impact query (MCP-backed)
+- `/arcanon:cross-impact` — legacy repo-local impact query
 
-## Hooks
+**Drift**
+- `/arcanon:drift` — service-graph / version / type / OpenAPI drift
 
-The following run automatically on every session and edit:
+**Hub sync**
+- `/arcanon:login` — store an `arc_*` API key
+- `/arcanon:upload` — push the latest scan to the hub
+- `/arcanon:sync` — drain the offline upload queue
+- `/arcanon:status` — one-line health report
 
-- **Auto-format** on every file edit (Python, Rust, TypeScript, Go)
-- **Auto-lint** with issues surfaced directly to Claude
-- **Sensitive-file guard** blocks writes to `.env`, lock files, credentials
-- **Session context** provides project type detection on start and each prompt
-- **Dep install** installs MCP server runtime dependencies on first session
+See [`docs/commands.md`](../../docs/commands.md) at the repo root for full details.
 
-## Environment Variables
+## Automatic behaviors
 
-| Name | Default | Purpose |
-|------|---------|---------|
-| `LIGAMEN_DISABLE_GUARD` | unset | Set to `1` to disable sensitive-file write blocking |
-| `LIGAMEN_DISABLE_LINT` | unset | Set to `1` to disable auto-lint on edit |
-| `LIGAMEN_DISABLE_FORMAT` | unset | Set to `1` to disable auto-format on edit |
-| `LIGAMEN_EXTRA_BLOCKED` | unset | Colon-separated list of additional file patterns to block |
+Hooks defined in `hooks/hooks.json` run automatically:
 
-## MCP Server
+- **Format** on edit (Python, Rust, TypeScript, Go)
+- **Lint** on edit, surfacing issues to Claude
+- **File guard** blocks writes to `.env`, lock files, credentials
+- **Session-start context** injects project type + command list
+- **Dep install** pulls MCP runtime deps on first session
 
-An MCP server is included for impact analysis queries. Runtime dependencies are installed automatically on first session start.
+## Package layout
 
-For full documentation see the [repository README](https://github.com/chilleregeravi/ligamen).
+| Path | Purpose |
+|---|---|
+| `commands/` | Slash-command markdown (`/arcanon:*`) |
+| `skills/` | Context-triggered skills |
+| `hooks/` | Hook bindings |
+| `scripts/` | Shell implementations for hooks and CLIs |
+| `lib/` | Shared bash libs (config, detect, linked-repos, data-dir) |
+| `worker/` | Node.js daemon — DB, HTTP API, MCP, scan agents, UI |
+| `worker/hub-sync/` | Hub upload client + offline queue |
+| `worker/cli/` | Node CLIs dispatched by slash commands |
+
+## Running the test suite
+
+```bash
+cd plugins/arcanon
+npm ci
+node --test worker/hub-sync/   # 35 hub-sync tests
+```
