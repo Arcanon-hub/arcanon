@@ -151,27 +151,65 @@
       }
       #detail-panel {
         position: absolute;
-        top: 8px;
-        right: 8px;
+        top: var(--space-2);
+        right: var(--space-2);
         width: 320px;
-        max-height: calc(100% - 16px);
+        max-height: calc(100% - var(--space-4));
         overflow-y: auto;
         background: var(--color-surface);
         border: 1px solid var(--color-border);
-        border-radius: 8px;
-        padding: 16px;
-        font-size: 12px;
+        border-radius: var(--radius-md);
+        padding: var(--space-4);
+        font-size: var(--font-size-sm);
         display: none;
         z-index: 15;
+        box-shadow: var(--shadow-md);
+        transition: transform var(--duration-normal) var(--ease);
+      }
+      /* Below 900px the side panel becomes a bottom drawer so the graph
+         gets the full width. Slides up from the bottom edge. */
+      @media (max-width: 900px) {
+        #detail-panel {
+          top: auto;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          width: 100%;
+          max-height: 60vh;
+          border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+          border-left: none;
+          border-right: none;
+          border-bottom: none;
+          padding-top: var(--space-5);
+        }
+        #detail-panel::before {
+          content: "";
+          position: absolute;
+          top: var(--space-2);
+          left: 50%;
+          transform: translateX(-50%);
+          width: 40px;
+          height: 4px;
+          border-radius: 2px;
+          background: var(--color-border-strong);
+        }
       }
       #detail-close {
         position: absolute;
-        top: 8px;
-        right: 12px;
+        top: var(--space-2);
+        right: var(--space-3);
         cursor: pointer;
-        font-size: 18px;
+        font-size: 20px;
         color: var(--color-text-muted);
         line-height: 1;
+        background: transparent;
+        border: none;
+        padding: var(--space-1) var(--space-2);
+        border-radius: var(--radius-sm);
+      }
+      #detail-close:hover {
+        color: var(--color-text-primary);
+        background: var(--color-surface-elevated);
       }
       #detail-close:hover {
         color: var(--color-text-primary);
@@ -429,6 +467,18 @@
         font-size: 12px;
         cursor: pointer;
         min-width: 80px;
+      }
+
+      /* Narrow-viewport toolbar + legend tweaks ---------------------------- */
+      @media (max-width: 720px) {
+        #toolbar {
+          flex-wrap: wrap;
+          gap: var(--space-2);
+        }
+        #toolbar h1 { flex-basis: 100%; margin-bottom: var(--space-1); }
+        #search { flex: 1 1 100%; }
+        .legend { bottom: calc(60vh + var(--space-3)); }
+        .legend[open] { max-width: calc(100% - var(--space-6)); }
       }
 
       /* Floating legend ---------------------------------------------------- */

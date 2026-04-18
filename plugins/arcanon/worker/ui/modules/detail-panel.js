@@ -397,3 +397,14 @@ export function hideDetailPanel() {
   panel.style.display = "none";
   panel.setAttribute("aria-hidden", "true");
 }
+
+/**
+ * Compute the detail panel display mode given a viewport width.
+ * Pure function, used by tests; CSS media queries do the real layout work.
+ *
+ * @param {number} width  viewport width in CSS px
+ * @returns {"side" | "drawer"}
+ */
+export function panelModeForWidth(width) {
+  return typeof width === "number" && width <= 900 ? "drawer" : "side";
+}
