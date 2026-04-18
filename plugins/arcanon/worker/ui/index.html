@@ -430,14 +430,88 @@
         cursor: pointer;
         min-width: 80px;
       }
+
+      /* Help modal ---------------------------------------------------------- */
+      .modal[hidden] { display: none; }
+      .modal {
+        position: fixed;
+        inset: 0;
+        z-index: var(--z-modal);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal__scrim {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(2px);
+      }
+      .modal__panel {
+        position: relative;
+        background: var(--color-surface);
+        color: var(--color-text-primary);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        padding: var(--space-6);
+        min-width: 420px;
+        max-width: 560px;
+        box-shadow: var(--shadow-lg);
+      }
+      .modal__header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: var(--space-4);
+      }
+      .modal__header h2 {
+        font-size: var(--font-size-lg);
+        font-weight: 600;
+        margin: 0;
+      }
+      .modal__header button {
+        background: transparent;
+        border: none;
+        color: var(--color-text-secondary);
+        font-size: 22px;
+        cursor: pointer;
+        padding: 0 var(--space-2);
+      }
+      .modal__list {
+        display: grid;
+        grid-template-columns: minmax(120px, max-content) 1fr;
+        gap: var(--space-2) var(--space-4);
+        margin: 0;
+        font-size: var(--font-size-sm);
+      }
+      .modal__list dt {
+        color: var(--color-text-secondary);
+      }
+      .modal__list dd {
+        margin: 0;
+        color: var(--color-text-primary);
+      }
+      .modal__list kbd {
+        display: inline-block;
+        padding: 2px 6px;
+        font-family: var(--font-mono);
+        font-size: var(--font-size-xs);
+        background: var(--color-surface-elevated);
+        border: 1px solid var(--color-border-strong);
+        border-radius: var(--radius-sm);
+        color: var(--color-text-primary);
+      }
     </style>
   </head>
   <body>
-    <div id="project-picker" style="display: none">
-      <h2>Select a Project</h2>
+    <a class="sr-only sr-only-focusable" href="#graph-canvas">Skip to graph</a>
+    <div id="a11y-live-polite" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div id="a11y-live-assertive" class="sr-only" role="alert" aria-live="assertive" aria-atomic="true"></div>
+    <div id="project-picker" style="display: none" role="dialog" aria-modal="true" aria-labelledby="project-picker-title">
+      <h2 id="project-picker-title">Select a Project</h2>
       <div id="project-list"></div>
     </div>
-    <div id="toolbar">
+    <div id="toolbar" role="toolbar" aria-label="Graph controls">
       <h1>Arcanon</h1>
       <select id="project-select" style="display: none" aria-label="Switch project"></select>
       <input
@@ -486,14 +560,45 @@
         <select id="filter-language"><option value="">All</option></select>
       </div>
     </div>
-    <div id="canvas-container">
-      <canvas id="graph-canvas"></canvas>
-      <div id="tooltip"></div>
-      <div id="detail-panel">
-        <div id="detail-close">&times;</div>
-        <div id="detail-content"></div>
+    <div
+      id="help-modal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="help-modal-title"
+      hidden
+    >
+      <div class="modal__scrim" data-close-modal></div>
+      <div class="modal__panel">
+        <header class="modal__header">
+          <h2 id="help-modal-title">Keyboard shortcuts</h2>
+          <button type="button" aria-label="Close" data-close-modal data-autofocus>&times;</button>
+        </header>
+        <dl class="modal__list">
+          <dt><kbd>F</kbd></dt><dd>Fit all nodes to the viewport</dd>
+          <dt><kbd>/</kbd></dt><dd>Focus the search box</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Deselect, close panel, return focus to the graph</dd>
+          <dt><kbd>I</kbd></dt><dd>Isolate the selected node's neighborhood</dd>
+          <dt><kbd>2</kbd> / <kbd>3</kbd></dt><dd>Expand isolation depth to 2 or 3 hops</dd>
+          <dt><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Pan the graph (hold <kbd>Shift</kbd> for larger steps)</dd>
+          <dt><kbd>Shift</kbd>+click</dt><dd>Show impact (blast radius) for a node</dd>
+          <dt><kbd>?</kbd></dt><dd>Open this help</dd>
+        </dl>
       </div>
     </div>
+    <main id="canvas-container" tabindex="-1">
+      <canvas
+        id="graph-canvas"
+        role="application"
+        aria-label="Interactive service dependency graph. Use arrow keys to pan when focused, / to search, F to fit, ? for help."
+        tabindex="0"
+      ></canvas>
+      <div id="tooltip" role="tooltip"></div>
+      <aside id="detail-panel" role="complementary" aria-label="Node detail panel" aria-hidden="true">
+        <button id="detail-close" aria-label="Close detail panel" type="button">&times;</button>
+        <div id="detail-content"></div>
+      </aside>
+    </main>
     <div id="log-panel" class="log-panel log-panel--collapsed">
       <div id="log-panel-header" class="log-panel__header">
         <span class="log-panel__title">Worker Logs</span>

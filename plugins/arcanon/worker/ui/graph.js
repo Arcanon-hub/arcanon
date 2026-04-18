@@ -30,6 +30,20 @@ document.addEventListener("arcanon:theme", () => {
 // Wire the theme toggle button once at module load.
 document.getElementById("theme-btn")?.addEventListener("click", toggleTheme);
 
+// Help modal — opened by the toolbar button or the "?" keyboard shortcut.
+const _helpModal = document.getElementById("help-modal");
+document.getElementById("help-btn")?.addEventListener("click", () => {
+  if (!_helpModal) return;
+  _helpModal.hidden = false;
+  _helpModal.querySelector("[data-autofocus]")?.focus();
+});
+_helpModal?.addEventListener("click", (e) => {
+  if (e.target instanceof HTMLElement && e.target.dataset.closeModal !== undefined) {
+    _helpModal.hidden = true;
+    document.getElementById("graph-canvas")?.focus();
+  }
+});
+
 // Guard: detail-close listener is wired once across multiple loadProject calls
 let _detailCloseWired = false;
 

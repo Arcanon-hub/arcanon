@@ -2,9 +2,11 @@
  * keyboard.js — Document-level keyboard shortcuts for the graph UI.
  *
  * Shortcuts:
- *   F     → fit all nodes to screen (delegates to #fit-btn click)
- *   Esc   → deselect selected node and close detail panel
- *   /     → focus the #search input
+ *   F           → fit all nodes to screen (delegates to #fit-btn click)
+ *   Esc         → deselect, close detail panel, return focus to canvas
+ *   /           → focus the #search input
+ *   ?           → open the keyboard-shortcut help modal
+ *   Arrow keys  → pan the canvas (when focused)
  *
  * Guard: shortcuts are skipped when the active element is an <input>,
  * <textarea>, or <select> so they do not interfere with typing.
@@ -29,6 +31,13 @@ function onKeyDown(e) {
       break;
     }
     case 'Escape': {
+      // Close help modal first if open.
+      const help = document.getElementById('help-modal');
+      if (help && !help.hidden) {
+        help.hidden = true;
+        document.getElementById('graph-canvas')?.focus();
+        break;
+      }
       if (state.selectedNodeId !== null || state.isolatedNodeId !== null) {
         state.selectedNodeId = null;
         state.isolatedNodeId = null;
@@ -36,6 +45,30 @@ function onKeyDown(e) {
         hideDetailPanel();
         render();
       }
+      document.getElementById('graph-canvas')?.focus();
+      break;
+    }
+    case '?': {
+      e.preventDefault();
+      const modal = document.getElementById('help-modal');
+      if (modal) {
+        modal.hidden = false;
+        modal.querySelector('[data-autofocus]')?.focus();
+      }
+      break;
+    }
+    case 'ArrowLeft':
+    case 'ArrowRight':
+    case 'ArrowUp':
+    case 'ArrowDown': {
+      if (document.activeElement?.id !== 'graph-canvas') break;
+      e.preventDefault();
+      const step = e.shiftKey ? 80 : 20;
+      const dx = e.key === 'ArrowLeft' ? step : e.key === 'ArrowRight' ? -step : 0;
+      const dy = e.key === 'ArrowUp' ? step : e.key === 'ArrowDown' ? -step : 0;
+      state.transform.x += dx;
+      state.transform.y += dy;
+      render();
       break;
     }
     case 'i':
