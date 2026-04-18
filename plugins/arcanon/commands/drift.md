@@ -1,7 +1,7 @@
 ---
-description: Check cross-repo consistency for version alignment, type definitions, and OpenAPI specs. Use when the user invokes /arcanon:drift or asks about dependency drift.
+description: Detect drift — service-graph changes across scans + version/type/OpenAPI drift across linked repos.
 allowed-tools: Bash
-argument-hint: "[versions|types|openapi|--all]"
+argument-hint: "[graph|versions|types|openapi|--all]"
 ---
 
 Check cross-repo drift for linked repositories.
@@ -11,10 +11,15 @@ Linked repos: !`source "${CLAUDE_PLUGIN_ROOT}/lib/linked-repos.sh" && list_linke
 ## Steps
 
 1. Parse arguments to determine subcommand and flags:
-   - Subcommand: `versions`, `types`, or `openapi` (default: run all three)
+   - Subcommand: `graph`, `versions`, `types`, or `openapi` (default: run all)
    - Flags: `--all` enables INFO-level output in addition to CRITICAL and WARN
 
-2. For `versions` (or no subcommand specified):
+2. For `graph` (or no subcommand specified):
+   Compare the two most recent scan snapshots — surfaces services and
+   connections that appeared, disappeared, or changed between scans.
+   Run: `node "${CLAUDE_PLUGIN_ROOT}/worker/cli/drift-local.js"`
+
+3. For `versions` (or no subcommand specified):
    Run: `"${CLAUDE_PLUGIN_ROOT}/scripts/drift-versions.sh" $LIGAMEN_ARGS`
 
 3. For `types` (or no subcommand specified):
