@@ -179,3 +179,109 @@ EOF
   "
   refute_output --partial "go-playground/validator"
 }
+
+# ---------------------------------------------------------------------------
+# Phase 92: Maven parent inheritance (MF-01)
+# ---------------------------------------------------------------------------
+
+@test "extract_versions: resolves Maven parent dependencyManagement for version-less child dep" {
+  run bash -c "
+    export CLAUDE_PLUGIN_ROOT='${PLUGIN_ROOT}'
+    source '${DRIFT_VERSIONS}' --test-only 2>/dev/null || true
+    extract_versions '${FIXTURES}/maven-parent/child'
+  "
+  assert_output --partial "org.springframework.boot:spring-boot-starter-web=3.2.1"
+}
+
+@test "extract_versions: Maven resolves second parent-managed dep" {
+  run bash -c "
+    export CLAUDE_PLUGIN_ROOT='${PLUGIN_ROOT}'
+    source '${DRIFT_VERSIONS}' --test-only 2>/dev/null || true
+    extract_versions '${FIXTURES}/maven-parent/child'
+  "
+  assert_output --partial "com.fasterxml.jackson.core:jackson-databind=2.16.1"
+}
+
+# ---------------------------------------------------------------------------
+# Phase 92: Gradle Kotlin DSL + version catalog (MF-02, MF-03)
+# ---------------------------------------------------------------------------
+
+@test "extract_versions: Kotlin DSL double-quote implementation dependency is extracted" {
+  run bash -c "
+    export CLAUDE_PLUGIN_ROOT='${PLUGIN_ROOT}'
+    source '${DRIFT_VERSIONS}' --test-only 2>/dev/null || true
+    extract_versions '${FIXTURES}/gradle-kotlin'
+  "
+  assert_output --partial "org.jetbrains.kotlinx:kotlinx-coroutines-core=1.7.3"
+}
+
+@test "extract_versions: Kotlin DSL captures multiple deps from build.gradle.kts" {
+  run bash -c "
+    export CLAUDE_PLUGIN_ROOT='${PLUGIN_ROOT}'
+    source '${DRIFT_VERSIONS}' --test-only 2>/dev/null || true
+    extract_versions '${FIXTURES}/gradle-kotlin'
+  "
+  assert_output --partial "com.squareup.okhttp3:okhttp=4.12.0"
+}
+
+@test "extract_versions: Gradle version catalog libs.versions.toml aliases surface" {
+  run bash -c "
+    export CLAUDE_PLUGIN_ROOT='${PLUGIN_ROOT}'
+    source '${DRIFT_VERSIONS}' --test-only 2>/dev/null || true
+    extract_versions '${FIXTURES}/gradle-kotlin'
+  "
+  assert_output --partial "BOM:spring-boot=3.2.1"
+}
+
+# ---------------------------------------------------------------------------
+# Phase 92: NuGet Central Package Management (MF-04)
+# ---------------------------------------------------------------------------
+
+@test "extract_versions: NuGet CPM resolves Version-less PackageReference via Directory.Packages.props" {
+  run bash -c "
+    export CLAUDE_PLUGIN_ROOT='${PLUGIN_ROOT}'
+    source '${DRIFT_VERSIONS}' --test-only 2>/dev/null || true
+    extract_versions '${FIXTURES}/nuget-cpm'
+  "
+  assert_output --partial "Newtonsoft.Json=13.0.3"
+}
+
+@test "extract_versions: NuGet CPM produces non-empty dep list for all .csproj entries" {
+  run bash -c "
+    export CLAUDE_PLUGIN_ROOT='${PLUGIN_ROOT}'
+    source '${DRIFT_VERSIONS}' --test-only 2>/dev/null || true
+    extract_versions '${FIXTURES}/nuget-cpm'
+  "
+  assert_output --partial "Serilog=3.1.1"
+}
+
+# ---------------------------------------------------------------------------
+# Phase 92: Bundler Gemfile.lock GEM + GIT + PATH sections (MF-05)
+# ---------------------------------------------------------------------------
+
+@test "extract_versions: Gemfile.lock GEM section gem is extracted" {
+  run bash -c "
+    export CLAUDE_PLUGIN_ROOT='${PLUGIN_ROOT}'
+    source '${DRIFT_VERSIONS}' --test-only 2>/dev/null || true
+    extract_versions '${FIXTURES}/gemfile-allsections'
+  "
+  assert_output --partial "rails=7.1.2"
+}
+
+@test "extract_versions: Gemfile.lock GIT section gem is extracted" {
+  run bash -c "
+    export CLAUDE_PLUGIN_ROOT='${PLUGIN_ROOT}'
+    source '${DRIFT_VERSIONS}' --test-only 2>/dev/null || true
+    extract_versions '${FIXTURES}/gemfile-allsections'
+  "
+  assert_output --partial "internal-lib=0.1.0"
+}
+
+@test "extract_versions: Gemfile.lock PATH section gem is extracted" {
+  run bash -c "
+    export CLAUDE_PLUGIN_ROOT='${PLUGIN_ROOT}'
+    source '${DRIFT_VERSIONS}' --test-only 2>/dev/null || true
+    extract_versions '${FIXTURES}/gemfile-allsections'
+  "
+  assert_output --partial "local-gem=0.2.0"
+}

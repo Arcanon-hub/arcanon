@@ -140,7 +140,7 @@ extract_versions() {
     local parent_rel parent_abs
     parent_rel=$(awk '
       /<parent>/{in_p=1}
-      in_p && /<relativePath>/{match($0,/<relativePath>[^<]+/); if(RSTART){print substr($0,RSTART+15,RLENGTH-15)}; exit}
+      in_p && /<relativePath>/{match($0,/<relativePath>[^<]+/); if(RSTART){print substr($0,RSTART+14,RLENGTH-14)}; exit}
       /<\/parent>/{exit}
     ' "${repo_dir}/pom.xml" 2>/dev/null)
     [[ -z "$parent_rel" ]] && parent_rel="../pom.xml"
