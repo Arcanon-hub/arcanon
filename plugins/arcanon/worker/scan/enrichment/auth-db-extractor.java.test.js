@@ -89,6 +89,7 @@ function buildCtx(db, repoPath, language, entryFile) {
 
 const FIXTURES_JAVA = fileURLToPath(new URL('./fixtures/java', import.meta.url));
 const FIXTURES_JAVA_SPRING5 = fileURLToPath(new URL('./fixtures/java-spring5', import.meta.url));
+const FIXTURES_JAVA_EMPTY = fileURLToPath(new URL('./fixtures/java-empty', import.meta.url));
 
 // ---------------------------------------------------------------------------
 // Test A + B: Spring Boot 3 SecurityFilterChain + Spring Data postgres
@@ -162,17 +163,10 @@ describe('Java auth/db end-to-end — Spring Security 5 (@EnableWebSecurity)', (
 // ---------------------------------------------------------------------------
 
 describe('Java auth/db end-to-end — empty service (no signals)', () => {
-  let emptyFixtureDir;
-
-  before(() => {
-    // Application.java only has @SpringBootApplication — no auth or DB signal
-    emptyFixtureDir = join(FIXTURES_JAVA, 'src/main/java/com/example');
-  });
-
   it('Test D: Java service with no auth/db signals returns both null', async () => {
     const db = buildDb();
-    // Point repoPath at Application.java's directory; Application.java has no auth/db signals
-    const ctx = buildCtx(db, emptyFixtureDir, 'java', 'Application.java');
+    // fixtures/java-empty has only Application.java (@SpringBootApplication) — no auth or DB signal
+    const ctx = buildCtx(db, FIXTURES_JAVA_EMPTY, 'java', 'src/main/java/com/example/Application.java');
     const result = await extractAuthAndDb(ctx);
 
     // Application.java has @SpringBootApplication only — no auth or DB signal

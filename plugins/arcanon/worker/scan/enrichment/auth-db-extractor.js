@@ -20,7 +20,7 @@ import { join, extname } from 'node:path';
 
 /** Directories to never descend into during file collection */
 export const EXCLUDED_DIRS = new Set([
-  'node_modules', '.git', 'vendor', 'dist', 'build', '__pycache__', '.venv', 'venv', // EXCLUDED_DIRS: canonical list
+  'node_modules', '.git', 'vendor', 'dist', 'build', 'target', '__pycache__', '.venv', 'venv', // EXCLUDED_DIRS: canonical list
 ]);
 
 /** Maximum directory depth to recurse into during file collection */
@@ -148,6 +148,16 @@ const AUTH_SIGNALS = {
     { mechanism: 'oauth2',     regex: /(oauth2::|openidconnect::)/i },
     { mechanism: 'actix-auth', regex: /(actix.web.httpauth|HttpAuthentication)/i },
   ],
+  java: [
+    // ENR-02 — jjwt (io.jsonwebtoken) dominant JWT lib; spring-security-oauth2-jose is Boot 3+
+    { mechanism: 'jwt',     regex: /(io\.jsonwebtoken|jjwt|JwtDecoder|JwtEncoder|BearerTokenAuthentication|spring-security.*oauth2.*jose)/i },
+    // ENR-02 — OAuth2 Authorization Server / OIDC login / resource server
+    { mechanism: 'oauth2',  regex: /(OAuth2AuthorizationServer|OAuth2LoginConfigurer|OidcUserService|oauth2Login\(\)|\.oauth2ResourceServer\()/i },
+    // ENR-02 — Spring Security 5 (@EnableWebSecurity, @PreAuthorize) AND Spring Security 6 (SecurityFilterChain, formLogin, sessionManagement). Both patterns MUST ship per research PITFALL 10.
+    { mechanism: 'session', regex: /(@EnableWebSecurity|@PreAuthorize|SecurityFilterChain|\.formLogin\(\)|\.sessionManagement\(\)|SecurityContextHolder|HttpSessionSecurityContextRepository)/i },
+    // Custom API key filter
+    { mechanism: 'api-key', regex: /(X-API-Key|ApiKeyAuthFilter|OncePerRequestFilter.*api.key|getHeader.*api)/i },
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -183,6 +193,18 @@ const DB_SOURCE_SIGNALS = {
     { backend: 'postgresql', regex: /(sqlx.*postgres|diesel.*pg|tokio-postgres)/i },
     { backend: 'sqlite',     regex: /(rusqlite|sqlx.*sqlite)/i },
   ],
+  java: [
+    // ENR-05 — PostgreSQL: driver class, datasource URL (jdbc:postgresql or spring.datasource.url=...postgres), r2dbc
+    { backend: 'postgresql', regex: /(org\.postgresql|jdbc:postgresql|spring\.datasource\.url.*postgres|r2dbc.*postgresql)/i },
+    // ENR-05 — MySQL
+    { backend: 'mysql',      regex: /(com\.mysql|mysql\.jdbc|jdbc:mysql|spring\.datasource\.url.*mysql|r2dbc.*mysql)/i },
+    // ENR-05 — MongoDB (Spring Data MongoDB)
+    { backend: 'mongodb',    regex: /(org\.springframework\.data\.mongodb|MongoClient|MongoRepository|@Document)/i },
+    // ENR-05 — Redis
+    { backend: 'redis',      regex: /(spring\.data\.redis|LettuceConnectionFactory|RedisTemplate|JedisConnectionFactory)/i },
+    // ENR-05 — H2 in-memory
+    { backend: 'h2',         regex: /(com\.h2database|jdbc:h2:|spring\.datasource\.url.*h2:|H2ConsoleAutoConfiguration)/i },
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -196,6 +218,7 @@ const LANG_EXTENSIONS = {
   typescript: ['.ts', '.tsx'],
   go:         ['.go'],
   rust:       ['.rs'],
+  java:       ['.java'],
 };
 
 /**
