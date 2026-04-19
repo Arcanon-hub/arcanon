@@ -151,7 +151,16 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ### Active
 
-(No active requirements — start next milestone with `/gsd:new-milestone`)
+## Current Milestone: v5.8.0 Library Drift & Language Parity
+
+**Goal:** Persist service-level dependencies to enable cross-repo library drift, extend detect/drift/enrichment to Java/C#/Ruby, and clean up shell scripts with a unified drift dispatcher.
+
+**Target features:**
+- Manifest-aware scanner with `service_dependencies` table + ScanPayloadV1 v1.1 upload (THE-1019)
+- Java / C# / Ruby parity with TS/Python/Go/Rust across detect + drift (versions/types) + enrichment (auth/db) (THE-1020)
+- Shell cleanup: extract `lib/worker-restart.sh`, unify `scripts/drift.sh` dispatcher, fix 4 real bugs, remove dead code (THE-1021)
+
+Linear tickets: THE-1019, THE-1020, THE-1021 (Theedgeworks / arcanon project, Medium priority, all related, no hard blocks). Hub companion THE-1018 is out of scope for this milestone — plugin-side library drift only.
 
 ### Out of Scope
 
@@ -172,7 +181,7 @@ Architecture: commands/ for user-invoked features, skills/ for auto-invoked know
 Known tech debt: db/database.js has console.log in script-mode guard, getQueryEngineByHash inline migration workaround, renderLibraryConnections() unused `outgoing` parameter, node_metadata table unused (forward-looking for STRIDE/vuln views), impact-flow.bats imports stale module paths (pre-existing from v3.0 restructure), package.json bin entry references non-existent ligamen-init.js, graph-fit-to-screen.test.js has 2 stale assertions for inlined fitToScreen() (Phase 26 regression).
 
 ---
-*Last updated: 2026-03-31 after v5.7.0 milestone*
+*Last updated: 2026-04-19 — v5.8.0 milestone started (Library Drift & Language Parity)*
 
 ## Constraints
 
@@ -237,4 +246,4 @@ Known tech debt: db/database.js has console.log in script-mode guard, getQueryEn
 | Mono-repo detection via subdirectory manifests | Simple heuristic (one level deep) catches common layouts without recursive scan | ✓ Good |
 
 ---
-*Last updated: 2026-03-31 after v5.7.0 milestone*
+*Last updated: 2026-04-19 — v5.8.0 milestone started (Library Drift & Language Parity)*
