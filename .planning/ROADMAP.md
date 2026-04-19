@@ -699,6 +699,11 @@ Plans:
   4. `EXCLUDED_DIRS` includes `target`, `obj`, and `bin` — enrichment does not traverse Maven or MSBuild generated output directories
   5. End-to-end fixture test per language (Java/C#/Ruby): `auth_mechanism` and `db_backend` populated correctly for a fixture repo
 **UI hint**: no
+**Plans**: 3 plans
+Plans:
+- [ ] 94-01-PLAN.md — Java auth/db signals (Spring Security 5 + 6, Spring Data), 'target' in EXCLUDED_DIRS, Java fixture + e2e test (ENR-01, ENR-02, ENR-05, ENR-08, ENR-09 java portion)
+- [ ] 94-02-PLAN.md — C# auth/db signals (ASP.NET Identity + JWT + [Authorize], EF Core minimal API UseNpgsql/UseSqlServer), 'obj' + 'bin' in EXCLUDED_DIRS, C# fixture + e2e test, partial class limitation documented (ENR-01, ENR-03, ENR-06, ENR-08, ENR-09 csharp portion)
+- [ ] 94-03-PLAN.md — Ruby auth/db signals (Devise + HTTP basic + ActiveRecord), config/database.yml adapter: probe in detectDbFromEnv(), Ruby fixture + e2e test (ENR-01, ENR-04, ENR-07, ENR-09 ruby portion)
 
 ### Phase 95: Shell Cleanup + Unified Dispatcher
 **Goal**: scripts/drift.sh dispatches all drift subcommands as subshells; lib/worker-restart.sh extracts shared restart logic; four bug fixes (bc subprocess, declare -A leak, global stderr, Bash version guard) are applied; dead code deleted
@@ -725,6 +730,10 @@ Plans:
   5. node:test covers all three flag/data combinations: empty deps → v1.0, populated deps + flag on → v1.1, populated deps + flag off → v1.0
 **Parallelism note**: Strict last step. Cannot start until Phase 93 is complete.
 **UI hint**: no
+**Plans**: 2 plans
+Plans:
+- [ ] 96-01-PLAN.md — payload.js buildFindingsBlock + buildScanPayload feature-flag gate, schemaVersion derivation; cli/hub.js + scan/manager.js wiring
+- [ ] 96-02-PLAN.md — payload.test.js: 4-case HUB-04 flag/data matrix + HUB-05 regression guard + shell-invariant zero-diff check
 
 ## Progress
 
@@ -749,6 +758,6 @@ Plans:
 | 89-91 | v5.7.0 | 3/3 | Complete | 2026-03-23 |
 | 92 | v5.8.0 | 0/? | Not started | - |
 | 93 | v5.8.0 | 0/4 | Not started | - |
-| 94 | v5.8.0 | 0/? | Not started | - |
+| 94 | v5.8.0 | 0/3 | Not started | - |
 | 95 | v5.8.0 | 0/? | Not started | - |
-| 96 | v5.8.0 | 0/? | Not started | - |
+| 96 | v5.8.0 | 0/2 | Not started | - |
