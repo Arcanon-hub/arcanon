@@ -228,3 +228,89 @@ test("buildScanPayload with libraryDepsEnabled=true but empty deps emits version
   assert.equal(payload.version, "1.0");
   assert.equal(payload.findings.services[0].dependencies, undefined);
 });
+
+// ---------------------------------------------------------------------------
+// HUB-04 / HUB-05 — Phase 96-02: additional matrix coverage + regression guard
+// ---------------------------------------------------------------------------
+
+// Shared fixture — matches Phase 93-02 getDependenciesForService return shape.
+const SAMPLE_DEP_ROW = {
+  id: 1,
+  service_id: 42,
+  scan_version_id: 7,
+  ecosystem: "npm",
+  package_name: "react",
+  version_spec: "^18.2.0",
+  resolved_version: "18.2.0",
+  manifest_file: "package.json",
+  dep_kind: "direct",
+};
+
+test("HUB-05 regression guard: buildFindingsBlock with no opts returns schemaVersion='1.0' and omits per-service dependencies", () => {
+  const block = buildFindingsBlock({
+    services: [{ name: "svc-a", language: "ts" }],
+    connections: [{ source: "svc-a", target: "db", protocol: "tcp" }],
+  });
+  // Default path MUST be v1.0 — proves backward compat for every caller that
+  // never opts into the feature flag.
+  assert.equal(block.schemaVersion, "1.0");
+  assert.equal(block.services[0].dependencies, undefined, "v1.0 services must NOT carry a dependencies key");
+  // Shape regression — existing keys are still present and unchanged.
+  assert.equal(block.services[0].name, "svc-a");
+  assert.equal(block.services[0].language, "ts");
+  assert.equal(block.services[0].root_path, ".");
+  assert.equal(block.services[0].type, "service");
+  assert.ok(Array.isArray(block.connections));
+  assert.ok(Array.isArray(block.schemas));
+  assert.ok(Array.isArray(block.actors));
+});
+
+test("HUB-04 matrix #3: flag OFF + populated deps → schemaVersion='1.0', deps suppressed (flag is authoritative)", () => {
+  const block = buildFindingsBlock(
+    {
+      services: [{ name: "svc-a", language: "ts", dependencies: [SAMPLE_DEP_ROW] }],
+      connections: [],
+    },
+    { libraryDepsEnabled: false },
+  );
+  assert.equal(block.schemaVersion, "1.0", "flag OFF dominates — dep data is ignored");
+  assert.equal(block.services[0].dependencies, undefined, "v1.0 must NOT leak the input dependencies array");
+});
+
+test("HUB-04 matrix #5 (mixed services): flag ON + one service with deps + one without → v1.1 with dependencies on both", () => {
+  const block = buildFindingsBlock(
+    {
+      services: [
+        { name: "svc-has-deps", language: "ts", dependencies: [SAMPLE_DEP_ROW] },
+        { name: "svc-no-deps", language: "go", dependencies: [] },
+        { name: "svc-missing-field", language: "py" }, // no dependencies key at all
+      ],
+      connections: [],
+    },
+    { libraryDepsEnabled: true },
+  );
+  // Any non-empty service → v1.1 envelope; every service in the envelope carries dependencies.
+  assert.equal(block.schemaVersion, "1.1");
+  assert.deepEqual(block.services[0].dependencies, [SAMPLE_DEP_ROW]);
+  assert.deepEqual(block.services[1].dependencies, []);
+  // Service with no dependencies field in input gets dependencies: [] on output (never undefined on v1.1 path)
+  assert.deepEqual(block.services[2].dependencies, []);
+});
+
+test("HUB-04 end-to-end default: buildScanPayload without libraryDepsEnabled emits payload.version='1.0' (regression)", () => {
+  const repoPath = makeTempGitRepo();
+  const { payload } = buildScanPayload({
+    findings: {
+      services: [{ name: "svc-a", dependencies: [SAMPLE_DEP_ROW] }],
+      connections: [],
+    },
+    repoPath,
+    // libraryDepsEnabled intentionally omitted — default false
+  });
+  assert.equal(payload.version, "1.0");
+  assert.equal(
+    payload.findings.services[0].dependencies,
+    undefined,
+    "v1.0 must not leak dependencies even if caller supplied them in findings",
+  );
+});
