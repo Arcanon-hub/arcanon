@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v5.8.0
 milestone_name: Library Drift & Language Parity
 status: executing
-stopped_at: Completed 94-auth-db-enrichment-01-PLAN.md
-last_updated: "2026-04-19T16:30:37.947Z"
+stopped_at: Completed 94-auth-db-enrichment 94-02-PLAN.md
+last_updated: "2026-04-19T16:35:09.149Z"
 last_activity: 2026-04-19
 progress:
   total_phases: 32
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-19)
 ## Current Position
 
 Phase: 94 (Auth/DB Extractor Expansion) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-19
 
@@ -67,6 +67,9 @@ Progress: [          ] 0%
 - [Phase 95]: Remove global exec 2>/dev/null in lint.sh so linter panics surface; drop dead npm bin branch (npm 9+ removed it)
 - [Phase 94-auth-db-enrichment]: java-empty fixture needed for Test D isolation — SecurityConfig.java siblings in main fixture polluted no-signal test
 - [Phase 94-auth-db-enrichment]: DB signals for Java rely on .java source files only — pom.xml/yml not scanned; postgresql signal embedded in UserEntity.java comments
+- [Phase 94-auth-db-enrichment]: Test D fixture isolation via tmpdir copy (not live file deletion) avoids concurrent test fragility
+- [Phase 94-auth-db-enrichment]: DB_SOURCE_SIGNALS.csharp captures EF Core minimal-API via UseNpgsql/UseSqlServer discriminators (Pitfall 11 GREEN path)
+- [Phase 94-auth-db-enrichment]: C# partial class limitation documented in AUTH_SIGNALS.csharp comment, not implemented (Phase 92 TYPE-03 locked)
 
 ### Pending Todos
 
@@ -78,6 +81,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-19T16:30:37.943Z
-Stopped at: Completed 94-auth-db-enrichment-01-PLAN.md
+Last session: 2026-04-19T16:35:09.144Z
+Stopped at: Completed 94-auth-db-enrichment 94-02-PLAN.md
 Resume file: None
