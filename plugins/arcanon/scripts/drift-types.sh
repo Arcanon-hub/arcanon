@@ -188,6 +188,19 @@ extract_type_body() {
   esac
 }
 
+# ---------------------------------------------------------------------------
+# Main comparison loop
+# Skip when --test-only is passed (allows sourcing from tests to call extractor functions)
+# ---------------------------------------------------------------------------
+for _arg in "$@"; do
+  if [[ "$_arg" == "--test-only" ]]; then
+    export -f detect_repo_language extract_ts_types extract_go_structs extract_py_classes \
+      extract_rs_structs extract_java_types extract_cs_types extract_ruby_types \
+      extract_type_names extract_type_body
+    return 0 2>/dev/null || exit 0
+  fi
+done
+
 # Group linked repos by language
 declare -A lang_repos  # lang_repos["ts"] = "repo1 repo2 ..."
 
