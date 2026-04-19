@@ -681,6 +681,12 @@ Plans:
   5. node:test suite covers npm/pypi/go/cargo/maven/nuget/rubygems parsers individually, upsert, dedup across re-scans, and stale cascade cleanup
 **Parallelism note**: Internal chain is strictly serialized (migration → QE → collector → manager). Independent of Phase 92 and Phase 95.
 **UI hint**: no
+**Plans**: 4 plans
+Plans:
+- [ ] 93-01-PLAN.md — Migration 010: service_dependencies table with dep_kind CHECK + 4-col UNIQUE + CASCADE FK + indexes (DEP-01..04)
+- [ ] 93-02-PLAN.md — QueryEngine upsertDependency + getDependenciesForService (ON CONFLICT DO UPDATE, row-id stability) (DEP-08)
+- [ ] 93-03-PLAN.md — dep-collector.js: 7-ecosystem parsers (npm/pypi/go/cargo/maven/nuget/rubygems), production-only, WARN on unsupported (DEP-05..07)
+- [ ] 93-04-PLAN.md — Wire collectDependencies into manager.js Phase B loop + end-to-end cascade-cleanup test (DEP-09..11)
 
 ### Phase 94: Auth/DB Extractor Expansion
 **Goal**: auth-db-extractor.js gains AUTH_SIGNALS and DB_SOURCE_SIGNALS for Java, C#, and Ruby; EXCLUDED_DIRS covers Maven/MSBuild output dirs; Ruby DB probe reads config/database.yml
@@ -742,7 +748,7 @@ Plans:
 | 84-88 | v5.6.0 | 6/6 | Complete | 2026-03-23 |
 | 89-91 | v5.7.0 | 3/3 | Complete | 2026-03-23 |
 | 92 | v5.8.0 | 0/? | Not started | - |
-| 93 | v5.8.0 | 0/? | Not started | - |
+| 93 | v5.8.0 | 0/4 | Not started | - |
 | 94 | v5.8.0 | 0/? | Not started | - |
 | 95 | v5.8.0 | 0/? | Not started | - |
 | 96 | v5.8.0 | 0/? | Not started | - |
