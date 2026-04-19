@@ -91,6 +91,7 @@ export function listProjects() {
       let projectRoot = null;
       let serviceCount = 0;
       let repoCount = 0;
+      let repoPaths = [];
       try {
         const db = new Database(dbPath, { readonly: true });
         // Note: do NOT set journal_mode on a readonly connection — it requires write access
@@ -99,8 +100,8 @@ export function listProjects() {
           .get();
         if (repo) {
           // Project root is the common parent of all repo paths
-          const allPaths = db.prepare("SELECT path FROM repos").pluck().all();
-          projectRoot = commonParent(allPaths);
+          repoPaths = db.prepare("SELECT path FROM repos").pluck().all();
+          projectRoot = commonParent(repoPaths);
         }
         serviceCount = db.prepare("SELECT COUNT(*) as c FROM services").get().c;
         repoCount = db.prepare("SELECT COUNT(*) as c FROM repos").get().c;
@@ -113,19 +114,33 @@ export function listProjects() {
       // UI shows the user-chosen name instead of the parent directory's
       // basename. Falls back to legacy ligamen.config.json, then to null
       // (callers display the path basename in that case).
+      //
+      // Search order:
+      //   1. projectRoot  — where the file lives in multi-repo setups
+      //   2. each indexed repo path — commonParent of a single-repo
+      //      project is its dirname (see commonParent below), so the
+      //      config actually lives *inside* the repo. This loop covers
+      //      that case.
       let projectName = null;
-      if (projectRoot) {
+      const searchRoots = [projectRoot, ...repoPaths].filter(Boolean);
+      const seen = new Set();
+      for (const root of searchRoots) {
+        if (seen.has(root)) continue;
+        seen.add(root);
+        let matched = false;
         for (const cfgFile of ["arcanon.config.json", "ligamen.config.json"]) {
           try {
             const cfg = JSON.parse(
-              fs.readFileSync(path.join(projectRoot, cfgFile), "utf8"),
+              fs.readFileSync(path.join(root, cfgFile), "utf8"),
             );
             if (cfg && typeof cfg["project-name"] === "string" && cfg["project-name"].length > 0) {
               projectName = cfg["project-name"];
+              matched = true;
               break;
             }
           } catch { /* config absent or unreadable — try next */ }
         }
+        if (matched) break;
       }
 
       return {
