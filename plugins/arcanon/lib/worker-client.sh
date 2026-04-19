@@ -37,11 +37,14 @@ wait_for_worker() {
   local max_attempts="${1:-20}"
   local interval_ms="${2:-250}"
   local i=0
+  # Pre-compute sleep interval once with awk (avoids bc subprocess per iteration)
+  local SLEEP_SEC
+  SLEEP_SEC=$(awk -v ms="$interval_ms" 'BEGIN { printf "%.3f", ms/1000 }')
   while [[ $i -lt $max_attempts ]]; do
     if worker_running; then
       return 0
     fi
-    sleep "$(echo "scale=3; $interval_ms/1000" | bc)"
+    sleep "$SLEEP_SEC"
     i=$((i + 1))
   done
   echo "worker-client: timed out waiting for worker after $((max_attempts * interval_ms))ms" >&2
