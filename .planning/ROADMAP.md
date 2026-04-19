@@ -662,6 +662,12 @@ Plans:
   7. bats suite passes including new fixtures in `tests/fixtures/drift/` covering parent POM, Kotlin DSL, CPM, and Gemfile.lock GEM+GIT+PATH; existing npm/pypi/go/cargo output unchanged
 **Parallelism note**: Independent of Phase 93. Both phases can be worked simultaneously.
 **UI hint**: no
+**Plans**: 4 plans
+Plans:
+- [ ] 92-01-PLAN.md — Manifest parsers: Maven (parent + dependencyManagement), Gradle Groovy + Kotlin DSL + libs.versions.toml, NuGet + CPM, Gemfile.lock GEM+GIT+PATH
+- [ ] 92-02-PLAN.md — Fixtures + bats tests for Maven parent, Gradle Kotlin, NuGet CPM, Gemfile.lock all sections (MF-06, MF-07)
+- [ ] 92-03-PLAN.md — Language detection: detect.sh java/dotnet/ruby branches + discovery.js MANIFESTS extension
+- [ ] 92-04-PLAN.md — Type extraction: drift-types.sh java/cs/rb extractors + fixtures + bats coverage
 
 ### Phase 93: DB Schema + Dependency Collector
 **Goal**: Migration 010 creates the `service_dependencies` table with `dep_kind` discriminant and 4-column UNIQUE constraint; dep-collector.js reads all supported ecosystems and persists production deps; manager.js Phase B loop calls it after enrichment
