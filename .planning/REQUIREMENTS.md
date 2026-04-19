@@ -55,9 +55,9 @@ Extend `worker/scan/enrichment/auth-db-extractor.js` with language switch cases.
 - [x] **DEP-02**: Unique constraint `UNIQUE(service_id, ecosystem, package_name, manifest_file)` — 4-column key handles mono-repos with the same package in multiple manifests
 - [x] **DEP-03**: Index on `package_name` for cross-repo drift lookup; index on `scan_version_id` for stale cleanup
 - [x] **DEP-04**: v5.8.0 writes `dep_kind = 'direct'` only; `'transient'` is a reserved future value (column in, parsing out)
-- [ ] **DEP-05**: `worker/scan/enrichment/dep-collector.js` exports `collectDependencies(repoPath, rootPath)` returning one row per dep across all supported ecosystems (npm/pypi/go/cargo/maven/nuget/rubygems)
-- [ ] **DEP-06**: `dep-collector.js` emits `slog('WARN', 'dep-scan: unsupported manifest skipped', {...})` for manifests it cannot parse, and returns `ecosystems_scanned: []` field so coverage gaps are visible in logs
-- [ ] **DEP-07**: `dep-collector.js` persists production deps only (not devDependencies); `drift-versions.sh` local output is unchanged
+- [x] **DEP-05**: `worker/scan/enrichment/dep-collector.js` exports `collectDependencies(repoPath, rootPath)` returning one row per dep across all supported ecosystems (npm/pypi/go/cargo/maven/nuget/rubygems)
+- [x] **DEP-06**: `dep-collector.js` emits `slog('WARN', 'dep-scan: unsupported manifest skipped', {...})` for manifests it cannot parse, and returns `ecosystems_scanned: []` field so coverage gaps are visible in logs
+- [x] **DEP-07**: `dep-collector.js` persists production deps only (not devDependencies); `drift-versions.sh` local output is unchanged
 - [x] **DEP-08**: `query-engine.js upsertDependency(row)` uses prepared statement + `ON CONFLICT DO UPDATE` preserving row IDs across re-scans
 - [ ] **DEP-09**: `manager.js` Phase B loop calls `collectDependencies` after `runEnrichmentPass` for each service (no change to `beginScan`/`endScan` bracket)
 - [ ] **DEP-10**: Stale rows cleaned automatically via `ON DELETE CASCADE` when `endScan()` removes a stale service; no new cleanup statement needed
@@ -155,9 +155,9 @@ Populated by gsd-roadmapper during ROADMAP.md creation.
 | DEP-02 | 93 | Complete |
 | DEP-03 | 93 | Complete |
 | DEP-04 | 93 | Complete |
-| DEP-05 | 93 | Pending |
-| DEP-06 | 93 | Pending |
-| DEP-07 | 93 | Pending |
+| DEP-05 | 93 | Complete |
+| DEP-06 | 93 | Complete |
+| DEP-07 | 93 | Complete |
 | DEP-08 | 93 | Complete |
 | DEP-09 | 93 | Pending |
 | DEP-10 | 93 | Pending |

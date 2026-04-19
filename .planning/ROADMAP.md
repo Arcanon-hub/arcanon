@@ -685,7 +685,7 @@ Plans:
 Plans:
 - [x] 93-01-PLAN.md — Migration 010: service_dependencies table with dep_kind CHECK + 4-col UNIQUE + CASCADE FK + indexes (DEP-01..04)
 - [x] 93-02-PLAN.md — QueryEngine upsertDependency + getDependenciesForService (ON CONFLICT DO UPDATE, row-id stability) (DEP-08)
-- [ ] 93-03-PLAN.md — dep-collector.js: 7-ecosystem parsers (npm/pypi/go/cargo/maven/nuget/rubygems), production-only, WARN on unsupported (DEP-05..07)
+- [x] 93-03-PLAN.md — dep-collector.js: 7-ecosystem parsers (npm/pypi/go/cargo/maven/nuget/rubygems), production-only, WARN on unsupported (DEP-05..07)
 - [ ] 93-04-PLAN.md — Wire collectDependencies into manager.js Phase B loop + end-to-end cascade-cleanup test (DEP-09..11)
 
 ### Phase 94: Auth/DB Extractor Expansion
@@ -717,7 +717,7 @@ Plans:
   5. Dead code deleted: `scripts/impact.sh` `classify_match()` function (lines 16-55); `scripts/lint.sh` `NPM_BIN=$(npm bin ...)` line (line 109); full bats suite passes with zero regressions
 **Parallelism note**: Fully independent of Phases 92, 93, 94. Can land at any point.
 **UI hint**: no
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 Plans:
 - [ ] 95-01-PLAN.md — scripts/drift.sh unified dispatcher (bash subprocess routing, Bash 4+ guard, reserved licenses|security, DSP-08 no-linked-repos message) + drift-dispatcher.bats (DSP-01..04, DSP-08, DSP-14)
 - [ ] 95-02-PLAN.md — lib/worker-restart.sh extraction (should_restart_worker + restart_worker_if_stale); session-start.sh + worker-start.sh refactor, PID-file mutex preserved; worker-restart.bats (DSP-05, DSP-06, DSP-07)
@@ -762,7 +762,7 @@ Plans:
 | 84-88 | v5.6.0 | 6/6 | Complete | 2026-03-23 |
 | 89-91 | v5.7.0 | 3/3 | Complete | 2026-03-23 |
 | 92 | v5.8.0 | 4/4 | Complete   | 2026-04-19 |
-| 93 | v5.8.0 | 2/4 | In Progress|  |
+| 93 | v5.8.0 | 3/4 | In Progress|  |
 | 94 | v5.8.0 | 0/3 | Not started | - |
 | 95 | v5.8.0 | 0/? | Not started | - |
 | 96 | v5.8.0 | 0/2 | Not started | - |

@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v5.8.0
 milestone_name: Library Drift & Language Parity
 status: executing
-stopped_at: Completed 93-dep-collector 93-02-PLAN.md
-last_updated: "2026-04-19T15:47:52.172Z"
+stopped_at: Completed 93-dep-collector 93-03-PLAN.md
+last_updated: "2026-04-19T15:53:31.619Z"
 last_activity: 2026-04-19
 progress:
   total_phases: 32
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-19)
 ## Current Position
 
 Phase: 93 (DB Schema + Dependency Collector) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-04-19
 
@@ -57,6 +57,8 @@ Progress: [          ] 0%
 - [Phase 93-dep-collector]: ON CONFLICT DO UPDATE (not INSERT OR REPLACE) preserves row IDs across re-scans — chosen for DEP-08 row-id stability contract
 - [Phase 93-dep-collector]: No deleteStaleDependencies() helper — ON DELETE CASCADE from services(id) handles dep cleanup automatically via endScan()
 - [Phase 93-dep-collector]: runMigrations() in test seedDb() instead of partial migration chain — QueryEngine constructor requires all migrations for unconditional prepared statements
+- [Phase 93-dep-collector]: Poetry regex: replaced \z (Perl/Ruby) with JS-compatible end-of-string match
+- [Phase 93-dep-collector]: ecosystems_scanned pushed even for empty-dep manifests — found+parsed without error is a valid scanned state
 
 ### Pending Todos
 
@@ -68,6 +70,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-19T15:47:52.168Z
-Stopped at: Completed 93-dep-collector 93-02-PLAN.md
+Last session: 2026-04-19T15:53:31.613Z
+Stopped at: Completed 93-dep-collector 93-03-PLAN.md
 Resume file: None
