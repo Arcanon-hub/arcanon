@@ -6,10 +6,7 @@ set -euo pipefail
 # 1. Bail immediately if lint is disabled (ARCANON_DISABLE_LINT, legacy LIGAMEN_DISABLE_LINT)
 [[ -n "${ARCANON_DISABLE_LINT:-${LIGAMEN_DISABLE_LINT:-}}" ]] && exit 0
 
-# 2. Route ALL debug/error output to stderr sink so nothing contaminates stdout
-exec 2>/dev/null
-
-# 3. Read stdin JSON and extract file path / tool name (PLGN-07 pattern)
+# 2. Read stdin JSON and extract file path / tool name (PLGN-07 pattern)
 INPUT=$(cat)
 FILE=$(printf '%s\n' "$INPUT" | jq -r '.tool_input.file_path // empty')
 
@@ -105,10 +102,7 @@ case "$LANG" in
     # 1. Local node_modules/.bin/eslint (most common for project installs)
     if [[ -f "node_modules/.bin/eslint" ]]; then
       ESLINT="node_modules/.bin/eslint"
-    # 2. npm bin path (older npm; may emit deprecation warnings to stderr)
-    elif NPM_BIN=$(npm bin 2>/dev/null) && [[ -f "${NPM_BIN}/eslint" ]]; then
-      ESLINT="${NPM_BIN}/eslint"
-    # 3. Global install
+    # 2. Global install
     elif command -v eslint &>/dev/null; then
       ESLINT="eslint"
     fi
