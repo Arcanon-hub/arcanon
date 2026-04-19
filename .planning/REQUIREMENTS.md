@@ -77,9 +77,9 @@ Extend `worker/scan/enrichment/auth-db-extractor.js` with language switch cases.
 - [x] **DSP-02**: Dispatcher invokes subcommands as subshells (`bash "$PLUGIN_ROOT/scripts/drift-${sub}.sh"`), never `source` — existing direct-invoke paths continue to work unchanged
 - [x] **DSP-03**: `scripts/drift-*.sh` subcommand scripts keep sourcing `drift-common.sh` themselves (no coupling to dispatcher)
 - [x] **DSP-04**: `scripts/drift.sh` bails cleanly with helpful message if `${BASH_VERSINFO[0]} < 4`
-- [ ] **DSP-05**: New `lib/worker-restart.sh` exports `should_restart_worker()` (returns 0/1 + stdout reason) and `restart_worker_if_stale()` (idempotent stop-then-background-start)
-- [ ] **DSP-06**: `scripts/session-start.sh` lines 43-68 replaced with `source lib/worker-restart.sh; restart_worker_if_stale || true`
-- [ ] **DSP-07**: `scripts/worker-start.sh` lines 28-61 replaced with same call; PID-file mutex preserved
+- [x] **DSP-05**: New `lib/worker-restart.sh` exports `should_restart_worker()` (returns 0/1 + stdout reason) and `restart_worker_if_stale()` (idempotent stop-then-background-start)
+- [x] **DSP-06**: `scripts/session-start.sh` lines 43-68 replaced with `source lib/worker-restart.sh; restart_worker_if_stale || true`
+- [x] **DSP-07**: `scripts/worker-start.sh` lines 28-61 replaced with same call; PID-file mutex preserved
 - [x] **DSP-08**: `drift-common.sh` "no linked repos" case emits `echo "drift: no linked repos configured" >&2` before return
 - [ ] **DSP-09**: Bug fix: `lib/worker-client.sh:38` — remove `bc` subprocess per sleep iteration; pre-compute once or use `awk`
 - [ ] **DSP-10**: Bug fix: `scripts/drift-types.sh:148,202` — `unset type_repos && declare -A type_repos` per language block to prevent associative-array leak
@@ -171,9 +171,9 @@ Populated by gsd-roadmapper during ROADMAP.md creation.
 | DSP-02 | 95 | Complete |
 | DSP-03 | 95 | Complete |
 | DSP-04 | 95 | Complete |
-| DSP-05 | 95 | Pending |
-| DSP-06 | 95 | Pending |
-| DSP-07 | 95 | Pending |
+| DSP-05 | 95 | Complete |
+| DSP-06 | 95 | Complete |
+| DSP-07 | 95 | Complete |
 | DSP-08 | 95 | Complete |
 | DSP-09 | 95 | Pending |
 | DSP-10 | 95 | Pending |

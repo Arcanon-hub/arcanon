@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v5.8.0
 milestone_name: Library Drift & Language Parity
 status: executing
-stopped_at: Completed 95-01-PLAN.md
-last_updated: "2026-04-19T16:13:05.637Z"
+stopped_at: Completed 95-shell-cleanup-dispatcher-95-02-PLAN.md
+last_updated: "2026-04-19T16:18:06.249Z"
 last_activity: 2026-04-19
 progress:
   total_phases: 32
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-19)
 ## Current Position
 
 Phase: 95 (Shell Cleanup + Unified Dispatcher) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-19
 
@@ -61,6 +61,7 @@ Progress: [          ] 0%
 - [Phase 93-dep-collector]: ecosystems_scanned pushed even for empty-dep manifests — found+parsed without error is a valid scanned state
 - [Phase 95-shell-cleanup-dispatcher]: drift.sh uses bash subprocess (not source) to preserve DSP-03 direct-invocation regression contract
 - [Phase 95-shell-cleanup-dispatcher]: Reserved slots licenses|security exit 2 (distinct from unknown=1) to differentiate reserved vs typo
+- [Phase 95-shell-cleanup-dispatcher]: worker-start.sh calls should_restart_worker (not restart_worker_if_stale) to avoid recursive worker_start_background spawn
 
 ### Pending Todos
 
@@ -72,6 +73,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-19T16:13:01.631Z
-Stopped at: Completed 95-01-PLAN.md
+Last session: 2026-04-19T16:18:06.245Z
+Stopped at: Completed 95-shell-cleanup-dispatcher-95-02-PLAN.md
 Resume file: None
