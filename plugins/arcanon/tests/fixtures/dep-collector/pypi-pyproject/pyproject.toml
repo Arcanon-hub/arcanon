@@ -1,0 +1,12 @@
+[project]
+name = "myservice"
+version = "1.0.0"
+dependencies = [
+    "requests>=2.31.0,<3.0",
+    "fastapi>=0.100.0",
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+httpx = "^0.25.0"
+pydantic = "^2.0.0"

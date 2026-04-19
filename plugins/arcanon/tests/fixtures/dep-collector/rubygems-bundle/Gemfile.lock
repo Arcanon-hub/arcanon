@@ -1,0 +1,32 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    rails (7.1.0)
+      actionpack (= 7.1.0)
+      activesupport (= 7.1.0)
+    activesupport (7.1.0)
+      tzinfo (~> 2.0)
+
+GIT
+  remote: https://github.com/example/mygem.git
+  revision: abc1234
+  specs:
+    mygem (1.2.3)
+      activesupport (>= 6.0)
+
+PATH
+  remote: ../local_gem
+  specs:
+    local_gem (0.1.0)
+      rack (>= 2.0)
+
+PLATFORMS
+  x86_64-linux
+
+DEPENDENCIES
+  local_gem!
+  mygem!
+  rails (~> 7.1)
+
+BUNDLED WITH
+   2.4.22

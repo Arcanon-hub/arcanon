@@ -1,0 +1,5 @@
+# Production dependencies
+flask>=2.3.0
+sqlalchemy>=2.0.0
+# -r base.txt should be skipped
+celery>=5.3.0
