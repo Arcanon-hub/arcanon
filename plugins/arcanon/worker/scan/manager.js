@@ -32,6 +32,7 @@ import os from "node:os";
 
 import { parseAgentOutput } from "./findings.js";
 import { registerEnricher, runEnrichmentPass } from "./enrichment.js";
+import { collectDependencies } from "./enrichment/dep-collector.js";
 import { createCodeownersEnricher } from "./codeowners.js";
 import { resolveDataDir } from "../lib/data-dir.js";
 import { resolveConfigPath } from "../lib/config-path.js";
@@ -772,11 +773,57 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       const services = queryEngine._db
         .prepare('SELECT id, root_path, language, boundary_entry FROM services WHERE repo_id = ?')
         .all(r.repoId);
+      let totalDeps = 0;
+      const ecosystemsSeen = new Set();
       for (const service of services) {
         await runEnrichmentPass(service, queryEngine._db, _logger, r.repoPath);
+
+        // DEP-09: collect library deps after enrichment — MUST NOT touch scan bracket.
+        // Runs AFTER endScan() has closed the bracket (line ~766 above). Stale
+        // cleanup for dep rows is handled by ON DELETE CASCADE from services(id)
+        // when the NEXT scan's endScan() removes a stale service.
+        try {
+          const { rows, ecosystems_scanned } = await collectDependencies({
+            repoPath: r.repoPath,
+            rootPath: service.root_path,
+            logger: _logger,
+          });
+          for (const row of rows) {
+            try {
+              queryEngine.upsertDependency({
+                ...row,
+                service_id: service.id,
+                scan_version_id: r.scanVersionId,
+              });
+              totalDeps++;
+            } catch (err) {
+              slog('WARN', 'dep-scan: upsert failed', {
+                repoPath: r.repoPath,
+                service: service.id,
+                package: row.package_name,
+                error: err.message,
+              });
+            }
+          }
+          for (const eco of ecosystems_scanned) ecosystemsSeen.add(eco);
+        } catch (err) {
+          // DEP-09: any throw from the collector is swallowed — the scan completes
+          slog('WARN', 'dep-scan: collector error', {
+            repoPath: r.repoPath,
+            service: service.id,
+            error: err.message,
+          });
+        }
       }
       // SCAN-02: Log enrichment done with number of services enriched
       slog('INFO', 'enrichment done', { repoPath: r.repoPath, enricherCount: services.length });
+      // DEP-06: Log dep-scan coverage — ecosystems_scanned makes gaps visible
+      slog('INFO', 'dep-scan done', {
+        repoPath: r.repoPath,
+        serviceCount: services.length,
+        totalDeps,
+        ecosystemsSeen: [...ecosystemsSeen].sort(),
+      });
     } catch (err) {
       slog('WARN', 'enrichment pass error', { repoPath: r.repoPath, error: err.message });
     }
