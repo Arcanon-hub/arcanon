@@ -24,41 +24,39 @@ mkdir -p "$DATA_DIR"
 PID_FILE="${DATA_DIR}/worker.pid"
 PORT_FILE="${DATA_DIR}/worker.port"
 
-# Stale-PID detection + version mismatch auto-restart
-if [[ -f "$PID_FILE" ]]; then
-  PID=$(cat "$PID_FILE")
-  if kill -0 "$PID" 2>/dev/null; then
-    # Worker is running — check version match
-    INSTALLED_VERSION=""
-    if [[ -f "${PLUGIN_ROOT}/package.json" ]] && command -v jq >/dev/null 2>&1; then
-      INSTALLED_VERSION=$(jq -r '.version // empty' "${PLUGIN_ROOT}/package.json" 2>/dev/null || true)
-    fi
+# DSP-07: stale-PID + version-mismatch detection extracted to lib/worker-restart.sh.
+# MUTEX BOUNDARY: all new logic below this point runs only when no worker is active
+# (either no PID file, or PID is stale, or we just killed it on version mismatch).
+# Pitfall 8: do NOT move any new initialization logic above this block.
+# shellcheck source=../lib/worker-client.sh
+source "${PLUGIN_ROOT}/lib/worker-client.sh"
+# shellcheck source=../lib/worker-restart.sh
+source "${PLUGIN_ROOT}/lib/worker-restart.sh"
 
-    RUNNING_VERSION=""
-    if [[ -f "$PORT_FILE" ]]; then
-      _port=$(cat "$PORT_FILE")
-      RUNNING_VERSION=$(curl -s "http://127.0.0.1:${_port}/api/version" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true)
-    fi
-
-    # Only restart on version mismatch if we can determine the running version.
-    # "unknown" means the worker could not read its own package.json — treat as same.
-    if [[ -n "$INSTALLED_VERSION" && -n "$RUNNING_VERSION" \
-        && "$RUNNING_VERSION" != "unknown" \
-        && "$INSTALLED_VERSION" != "$RUNNING_VERSION" ]]; then
-      echo "version mismatch (installed=$INSTALLED_VERSION, running=$RUNNING_VERSION) — restarting" >&2
-      kill "$PID" 2>/dev/null || true
-      sleep 1
-      kill -0 "$PID" 2>/dev/null && kill -9 "$PID" 2>/dev/null || true
-      rm -f "$PID_FILE" "$PORT_FILE"
-    else
-      echo "worker already running (PID $PID)"
-      exit 0
-    fi
-  else
-    echo "removing stale PID file (PID $PID no longer exists)" >&2
-    rm -f "$PID_FILE"
-  fi
+should_restart_worker
+if [[ "$_should_restart" != "true" ]]; then
+  # Worker is running and versions match — nothing to do.
+  echo "worker already running (PID ${_worker_pid})"
+  exit 0
 fi
+
+# Clean up stale or mismatched worker before spawning.
+case "$_restart_reason" in
+  version_mismatch)
+    echo "version mismatch (installed=${_installed_version}, running=${_running_version}) — restarting" >&2
+    kill "$_worker_pid" 2>/dev/null || true
+    sleep 1
+    kill -0 "$_worker_pid" 2>/dev/null && kill -9 "$_worker_pid" 2>/dev/null || true
+    rm -f "$PID_FILE" "$PORT_FILE"
+    ;;
+  stale_pid)
+    echo "removing stale PID file (PID ${_worker_pid} no longer exists)" >&2
+    rm -f "$PID_FILE"
+    ;;
+  no_pid_file)
+    : # nothing to clean up
+    ;;
+esac
 
 # Determine port — check in priority order
 PORT=""
