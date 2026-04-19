@@ -159,9 +159,9 @@ Populated by gsd-roadmapper during ROADMAP.md creation.
 | DEP-06 | 93 | Complete |
 | DEP-07 | 93 | Complete |
 | DEP-08 | 93 | Complete |
-| DEP-09 | 93 | Pending |
-| DEP-10 | 93 | Pending |
-| DEP-11 | 93 | Pending |
+| DEP-09 | 93 | Complete |
+| DEP-10 | 93 | Complete |
+| DEP-11 | 93 | Complete |
 | HUB-01 | 96 | Complete |
 | HUB-02 | 96 | Complete |
 | HUB-03 | 96 | Complete |
