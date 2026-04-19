@@ -9,51 +9,6 @@ set -euo pipefail
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 source "${PLUGIN_ROOT}/lib/linked-repos.sh"
 
-# ─── classify_match ──────────────────────────────────────────────────────────
-# Classifies a file path into: test | docs | config | code (default)
-# Priority: test > docs > config > code
-# Compatible with macOS bash 3.2 (no ${var,,} lowercase expansion).
-classify_match() {
-  local filepath="$1"
-  local fname
-  fname="$(basename "$filepath")"
-  # Use tr for lowercase — bash 3.2 compatible (no ${var,,})
-  local lower_path
-  lower_path="$(printf '%s' "$filepath" | tr '[:upper:]' '[:lower:]')"
-  local lower_fname
-  lower_fname="$(printf '%s' "$fname" | tr '[:upper:]' '[:lower:]')"
-
-  # Test: path or filename contains test/spec indicator
-  # Check directory components and filename patterns
-  if printf '%s' "$lower_path" | grep -qE '/(tests?|__tests__|spec)/'; then
-    echo "test"; return
-  fi
-  if printf '%s' "$lower_fname" | grep -qE '(_test\.|_spec\.|\.test\.|\.spec\.)'; then
-    echo "test"; return
-  fi
-  # Also match filenames like test_foo.py or spec_foo.rb (prefix)
-  if printf '%s' "$lower_fname" | grep -qE '^(test_|spec_)'; then
-    echo "test"; return
-  fi
-
-  # Docs: markdown, rst, txt, adoc
-  local ext="${filepath##*.}"
-  case "$ext" in
-    md|rst|txt|adoc) echo "docs"; return ;;
-  esac
-
-  # Config: structured data and build files
-  case "$ext" in
-    json|yaml|yml|toml|ini|env) echo "config"; return ;;
-  esac
-  case "$fname" in
-    Makefile|Dockerfile|docker-compose.yml|docker-compose.yaml) echo "config"; return ;;
-  esac
-
-  # Default: code
-  echo "code"
-}
-
 # ─── Argument parsing ─────────────────────────────────────────────────────────
 TERMS=()
 EXCLUDES=()
@@ -73,7 +28,7 @@ if [[ "$CHANGED" == true ]]; then
   CHANGED_FILES="$(git diff HEAD~1 --name-only 2>/dev/null | \
     grep -E '\.(py|rs|ts|js|tsx|jsx|go|java|rb|sh)$' || true)"
 
-  # Use a temp file for accumulation (bash 3.2 — no mapfile)
+  # Use a temp file for accumulation (no mapfile — POSIX portable)
   TMPFILE="/tmp/arcanon_terms_$$"
   trap 'rm -f "$TMPFILE"' EXIT
 
@@ -86,7 +41,7 @@ if [[ "$CHANGED" == true ]]; then
   done <<< "$CHANGED_FILES"
 
   if [[ -f "$TMPFILE" && -s "$TMPFILE" ]]; then
-    # Populate TERMS from temp file — bash 3.2 compatible (no mapfile)
+    # Populate TERMS from temp file (no mapfile — POSIX portable)
     while IFS= read -r sym; do
       [[ -z "$sym" ]] && continue
       TERMS+=("$sym")
@@ -157,7 +112,7 @@ while IFS= read -r linked_path; do
         n = split(filepath, parts, "/")
         basename = parts[n]
 
-        # Lowercase for matching (POSIX awk tolower — no bash 3.2 concerns)
+        # Lowercase for matching (POSIX awk tolower)
         lower_path = tolower(filepath)
         lower_fname = tolower(basename)
         ext = basename
