@@ -19,6 +19,7 @@
 - ✅ **v5.5.0 Security & Data Integrity Hardening** — Phases 80-83 (shipped 2026-03-22)
 - ✅ **v5.6.0 Logging & Observability** — Phases 84-88 (shipped 2026-03-23)
 - ✅ **v5.7.0 Scan Accuracy** — Phases 89-91 (shipped 2026-03-23)
+- 🟡 **v5.8.0 Library Drift & Language Parity** — Phases 92-96 (in progress)
 
 ## Phases
 
@@ -174,6 +175,14 @@ Full details: `.planning/milestones/v5.6.0-ROADMAP.md`
 Full details: `.planning/milestones/v5.7.0-ROADMAP.md`
 
 </details>
+
+### 🟡 v5.8.0 Library Drift & Language Parity (Phases 92-96)
+
+- [ ] **Phase 92** — Manifest Parser Foundation + Language Detection + Type Extraction
+- [ ] **Phase 93** — DB Schema + Dependency Collector
+- [ ] **Phase 94** — Auth/DB Extractor Expansion
+- [ ] **Phase 95** — Shell Cleanup + Unified Dispatcher
+- [ ] **Phase 96** — Hub Payload v1.1 + Feature Flag
 
 ## Phase Details
 
@@ -637,6 +646,74 @@ Plans:
 
 </details>
 
+### v5.8.0 Library Drift & Language Parity (Phases 92-96)
+
+### Phase 92: Manifest Parser Foundation + Language Detection + Type Extraction
+**Goal**: drift-versions.sh gains parsers for Maven, Gradle (Groovy + Kotlin DSL), NuGet (including CPM), and Bundler; detect.sh and discovery.js gain Java/dotnet/Ruby language branches; drift-types.sh gains java/cs/rb type extractors
+**Depends on**: Phase 91 (v5.7.0 complete); can run in parallel with Phase 93
+**Requirements**: MF-01, MF-02, MF-03, MF-04, MF-05, MF-06, MF-07, LANG-01, LANG-02, LANG-03, TYPE-01, TYPE-02, TYPE-03, TYPE-04, TYPE-05
+**Success Criteria** (what must be TRUE):
+  1. `/arcanon:drift versions` on a Maven project resolves `<parent>` inheritance — managed deps surface with correct versions, not empty version strings
+  2. `/arcanon:drift versions` on a Gradle project parses both Groovy DSL (`build.gradle`) and Kotlin DSL (`build.gradle.kts`) with separate passes; version-catalog entries resolved via `gradle/libs.versions.toml`
+  3. `/arcanon:drift versions` on a .NET project resolves NuGet `<PackageReference>` entries including `Directory.Packages.props` Central Package Management; no empty dep lists from CPM-only projects
+  4. `/arcanon:drift versions` on a Ruby project uses Gemfile.lock pinned versions covering GEM, GIT, and PATH sections
+  5. `lib/detect.sh` session-start banner shows `java`, `dotnet`, or `ruby` for projects with the corresponding manifests; `detect_project_type()` appends these after existing TS/Python/Go/Rust; `discovery.js` MANIFESTS array includes `pom.xml`, `build.gradle`, `build.gradle.kts`, `Gemfile`
+  6. `drift-types.sh detect_repo_language()` returns `java | cs | rb` tokens; Java/C#/Ruby extractors capture public types without false positives; all new code uses `$WORK_DIR/<pkg_safe>` tmpdir pattern (no new `declare -A`)
+  7. bats suite passes including new fixtures in `tests/fixtures/drift/` covering parent POM, Kotlin DSL, CPM, and Gemfile.lock GEM+GIT+PATH; existing npm/pypi/go/cargo output unchanged
+**Parallelism note**: Independent of Phase 93. Both phases can be worked simultaneously.
+**UI hint**: no
+
+### Phase 93: DB Schema + Dependency Collector
+**Goal**: Migration 010 creates the `service_dependencies` table with `dep_kind` discriminant and 4-column UNIQUE constraint; dep-collector.js reads all supported ecosystems and persists production deps; manager.js Phase B loop calls it after enrichment
+**Depends on**: Phase 91 (v5.7.0 complete); can run in parallel with Phase 92
+**Requirements**: DEP-01, DEP-02, DEP-03, DEP-04, DEP-05, DEP-06, DEP-07, DEP-08, DEP-09, DEP-10, DEP-11
+**Success Criteria** (what must be TRUE):
+  1. Migration 010 creates `service_dependencies` with `dep_kind TEXT CHECK(dep_kind IN ('direct','transient')) DEFAULT 'direct'` and `UNIQUE(service_id, ecosystem, package_name, manifest_file)` 4-column key; indexes on `package_name` and `scan_version_id` present
+  2. `dep-collector.js collectDependencies(repoPath, rootPath)` returns one row per production dep across all supported ecosystems (npm/pypi/go/cargo/maven/nuget/rubygems); emits `slog('WARN', ...)` for unsupported manifests; `ecosystems_scanned` field visible in logs
+  3. `query-engine.js upsertDependency(row)` uses `ON CONFLICT DO UPDATE` preserving row IDs across re-scans; row IDs are stable on repeat calls with identical data
+  4. `manager.js` Phase B loop calls `collectDependencies` after `runEnrichmentPass` without touching `beginScan`/`endScan`; stale dep rows are removed automatically via `ON DELETE CASCADE` when `endScan()` deletes a stale service
+  5. node:test suite covers npm/pypi/go/cargo/maven/nuget/rubygems parsers individually, upsert, dedup across re-scans, and stale cascade cleanup
+**Parallelism note**: Internal chain is strictly serialized (migration → QE → collector → manager). Independent of Phase 92 and Phase 95.
+**UI hint**: no
+
+### Phase 94: Auth/DB Extractor Expansion
+**Goal**: auth-db-extractor.js gains AUTH_SIGNALS and DB_SOURCE_SIGNALS for Java, C#, and Ruby; EXCLUDED_DIRS covers Maven/MSBuild output dirs; Ruby DB probe reads config/database.yml
+**Depends on**: Phase 92 (language detection tags from detect.sh must be in place before signal dispatch is keyed on them)
+**Requirements**: ENR-01, ENR-02, ENR-03, ENR-04, ENR-05, ENR-06, ENR-07, ENR-08, ENR-09
+**Success Criteria** (what must be TRUE):
+  1. After scanning a Java service, `services.auth_mechanism` reflects Spring Security 5 (`@EnableWebSecurity`) OR Spring Security 6 (`SecurityFilterChain` bean) patterns; `services.db_backend` reflects Spring Data signals (`@Entity`, `JdbcTemplate`, `spring.datasource.url`)
+  2. After scanning a C# service, `services.auth_mechanism` reflects ASP.NET Identity (`[Authorize]`, `AddAuthentication`, `AddJwtBearer`); `services.db_backend` reflects EF Core including minimal-API `builder.Services.AddDbContext<T>()` pattern
+  3. After scanning a Ruby service, `services.auth_mechanism` reflects Devise (`before_action :authenticate_user!`, `devise_for`) or HTTP basic; `services.db_backend` reflects ActiveRecord or `adapter:` key from `config/database.yml`
+  4. `EXCLUDED_DIRS` includes `target`, `obj`, and `bin` — enrichment does not traverse Maven or MSBuild generated output directories
+  5. End-to-end fixture test per language (Java/C#/Ruby): `auth_mechanism` and `db_backend` populated correctly for a fixture repo
+**UI hint**: no
+
+### Phase 95: Shell Cleanup + Unified Dispatcher
+**Goal**: scripts/drift.sh dispatches all drift subcommands as subshells; lib/worker-restart.sh extracts shared restart logic; four bug fixes (bc subprocess, declare -A leak, global stderr, Bash version guard) are applied; dead code deleted
+**Depends on**: Phase 91 (v5.7.0 complete); free-floating — no dependency on Phases 92-94
+**Requirements**: DSP-01, DSP-02, DSP-03, DSP-04, DSP-05, DSP-06, DSP-07, DSP-08, DSP-09, DSP-10, DSP-11, DSP-12, DSP-13, DSP-14
+**Success Criteria** (what must be TRUE):
+  1. `scripts/drift.sh versions|types|openapi|all` dispatches correctly; `licenses` and `security` print "not yet implemented" with exit 2; existing `drift-versions.sh` and `drift-types.sh` direct-invoke paths still work unchanged
+  2. Dispatcher uses `bash "$PLUGIN_ROOT/scripts/drift-${sub}.sh"` (subprocess), never `source`; `drift.sh` exits with helpful message if `${BASH_VERSINFO[0]} < 4`
+  3. `lib/worker-restart.sh` exports `should_restart_worker()` and `restart_worker_if_stale()`; `session-start.sh` lines 43-68 and `worker-start.sh` lines 28-61 replaced with sourced calls; PID-file mutex preserved
+  4. All four bug fixes verified: `bc` subprocess removed from worker-client.sh sleep loop; `declare -A type_repos` unset+redeclared per language block in drift-types.sh; global `exec 2>/dev/null` removed from lint.sh; Bash 4+ version guard at top of drift-types.sh; `lib/config.sh` comment updated
+  5. Dead code deleted: `scripts/impact.sh` `classify_match()` function (lines 16-55); `scripts/lint.sh` `NPM_BIN=$(npm bin ...)` line (line 109); full bats suite passes with zero regressions
+**Parallelism note**: Fully independent of Phases 92, 93, 94. Can land at any point.
+**UI hint**: no
+
+### Phase 96: Hub Payload v1.1 + Feature Flag
+**Goal**: payload.js emits a dependencies array per service and bumps schemaVersion to "1.1" when the feature flag is on and deps are non-empty; v1.0 payload is always emitted when flag is off or deps are empty
+**Depends on**: Phase 93 (service_dependencies table must be populated before payload reads it); must be the final phase of v5.8.0
+**Requirements**: HUB-01, HUB-02, HUB-03, HUB-04, HUB-05
+**Success Criteria** (what must be TRUE):
+  1. With `hub.beta_features.library_deps: false` (default), `/arcanon:upload` emits a v1.0 payload regardless of whether deps exist in the database
+  2. With `hub.beta_features.library_deps: true` and non-empty deps, `/arcanon:upload` emits a v1.1 payload with a `dependencies` array per service populated from `queryEngine.getDependenciesForService(serviceId)`
+  3. With `hub.beta_features.library_deps: true` but all services having empty deps, payload falls back to v1.0 (no `dependencies` key emitted)
+  4. `/arcanon:drift versions` shell output is unchanged — this phase touches only payload.js, not any shell script
+  5. node:test covers all three flag/data combinations: empty deps → v1.0, populated deps + flag on → v1.1, populated deps + flag off → v1.0
+**Parallelism note**: Strict last step. Cannot start until Phase 93 is complete.
+**UI hint**: no
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -658,3 +735,8 @@ Plans:
 | 80-83 | v5.5.0 | 9/9 | Complete | 2026-03-22 |
 | 84-88 | v5.6.0 | 6/6 | Complete | 2026-03-23 |
 | 89-91 | v5.7.0 | 3/3 | Complete | 2026-03-23 |
+| 92 | v5.8.0 | 0/? | Not started | - |
+| 93 | v5.8.0 | 0/? | Not started | - |
+| 94 | v5.8.0 | 0/? | Not started | - |
+| 95 | v5.8.0 | 0/? | Not started | - |
+| 96 | v5.8.0 | 0/? | Not started | - |

@@ -123,70 +123,69 @@ Extend `worker/scan/enrichment/auth-db-extractor.js` with language switch cases.
 
 ## Traceability
 
-Populated by gsd-roadmapper during ROADMAP.md creation. Empty initially.
+Populated by gsd-roadmapper during ROADMAP.md creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MF-01 | — | Pending |
-| MF-02 | — | Pending |
-| MF-03 | — | Pending |
-| MF-04 | — | Pending |
-| MF-05 | — | Pending |
-| MF-06 | — | Pending |
-| MF-07 | — | Pending |
-| LANG-01 | — | Pending |
-| LANG-02 | — | Pending |
-| LANG-03 | — | Pending |
-| TYPE-01 | — | Pending |
-| TYPE-02 | — | Pending |
-| TYPE-03 | — | Pending |
-| TYPE-04 | — | Pending |
-| TYPE-05 | — | Pending |
-| ENR-01 | — | Pending |
-| ENR-02 | — | Pending |
-| ENR-03 | — | Pending |
-| ENR-04 | — | Pending |
-| ENR-05 | — | Pending |
-| ENR-06 | — | Pending |
-| ENR-07 | — | Pending |
-| ENR-08 | — | Pending |
-| ENR-09 | — | Pending |
-| DEP-01 | — | Pending |
-| DEP-02 | — | Pending |
-| DEP-03 | — | Pending |
-| DEP-04 | — | Pending |
-| DEP-05 | — | Pending |
-| DEP-06 | — | Pending |
-| DEP-07 | — | Pending |
-| DEP-08 | — | Pending |
-| DEP-09 | — | Pending |
-| DEP-10 | — | Pending |
-| DEP-11 | — | Pending |
-| HUB-01 | — | Pending |
-| HUB-02 | — | Pending |
-| HUB-03 | — | Pending |
-| HUB-04 | — | Pending |
-| HUB-05 | — | Pending |
-| DSP-01 | — | Pending |
-| DSP-02 | — | Pending |
-| DSP-03 | — | Pending |
-| DSP-04 | — | Pending |
-| DSP-05 | — | Pending |
-| DSP-06 | — | Pending |
-| DSP-07 | — | Pending |
-| DSP-08 | — | Pending |
-| DSP-09 | — | Pending |
-| DSP-10 | — | Pending |
-| DSP-11 | — | Pending |
-| DSP-12 | — | Pending |
-| DSP-13 | — | Pending |
-| DSP-14 | — | Pending |
+| MF-01 | 92 | Pending |
+| MF-02 | 92 | Pending |
+| MF-03 | 92 | Pending |
+| MF-04 | 92 | Pending |
+| MF-05 | 92 | Pending |
+| MF-06 | 92 | Pending |
+| MF-07 | 92 | Pending |
+| LANG-01 | 92 | Pending |
+| LANG-02 | 92 | Pending |
+| LANG-03 | 92 | Pending |
+| TYPE-01 | 92 | Pending |
+| TYPE-02 | 92 | Pending |
+| TYPE-03 | 92 | Pending |
+| TYPE-04 | 92 | Pending |
+| TYPE-05 | 92 | Pending |
+| ENR-01 | 94 | Pending |
+| ENR-02 | 94 | Pending |
+| ENR-03 | 94 | Pending |
+| ENR-04 | 94 | Pending |
+| ENR-05 | 94 | Pending |
+| ENR-06 | 94 | Pending |
+| ENR-07 | 94 | Pending |
+| ENR-08 | 94 | Pending |
+| ENR-09 | 94 | Pending |
+| DEP-01 | 93 | Pending |
+| DEP-02 | 93 | Pending |
+| DEP-03 | 93 | Pending |
+| DEP-04 | 93 | Pending |
+| DEP-05 | 93 | Pending |
+| DEP-06 | 93 | Pending |
+| DEP-07 | 93 | Pending |
+| DEP-08 | 93 | Pending |
+| DEP-09 | 93 | Pending |
+| DEP-10 | 93 | Pending |
+| DEP-11 | 93 | Pending |
+| HUB-01 | 96 | Pending |
+| HUB-02 | 96 | Pending |
+| HUB-03 | 96 | Pending |
+| HUB-04 | 96 | Pending |
+| HUB-05 | 96 | Pending |
+| DSP-01 | 95 | Pending |
+| DSP-02 | 95 | Pending |
+| DSP-03 | 95 | Pending |
+| DSP-04 | 95 | Pending |
+| DSP-05 | 95 | Pending |
+| DSP-06 | 95 | Pending |
+| DSP-07 | 95 | Pending |
+| DSP-08 | 95 | Pending |
+| DSP-09 | 95 | Pending |
+| DSP-10 | 95 | Pending |
+| DSP-11 | 95 | Pending |
+| DSP-12 | 95 | Pending |
+| DSP-13 | 95 | Pending |
+| DSP-14 | 95 | Pending |
 
 **Coverage:**
 - v1 requirements: 53 total
-- Mapped to phases: 0 (roadmapper pending)
-- Unmapped: 53 ⚠️ (expected until roadmap is generated)
+- Mapped to phases: 53, Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-19*
-*Last updated: 2026-04-19 after initial definition*
+*Last updated: 2026-04-19 after roadmap creation*
