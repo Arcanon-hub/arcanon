@@ -118,6 +118,59 @@ extract_versions() {
       ' "${repo_dir}/pyproject.toml" 2>/dev/null || true
     fi
   fi
+
+  # ---- pom.xml (Maven — parent + dependencyManagement resolution) ----------
+  if [[ -f "${repo_dir}/pom.xml" ]]; then
+    local mvn_vermap
+    mvn_vermap=$(mktemp -t arcanon-mvn.XXXX) || return 0
+    # Helper awk: extract <dependencyManagement> entries from a given pom file
+    _mvn_dm_extract() {
+      local pom_file="$1"
+      awk '
+        /<dependencyManagement>/{in_dm=1}
+        /<\/dependencyManagement>/{in_dm=0}
+        in_dm && /<dependency>/{in_dep=1; g=""; a=""; v=""}
+        in_dm && /<\/dependency>/{if(g && a && v) print g":"a"="v; in_dep=0}
+        in_dep && match($0,/<groupId>[^<]+/){g=substr($0,RSTART+9,RLENGTH-9)}
+        in_dep && match($0,/<artifactId>[^<]+/){a=substr($0,RSTART+12,RLENGTH-12)}
+        in_dep && match($0,/<version>[^<]+/){v=substr($0,RSTART+9,RLENGTH-9)}
+      ' "$pom_file" 2>/dev/null
+    }
+    # Resolve <parent> relativePath (default ../pom.xml)
+    local parent_rel parent_abs
+    parent_rel=$(awk '
+      /<parent>/{in_p=1}
+      in_p && /<relativePath>/{match($0,/<relativePath>[^<]+/); if(RSTART){print substr($0,RSTART+15,RLENGTH-15)}; exit}
+      /<\/parent>/{exit}
+    ' "${repo_dir}/pom.xml" 2>/dev/null)
+    [[ -z "$parent_rel" ]] && parent_rel="../pom.xml"
+    parent_abs="${repo_dir}/${parent_rel}"
+    if [[ -f "$parent_abs" ]]; then
+      _mvn_dm_extract "$parent_abs" >> "$mvn_vermap"
+    fi
+    # Child dependencyManagement wins (appended last, tac reverses so child is found first)
+    _mvn_dm_extract "${repo_dir}/pom.xml" >> "$mvn_vermap"
+    # Extract leaf <dependency> entries (outside <dependencyManagement>)
+    awk '
+      /<dependencyManagement>/{skip=1}
+      /<\/dependencyManagement>/{skip=0; next}
+      skip{next}
+      /<dependency>/{in_dep=1; g=""; a=""; v=""}
+      /<\/dependency>/{if(g && a) print g":"a"="v; in_dep=0}
+      in_dep && match($0,/<groupId>[^<]+/){g=substr($0,RSTART+9,RLENGTH-9)}
+      in_dep && match($0,/<artifactId>[^<]+/){a=substr($0,RSTART+12,RLENGTH-12)}
+      in_dep && match($0,/<version>[^<]+/){v=substr($0,RSTART+9,RLENGTH-9)}
+    ' "${repo_dir}/pom.xml" 2>/dev/null | while IFS='=' read -r key raw_ver; do
+      [[ -z "$key" ]] && continue
+      local ver="$raw_ver"
+      if [[ -z "$ver" ]]; then
+        ver=$(tac "$mvn_vermap" | awk -F= -v k="$key" '$1==k{print $2; exit}')
+      fi
+      [[ -z "$ver" ]] && ver="MANAGED"
+      printf '%s=%s\n' "$key" "$ver"
+    done || true
+    rm -f "$mvn_vermap"
+  fi
 }
 
 # ---------------------------------------------------------------------------
