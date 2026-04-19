@@ -26,6 +26,9 @@ const MANIFESTS = [
   "go.mod",
   "Cargo.toml",
   "pom.xml",
+  "build.gradle",
+  "build.gradle.kts",
+  "Gemfile",
 ];
 
 // ---------------------------------------------------------------------------

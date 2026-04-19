@@ -119,3 +119,82 @@ teardown() {
   assert_success
   assert_output --partial "python"
 }
+
+# ---------------------------------------------------------------------------
+# detect_language — new java/csharp/ruby branches (LANG-01)
+# ---------------------------------------------------------------------------
+
+@test "detect.sh - detect_language: .java returns java" {
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
+  run detect_language foo.java
+  assert_success
+  assert_output "java"
+}
+
+@test "detect.sh - detect_language: .cs returns csharp" {
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
+  run detect_language foo.cs
+  assert_success
+  assert_output "csharp"
+}
+
+@test "detect.sh - detect_language: .rb returns ruby" {
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
+  run detect_language foo.rb
+  assert_success
+  assert_output "ruby"
+}
+
+# ---------------------------------------------------------------------------
+# detect_project_type — java/dotnet/ruby manifest detection (LANG-02)
+# ---------------------------------------------------------------------------
+
+@test "detect.sh - detects Java from pom.xml" {
+  touch "${FIXTURES_DIR}/pom.xml"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
+  run detect_project_type "${FIXTURES_DIR}"
+  assert_success
+  assert_output --partial "java"
+}
+
+@test "detect.sh - detects Java from build.gradle.kts" {
+  touch "${FIXTURES_DIR}/build.gradle.kts"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
+  run detect_project_type "${FIXTURES_DIR}"
+  assert_success
+  assert_output --partial "java"
+}
+
+@test "detect.sh - detects dotnet from *.csproj" {
+  touch "${FIXTURES_DIR}/MyApp.csproj"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
+  run detect_project_type "${FIXTURES_DIR}"
+  assert_success
+  assert_output --partial "dotnet"
+}
+
+@test "detect.sh - detects Ruby from Gemfile" {
+  touch "${FIXTURES_DIR}/Gemfile"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
+  run detect_project_type "${FIXTURES_DIR}"
+  assert_success
+  assert_output --partial "ruby"
+}
+
+@test "detect.sh - python wins over java when both pyproject.toml and pom.xml present (LANG-02 priority)" {
+  touch "${FIXTURES_DIR}/pyproject.toml"
+  touch "${FIXTURES_DIR}/pom.xml"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
+  run detect_project_type "${FIXTURES_DIR}"
+  assert_success
+  assert_output --partial "python"
+}
+
+@test "detect.sh - node wins over ruby when both package.json and Gemfile present (LANG-02 priority)" {
+  touch "${FIXTURES_DIR}/package.json"
+  touch "${FIXTURES_DIR}/Gemfile"
+  source "${BATS_TEST_DIRNAME}/../plugins/arcanon/lib/detect.sh"
+  run detect_project_type "${FIXTURES_DIR}"
+  assert_success
+  assert_output --partial "node"
+}
