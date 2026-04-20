@@ -17,7 +17,7 @@ Request body shape (`ScanPayloadV1`):
   "version": "1.0",
   "metadata": {
     "tool": "claude-code",          // enum: claude-code | copilot | cursor | cli | unknown
-    "tool_version": "6.0.0",
+    "tool_version": "0.1.0",
     "scan_mode": "full",            // "full" | "incremental"
     "repo_url": "git@github.com:org/repo.git",
     "repo_name": "repo",            // required
@@ -36,6 +36,52 @@ Request body shape (`ScanPayloadV1`):
   }
 }
 ```
+
+### Payload v1.1 — library dependencies (opt-in)
+
+When the `hub.beta_features.library_deps` config flag is enabled **and** at
+least one scanned service has persisted dependencies, the plugin emits
+`version: "1.1"` with a per-service `dependencies` array derived from the
+`service_dependencies` table:
+
+```jsonc
+{
+  "version": "1.1",
+  "metadata": { /* unchanged */ },
+  "findings": {
+    "services": [
+      {
+        "name": "api",
+        "dependencies": [
+          {
+            "ecosystem": "maven",           // npm | pypi | go | cargo | maven | nuget | rubygems
+            "package_name": "org.springframework.boot:spring-boot-starter-web",
+            "version_spec": "3.2.1",
+            "resolved_version": "3.2.1",    // from lockfile when available; null otherwise
+            "manifest_file": "pom.xml",
+            "dep_kind": "direct"            // "direct" | "transient" (only "direct" emitted in 0.1.0)
+          }
+        ]
+      }
+    ],
+    "connections": [ /* … */ ],
+    "schemas":     [ /* … */ ],
+    "actors":      [ /* … */ ]
+  }
+}
+```
+
+Back-compat contract:
+
+- Flag **off** (default) → always `version: "1.0"`, no `dependencies` key.
+- Flag **on** with every service having empty deps → falls back to
+  `version: "1.0"`.
+- Flag **on** with at least one populated `dependencies` array → `version: "1.1"`.
+
+Production deps only; `devDependencies` (npm), `test` scope (Maven), and
+`python` key (PyPI) are explicitly excluded from persistence. The v1.1
+payload is gated behind the feature flag until the hub side of the
+`service_dependencies` resolver ships.
 
 Response codes the plugin reacts to:
 

@@ -57,10 +57,21 @@ credential presence, auto-upload flag, queue stats, data dir.
 
 ### `/arcanon:drift [graph|versions|types|openapi] [--all]`
 
-- `graph` *(new in v6)* — diff the two most recent scan snapshots.
-- `versions` — cross-repo dependency version drift.
-- `types` — shared type/interface drift (best-effort, same-language).
+- `graph` — diff the two most recent scan snapshots.
+- `versions` — cross-repo dependency version drift across **7 ecosystems**:
+  npm (`package.json` + `package-lock.json`), PyPI (`pyproject.toml` PEP 621
+  + Poetry + `requirements.txt`), Go (`go.mod` + `go.sum`), Cargo
+  (`Cargo.toml` + `Cargo.lock`), Maven (`pom.xml` with `<parent>`
+  inheritance + `<dependencyManagement>` resolution), Gradle
+  (`build.gradle` + `build.gradle.kts` + `gradle/libs.versions.toml`
+  catalog), NuGet (`*.csproj` + `Directory.Packages.props` Central Package
+  Management), and Bundler (`Gemfile.lock` GEM/GIT/PATH sections).
+- `types` — shared type/interface drift across same-language repos.
+  Supports TypeScript/JavaScript, Python, Go, Rust, Java, C#, Ruby.
 - `openapi` — OpenAPI spec diff via `oasdiff` when available.
+
+Routed through the unified `scripts/drift.sh` dispatcher; reserved slots
+for `licenses` and `security` exist but are not yet implemented.
 
 With no subcommand, runs all four and groups output by severity
 (`CRITICAL`, `WARN`, `INFO`). `--all` shows `INFO` lines too.

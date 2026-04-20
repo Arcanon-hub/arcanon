@@ -1,0 +1,117 @@
+graph TB
+    %% ─────────────────────────────────────────────
+    %% ARCANON — System Architecture
+    %% ─────────────────────────────────────────────
+
+    %% ============ LOCAL / DEVELOPER SIDE ============
+    subgraph LOCAL["🖥️ Developer Machine (Local)"]
+        direction TB
+
+        subgraph TOOLS["AI Tool Integrations"]
+            CLI["@arcanon/cli<br/>Claude Code Plugin"]
+            VSCODE["@arcanon/vscode<br/>VS Code Extension<br/>(Copilot + Cursor)"]
+            COPILOT["@arcanon/copilot-cli<br/>GitHub Copilot CLI Plugin"]
+        end
+
+        subgraph SHARED["Shared Modules"]
+            SCAN["worker/scan/<br/>Scan Engine"]
+            HUBSYNC["worker/hub-sync/<br/>Hub Upload"]
+        end
+
+        subgraph LOCALSTORE["Local Storage"]
+            SQLITE[("SQLite<br/>(WAL mode)")]
+            CHROMA[("ChromaDB<br/>(optional)")]
+        end
+
+        WORKER["Worker Daemon<br/>localhost:37888<br/>(Graph UI)"]
+
+        CLI --> SCAN
+        VSCODE --> SCAN
+        COPILOT --> SCAN
+        SCAN --> SQLITE
+        SCAN --> CHROMA
+        SCAN --> WORKER
+        SCAN --> HUBSYNC
+    end
+
+    %% ============ NETWORK BOUNDARY ============
+    HUBSYNC -- "HTTP POST<br/>Scan Results" --> NGINX
+
+    %% ============ SAAS HUB ============
+    subgraph HUB["☁️ Arcanon Hub (Kubernetes)"]
+        direction TB
+
+        NGINX["NGINX Ingress<br/>TLS + Rate Limiting"]
+
+        subgraph API_LAYER["API Layer"]
+            API["Fastify API Server<br/>(3–30 replicas, HPA)<br/>+ PgBouncer sidecar"]
+        end
+
+        subgraph ASYNC["Async Processing"]
+            NATS["NATS JetStream<br/>Stream: SCANS<br/>WorkQueue retention"]
+            RECONCILER["Graph Reconciler<br/>Workers (3–10 replicas)<br/>Graph merge + diff +<br/>embedding generation"]
+        end
+
+        subgraph DATA["Data Layer"]
+            PG_PRIMARY[("PostgreSQL Primary<br/>Writes + RLS")]
+            PG_REPLICA1[("Read Replica 1")]
+            PG_REPLICA2[("Read Replica 2")]
+        end
+
+        subgraph FRONTEND["Frontend"]
+            DASHBOARD["React Dashboard<br/>(Vite + Tailwind)<br/>Canvas Graph UI"]
+        end
+
+        MCP_SERVER["@arcanon/mcp<br/>Standalone MCP Server<br/>(query-only)"]
+
+        %% Ingress routing
+        NGINX --> API
+        NGINX --> DASHBOARD
+
+        %% API connections
+        API -- "SET LOCAL org_id<br/>(RLS)" --> PG_PRIMARY
+        API -- "Read queries" --> PG_REPLICA1
+        API -- "Read queries" --> PG_REPLICA2
+        API -- "Publish<br/>scans.*.uploaded" --> NATS
+        API -- "SSE events" --> DASHBOARD
+
+        %% Async pipeline
+        NATS -- "Consume<br/>scan events" --> RECONCILER
+        RECONCILER -- "Upsert graph<br/>entities" --> PG_PRIMARY
+        RECONCILER -- "Publish<br/>scans.*.completed" --> NATS
+
+        %% Replication
+        PG_PRIMARY -. "Streaming<br/>replication" .-> PG_REPLICA1
+        PG_PRIMARY -. "Streaming<br/>replication" .-> PG_REPLICA2
+
+        %% MCP Server
+        MCP_SERVER -- "API key auth<br/>REST proxy" --> API
+    end
+
+    %% ============ EXTERNAL INTEGRATIONS ============
+    subgraph EXTERNAL["External Services"]
+        GITHUB["GitHub<br/>OAuth + Webhooks"]
+        GOOGLE["Google<br/>OAuth"]
+        EMBEDDINGS["Embedding API<br/>(text-embedding-3-small)"]
+    end
+
+    API -- "OAuth flow" --> GITHUB
+    API -- "OAuth flow" --> GOOGLE
+    GITHUB -- "push / PR<br/>webhooks" --> NGINX
+    RECONCILER -- "Batch embed<br/>requests" --> EMBEDDINGS
+
+    %% ============ OTHER AI TOOLS (via MCP) ============
+    OTHER_TOOLS["Other AI Tools<br/>(any MCP client)"] -- "stdio / API key" --> MCP_SERVER
+
+    %% ============ STYLES ============
+    classDef local fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+    classDef hub fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
+    classDef data fill:#fff3e0,stroke:#e65100,color:#bf360c
+    classDef external fill:#f3e5f5,stroke:#6a1b9a,color:#4a148c
+    classDef async fill:#e0f7fa,stroke:#00838f,color:#006064
+
+    class CLI,VSCODE,COPILOT,SCAN,HUBSYNC,WORKER,SQLITE,CHROMA local
+    class NGINX,API,DASHBOARD,MCP_SERVER hub
+    class PG_PRIMARY,PG_REPLICA1,PG_REPLICA2 data
+    class NATS,RECONCILER async
+    class GITHUB,GOOGLE,EMBEDDINGS,OTHER_TOOLS external

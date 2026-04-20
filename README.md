@@ -105,4 +105,4 @@ The plugin is **offline-first**: no network required to scan, query, or map. Hub
 
 AGPL-3.0-only. See [LICENSE](./LICENSE).
 
-Arcanon was formerly known as **Ligamen** — see the [migration guide](./docs/migration.md) if you're upgrading from v5.x.
+Arcanon was formerly known as **Ligamen** (v1.0–v5.7.0). The `0.1.0` release is the first public version under the new name; legacy `~/.ligamen/` data dirs and `LIGAMEN_*` env vars are still honored for now.

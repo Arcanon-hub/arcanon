@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Notes on prior versions
 
-Historical releases (v1.0 through v5.7.0) were shipped under the **Ligamen** name. The plugin was rebranded to **Arcanon** during the v6.0.0 development cycle, adding the Arcanon Hub sync pipeline and consolidating the library-drift workstream. See [docs/migration.md](../../docs/migration.md) for Ligamen → Arcanon migration notes.
+Historical releases (v1.0 through v5.7.0) were shipped under the **Ligamen** name. The plugin was rebranded to **Arcanon**, adding the Arcanon Hub sync pipeline and consolidating the library-drift workstream. The version was reset to `0.1.0` for the first public Arcanon release; legacy `~/.ligamen/` data dirs and `LIGAMEN_*` env vars are still read for back-compat.
 
 The v5.8.0 internal milestone (Library Drift & Language Parity) shipped during the Arcanon rebrand and is captured as part of the first Arcanon public release rather than tagged separately. It delivered:
 

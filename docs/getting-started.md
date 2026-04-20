@@ -16,6 +16,13 @@ Confirm it's live in a new Claude Code session — you should see:
 
 > `Arcanon active. Detected: <your project types>. Commands: /arcanon:map, …`
 
+**Supported languages:** TypeScript / JavaScript, Python, Go, Rust, Java,
+C#, Ruby — for project-type detection, version drift (7 ecosystems
+including Maven, NuGet, Bundler), type drift, and auth / database
+enrichment. Other languages still scan (agents are language-agnostic);
+the support infrastructure — drift output, CODEOWNERS, auth/db columns —
+is richest for the seven above.
+
 ## 2. First scan
 
 In any repository:
@@ -121,7 +128,7 @@ your repo boundary.
   report it with the warning list the CLI prints.
 - **Queue keeps growing** → `/arcanon:sync` drains it; check
   `~/.arcanon/hub-queue.db` for the failing rows.
-- **Coming from Ligamen v5.x?** → see [migration.md](./migration.md).
+- **Coming from Ligamen v5.x?** → the plugin was renamed (Ligamen → Arcanon) and reset to `0.1.0` as a clean public release. Legacy `~/.ligamen/` data dir and `LIGAMEN_*` env vars are still honored; rename to `~/.arcanon/` and `ARCANON_*` at your convenience.
 
 ## Uninstalling
 

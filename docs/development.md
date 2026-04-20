@@ -11,17 +11,17 @@
 ## Setup
 
 ```bash
-git clone https://github.com/chilleregeravi/arcanon.git
+git clone https://github.com/Arcanon-hub/arcanon.git
 cd arcanon
 git submodule update --init --recursive
-npm install
+cd plugins/arcanon && npm install
 ```
 
 ## Makefile Targets
 
 ```bash
 make help        # show all targets
-make test        # run all bats tests (173+)
+make test        # run all bats tests (245+)
 make lint        # shellcheck scripts and libs
 make check       # validate plugin.json and hooks.json
 make install     # register marketplace and install plugin
@@ -44,12 +44,10 @@ npm run test:storage         # query engine unit tests (node:test)
 claude --plugin-dir /path/to/arcanon
 ```
 
-## Quality Gate
+## Pre-commit Check
 
 Run all checks before committing:
 
 ```bash
 make lint && make check && make test
 ```
-
-Or use Arcanon itself: `/arcanon:quality-gate`

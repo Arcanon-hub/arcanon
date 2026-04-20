@@ -45,7 +45,7 @@ Before Claude writes to a file, Arcanon checks if it's a sensitive file and bloc
 - Generated code (`*.pb.go`, `*_generated.*`, `*.gen.*`)
 - `CHANGELOG.md`
 
-You can add your own blocked patterns with the `LIGAMEN_EXTRA_BLOCKED` environment variable (colon-separated glob patterns).
+You can add your own blocked patterns with the `ARCANON_EXTRA_BLOCKED` environment variable (colon-separated glob patterns).
 
 ## Session Context
 
