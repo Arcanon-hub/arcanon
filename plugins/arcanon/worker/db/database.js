@@ -44,7 +44,7 @@ async function loadMigrationsAsync() {
 
   const files = fs
     .readdirSync(migrationsDir)
-    .filter((f) => f.endsWith(".js"))
+    .filter((f) => f.endsWith(".js") && !f.endsWith(".test.js"))
     .sort();
 
   const migrations = [];
