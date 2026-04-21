@@ -168,7 +168,19 @@ Every edit is automatically formatted and linted, every quality check runs with 
 
 ### Active
 
-(No active requirements — start next milestone with `/gsd-new-milestone`)
+## Current Milestone: v0.1.1 Command Cleanup + Update + Ambient Hooks
+
+**Goal:** Reduce command surface from 9 to 8, add a clean self-update flow, and introduce ambient cross-repo impact protection via hooks — so Arcanon's value surfaces automatically during implementation without requiring users to memorize commands.
+
+**Target features:**
+- Command consolidation: remove `/arcanon:cross-impact`, merge `/arcanon:upload` into `/arcanon:sync` (with `--dry-run`/`--repo`/`--force`/`--drain` flags), rename config `auto_upload` → `auto_sync` (honor legacy for one version)
+- New `/arcanon:update` command: check remote, confirm with user, reinstall, kill stale worker, prune old cache, verify
+- PreToolUse impact hook: ambient protection — when Claude Edit/Writes service-load-bearing files (proto, OpenAPI, known service entry-points), inject cross-repo consumer context BEFORE the edit
+- SessionStart enrichment: inject impact-map summary into every new session so Claude has global awareness of the project's service topology
+
+Explicitly deferred to v0.2.0: skills layer, agents, MCP-tool-wrapping skills. Ship hooks first, observe real firing behavior, design skills on top later.
+
+Directly addresses: the v0.1.0 → v6.0.0 stale-worker incident (solved by `/arcanon:update`), and the "Claude doesn't know Arcanon exists mid-implementation" gap (solved by PreToolUse hook).
 
 ### Out of Scope
 
@@ -189,7 +201,7 @@ Architecture: commands/ for user-invoked features, skills/ for auto-invoked know
 Known tech debt: db/database.js has console.log in script-mode guard, getQueryEngineByHash inline migration workaround, renderLibraryConnections() unused `outgoing` parameter, node_metadata table unused (forward-looking for STRIDE/vuln views), impact-flow.bats imports stale module paths (pre-existing from v3.0 restructure), package.json bin entry references non-existent ligamen-init.js, graph-fit-to-screen.test.js has 2 stale assertions for inlined fitToScreen() (Phase 26 regression).
 
 ---
-*Last updated: 2026-04-19 — v5.8.0 Library Drift & Language Parity shipped*
+*Last updated: 2026-04-21 — v0.1.1 milestone started (Command Cleanup + Update + Ambient Hooks)*
 
 ## Constraints
 
@@ -254,4 +266,4 @@ Known tech debt: db/database.js has console.log in script-mode guard, getQueryEn
 | Mono-repo detection via subdirectory manifests | Simple heuristic (one level deep) catches common layouts without recursive scan | ✓ Good |
 
 ---
-*Last updated: 2026-04-19 — v5.8.0 Library Drift & Language Parity shipped*
+*Last updated: 2026-04-21 — v0.1.1 milestone started (Command Cleanup + Update + Ambient Hooks)*
