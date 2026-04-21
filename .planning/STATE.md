@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.1.1
 milestone_name: Command Cleanup + Update + Ambient Hooks
-status: executing
-stopped_at: Completed 98-02-PLAN.md (confirmation+kill+reinstall)
-last_updated: "2026-04-21T19:06:14.609Z"
+status: verifying
+stopped_at: Completed 98-03-PLAN.md (cache prune + health verify + final restart message)
+last_updated: "2026-04-21T19:17:07.146Z"
 last_activity: 2026-04-21
 progress:
   total_phases: 36
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 12
-  completed_plans: 6
-  percent: 50
+  completed_plans: 7
+  percent: 58
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-04-21)
 
 Phase: 98 (/arcanon:update Command) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-04-21
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 58%
 
 ## Performance Metrics
 
@@ -61,6 +61,8 @@ Progress: [█████░░░░░] 50%
 - node exit-code capture via || NODE_EXIT=$? guards ERR trap on intentional non-zero exits
 - Kill-only semantics: update.sh --kill never calls restart_worker_if_stale or worker_start_background (Anti-Pattern 2 guard)
 - --yes absent: reinstall uses claude plugin update arcanon --scope user without --yes per 98-01 pre-flight confirmation
+- lsof +D detects open directory handles (cwd of a process), not open file handles — tail -f does NOT trigger it; tests must use (cd dir && sleep) to hold a genuine directory FD
+- --verify always exits 0 regardless of poll outcome (Pitfall 11 graceful failure); caller reads .status to format user message
 
 ### Pending Todos
 
@@ -74,6 +76,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-21T19:06:14.600Z
-Stopped at: Completed 98-02-PLAN.md (confirmation+kill+reinstall)
+Last session: 2026-04-21T19:17:07.137Z
+Stopped at: Completed 98-03-PLAN.md (cache prune + health verify + final restart message)
 Resume file: None

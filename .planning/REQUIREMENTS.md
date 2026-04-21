@@ -58,11 +58,14 @@ New `/arcanon:update` command for clean self-update flow.
 **: Before killing worker, command checks `$ARCANON_DATA_DIR/scan.lock` OR worker HTTP `/api/status` for active scan — aborts with user prompt if scan in progress
 - [x] **UPD-08
 **: Worker kill uses kill-only semantics (SIGTERM → 5s wait → SIGKILL), NOT `restart_worker_if_stale` (which restarts the old binary)
-- [ ] **UPD-09**: Old cache version dirs pruned from `~/.claude/plugins/cache/arcanon/arcanon/` after verifying no active `lsof` locks on files
-- [ ] **UPD-10**: Post-update health poll: GET `/api/version` for up to 10s; confirm version matches target
+- [x] **UPD-09
+**: Old cache version dirs pruned from `~/.claude/plugins/cache/arcanon/arcanon/` after verifying no active `lsof` locks on files
+- [x] **UPD-10
+**: Post-update health poll: GET `/api/version` for up to 10s; confirm version matches target
 - [x] **UPD-11
 **: On offline / rate-limited marketplace fetch (`curl --max-time 5` fails), command exits 0 with "could not reach update server, current version is X.Y.Z"
-- [ ] **UPD-12**: Final message tells user "Restart Claude Code to activate v{newver}" (session-restart is required for new commands/hooks to load)
+- [x] **UPD-12
+**: Final message tells user "Restart Claude Code to activate v{newver}" (session-restart is required for new commands/hooks to load)
 - [x] **UPD-13
 **: bats test matrix for semver comparison (`0.9.0 < 0.10.0`, `0.1.0 < 0.1.1`, `1.0.0 == 1.0.0`)
 
