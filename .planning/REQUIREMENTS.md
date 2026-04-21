@@ -50,10 +50,14 @@ New `/arcanon:update` command for clean self-update flow.
 **: When up-to-date, command exits 0 with "Arcanon v{version} is the latest release." message
 - [x] **UPD-04
 **: When newer available, command prints 2-4 CHANGELOG lines from the remote `CHANGELOG.md` Unreleased / latest section
-- [ ] **UPD-05**: Command asks for confirmation (default No) via user prompt before applying update
-- [ ] **UPD-06**: On confirmation, command runs `claude plugin update arcanon --scope user` to trigger reinstall
-- [ ] **UPD-07**: Before killing worker, command checks `$ARCANON_DATA_DIR/scan.lock` OR worker HTTP `/api/status` for active scan — aborts with user prompt if scan in progress
-- [ ] **UPD-08**: Worker kill uses kill-only semantics (SIGTERM → 5s wait → SIGKILL), NOT `restart_worker_if_stale` (which restarts the old binary)
+- [x] **UPD-05
+**: Command asks for confirmation (default No) via user prompt before applying update
+- [x] **UPD-06
+**: On confirmation, command runs `claude plugin update arcanon --scope user` to trigger reinstall
+- [x] **UPD-07
+**: Before killing worker, command checks `$ARCANON_DATA_DIR/scan.lock` OR worker HTTP `/api/status` for active scan — aborts with user prompt if scan in progress
+- [x] **UPD-08
+**: Worker kill uses kill-only semantics (SIGTERM → 5s wait → SIGKILL), NOT `restart_worker_if_stale` (which restarts the old binary)
 - [ ] **UPD-09**: Old cache version dirs pruned from `~/.claude/plugins/cache/arcanon/arcanon/` after verifying no active `lsof` locks on files
 - [ ] **UPD-10**: Post-update health poll: GET `/api/version` for up to 10s; confirm version matches target
 - [x] **UPD-11

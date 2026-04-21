@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1.1
 milestone_name: Command Cleanup + Update + Ambient Hooks
 status: executing
-stopped_at: Completed 98-update-command/98-01-PLAN.md
-last_updated: "2026-04-21T18:57:39.733Z"
+stopped_at: Completed 98-02-PLAN.md (confirmation+kill+reinstall)
+last_updated: "2026-04-21T19:06:14.609Z"
 last_activity: 2026-04-21
 progress:
   total_phases: 36
   completed_phases: 1
   total_plans: 12
-  completed_plans: 5
-  percent: 42
+  completed_plans: 6
+  percent: 50
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-21)
 ## Current Position
 
 Phase: 98 (/arcanon:update Command) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-21
 
-Progress: [████░░░░░░] 42%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -59,6 +59,8 @@ Progress: [████░░░░░░] 42%
 - semver present transitively in node_modules — no package.json edit needed for 98-01
 - claude plugin update --yes flag absent — 98-02 must handle interactive reinstall prompt
 - node exit-code capture via || NODE_EXIT=$? guards ERR trap on intentional non-zero exits
+- Kill-only semantics: update.sh --kill never calls restart_worker_if_stale or worker_start_background (Anti-Pattern 2 guard)
+- --yes absent: reinstall uses claude plugin update arcanon --scope user without --yes per 98-01 pre-flight confirmation
 
 ### Pending Todos
 
@@ -72,6 +74,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-21T18:57:39.725Z
-Stopped at: Completed 98-update-command/98-01-PLAN.md
+Last session: 2026-04-21T19:06:14.600Z
+Stopped at: Completed 98-02-PLAN.md (confirmation+kill+reinstall)
 Resume file: None
