@@ -66,12 +66,50 @@ Otherwise:
 > `Arcanon v{remote} is available. Changes:`
 > `{PREVIEW verbatim, one bullet per line}`
 
-## Step 3 — (Coming in plans 98-02 + 98-03)
+## Step 3 — Ask for confirmation (default No) [REQ UPD-05]
 
-Confirmation, kill, reinstall, cache prune, health poll, and the final
-"Restart Claude Code to activate v{newver}" message are wired in the next
-two plans. This command prints a placeholder for now:
+Only reached when `status=newer`. Show the installed/remote/changelog summary, then ask:
 
-> `Apply flow lands in plans 98-02 and 98-03. For now, run 'claude plugin update arcanon --scope user' manually.`
+> `Update Arcanon from v{INSTALLED} to v{REMOTE}? [y/N]`
 
-Never mutate state in this plan. The check is read-only.
+Default is No. Only proceed if the user types `y` or `yes` (case-insensitive). Any other input — including empty — aborts with:
+
+> `Update cancelled. No changes made.`
+
+Wait for the user's literal response. Do NOT auto-proceed.
+
+## Step 4 — Check for active scan and kill the worker [REQ UPD-07, UPD-08]
+
+Run:
+
+```bash
+KILL_OUT=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/update.sh" --kill)
+KILL_STATUS=$(printf '%s' "$KILL_OUT" | jq -r '.status')
+```
+
+Branch on `KILL_STATUS`:
+
+| status | Action |
+|--------|--------|
+| `killed` | Proceed to Step 5. |
+| `scan_in_progress` | Tell the user: `A scan is currently running. Finish or cancel it, then run /arcanon:update again.` Then stop — do NOT continue. |
+
+Never proceed to reinstall while a scan is running.
+
+## Step 5 — Run the plugin reinstall [REQ UPD-06]
+
+**Note:** Pre-flight validation (recorded in 98-01 SUMMARY) confirmed that `claude plugin update` does NOT support `--yes` / `-y` / `--non-interactive`. The reinstall will run interactively — the user may be prompted to confirm by the `claude` CLI itself.
+
+```bash
+claude plugin update arcanon --scope user
+```
+
+Tell the user:
+
+> `Installing Arcanon v{REMOTE}… (this may take a moment)`
+
+If the reinstall command exits non-zero, relay its stderr verbatim and stop — do NOT continue to Step 6/7.
+
+## Step 6 — (Continued in plan 98-03: cache prune)
+
+## Step 7 — (Continued in plan 98-03: health verify + final message)
