@@ -667,7 +667,11 @@ Plans:
   3. `/arcanon:upload` still exists as a deprecated stub that exits 0, forwards to sync, and emits a deprecation warning to stderr — existing CI pipelines do not break
   4. `worker/cli/hub.js` and `worker/scan/manager.js` use the two-read pattern `cfg?.hub?.["auto-sync"] ?? cfg?.hub?.["auto-upload"]`; reading the legacy `auto-upload` key emits a deprecation warning to stderr
   5. bats regression passes: all seven surviving commands (`/arcanon:map`, `/arcanon:drift`, `/arcanon:impact`, `/arcanon:sync`, `/arcanon:login`, `/arcanon:status`, `/arcanon:export`) behave correctly
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 97-01-PLAN.md — Delete /arcanon:cross-impact and scrub banner/README/docs/bats references (CLN-01, CLN-02)
+- [ ] 97-02-PLAN.md — Merge upload into sync with --drain|--repo|--dry-run|--force + deprecated upload stub + 7-command bats regression (CLN-03, CLN-04, CLN-05, CLN-09)
+- [ ] 97-03-PLAN.md — Rename auto_upload → auto_sync with two-read pattern + one-time stderr deprecation warning + unit tests (CLN-06, CLN-07, CLN-08)
 
 ### Phase 98: /arcanon:update Command
 **Goal**: Users can run `/arcanon:update` to check for a newer version, confirm, and get a clean plugin update — stale workers are killed safely, old cache is pruned, and the user is told exactly what to do next
@@ -734,7 +738,7 @@ Plans:
 | 84-88 | v5.6.0 | 6/6 | Complete | 2026-03-23 |
 | 89-91 | v5.7.0 | 3/3 | Complete | 2026-03-23 |
 | 92-96 | v5.8.0 | 16/16 | Complete | 2026-04-19 |
-| 97 | v0.1.1 | 0/TBD | Not started | - |
+| 97 | v0.1.1 | 0/3 | Not started | - |
 | 98 | v0.1.1 | 0/TBD | Not started | - |
 | 99 | v0.1.1 | 0/TBD | Not started | - |
 | 100 | v0.1.1 | 0/TBD | Not started | - |
