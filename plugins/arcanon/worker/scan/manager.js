@@ -43,22 +43,52 @@ import { syncFindings, hasCredentials } from "../hub-sync/index.js";
 // Module-level registration runs before the first scan.
 registerEnricher("codeowners", createCodeownersEnricher());
 
+// CLN-08: Module-level guard ensures the deprecation warning fires at most
+// once per worker process, even if _readHubAutoSync is called thousands of
+// times across sequential scans.
+let _autoUploadDeprecationWarned = false;
+
+/**
+ * Read hub.auto-sync with a legacy fallback to hub.auto-upload.
+ * Writes a one-time stderr deprecation warning when the legacy key is the
+ * sole activator. Remove this helper in v0.2.0 when the fallback is dropped.
+ *
+ * @param {Record<string, unknown>|undefined} hubBlock The `cfg.hub` object.
+ * @returns {boolean} Effective flag value.
+ */
+function _readHubAutoSync(hubBlock) {
+  const newKey = hubBlock?.["auto-sync"];
+  const legacyKey = hubBlock?.["auto-upload"];
+  // Explicit undefined check so that auto-sync:false beats auto-upload:true.
+  if (typeof newKey !== "undefined") return Boolean(newKey);
+  if (typeof legacyKey !== "undefined") {
+    if (!_autoUploadDeprecationWarned) {
+      process.stderr.write(
+        "arcanon: config key 'hub.auto-upload' is deprecated — rename to 'hub.auto-sync' (legacy key will be dropped in v0.2.0)\n"
+      );
+      _autoUploadDeprecationWarned = true;
+    }
+    return Boolean(legacyKey);
+  }
+  return false;
+}
+
 /**
  * Read hub config from arcanon.config.json (legacy ligamen.config.json supported).
- * @returns {{ hubAutoUpload: boolean, hubUrl: string|undefined, projectSlug: string|undefined }}
+ * @returns {{ hubAutoSync: boolean, hubUrl: string|undefined, projectSlug: string|undefined }}
  */
 function _readHubConfig() {
   try {
     const cfgPath = resolveConfigPath(process.cwd());
     const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));
     return {
-      hubAutoUpload: Boolean(cfg?.hub?.["auto-upload"]),
+      hubAutoSync: _readHubAutoSync(cfg?.hub),
       hubUrl: cfg?.hub?.url,
       projectSlug: cfg?.hub?.["project-slug"] || cfg?.["project-name"],
       libraryDepsEnabled: Boolean(cfg?.hub?.beta_features?.library_deps),
     };
   } catch {
-    return { hubAutoUpload: false, hubUrl: undefined, projectSlug: undefined, libraryDepsEnabled: false };
+    return { hubAutoSync: false, hubUrl: undefined, projectSlug: undefined, libraryDepsEnabled: false };
   }
 }
 
@@ -767,7 +797,7 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     queryEngine.persistFindings(r.repoId, r.findings, r.currentHead, r.scanVersionId);
     queryEngine.endScan(r.repoId, r.scanVersionId);
 
-    // 10a. Back-fill DB ids onto r.findings.services so the hub auto-upload
+    // 10a. Back-fill DB ids onto r.findings.services so the hub auto-sync
     // loop (step HUB-01) can call getDependenciesForService(svc.id).
     // persistFindings builds a name→id map internally but does not write ids
     // back onto the findings objects. We resolve them here via a single SELECT.
@@ -849,22 +879,22 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     results.push({ repoPath: r.repoPath, mode: r.mode, findings: r.findings });
   }
 
-  // HUB-01: Optional Arcanon Hub sync — opt-in via ARCANON_API_KEY or config.hub.autoUpload.
+  // HUB-01: Optional Arcanon Hub sync — opt-in via ARCANON_API_KEY or config.hub.auto-sync.
   // Runs per-repo, fire-and-log — a hub failure never fails the scan.
   try {
-    const { hubAutoUpload, hubUrl, projectSlug, libraryDepsEnabled } = _readHubConfig();
+    const { hubAutoSync, hubUrl, projectSlug, libraryDepsEnabled } = _readHubConfig();
     // Credential check spans env vars AND ~/.arcanon/config.json so that
     // users who ran /arcanon:login (without exporting an env var) still
-    // get auto-uploads.
-    if (hubAutoUpload && !hasCredentials()) {
+    // get auto-sync.
+    if (hubAutoSync && !hasCredentials()) {
       // User opted in but never set up credentials — surface a nudge so the
       // setting isn't silently ignored. The first scan log surfaces this;
       // subsequent scans repeat it so missing creds stay visible.
-      slog('WARN', 'hub auto-upload skipped — no api_token configured', {
+      slog('WARN', 'hub auto-sync skipped — no api_token configured', {
         next_step: 'Get a key at https://app.arcanon.dev/settings/api-keys, then /arcanon:login',
       });
     }
-    if (hasCredentials() && hubAutoUpload) {
+    if (hasCredentials() && hubAutoSync) {
       for (const r of results) {
         if (!r.findings) continue;
         // HUB-01 / HUB-03: when the feature flag is on, attach per-service deps
@@ -926,3 +956,6 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     releaseScanLock(lockPath);
   }
 }
+
+// Exported for test access only (_-prefixed = internal helper, not public surface).
+export { _readHubAutoSync };

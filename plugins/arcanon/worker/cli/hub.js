@@ -39,6 +39,35 @@ import { resolveDataDir } from "../lib/data-dir.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// CLN-08: Module-level guard ensures the deprecation warning fires at most
+// once per worker process, even if _readHubAutoSync is called multiple times.
+let _autoUploadDeprecationWarned = false;
+
+/**
+ * Read hub.auto-sync with a legacy fallback to hub.auto-upload.
+ * Writes a one-time stderr deprecation warning when the legacy key is the
+ * sole activator. Remove this helper in v0.2.0 when the fallback is dropped.
+ *
+ * @param {Record<string, unknown>|undefined} hubBlock The `cfg.hub` object.
+ * @returns {boolean} Effective flag value.
+ */
+function _readHubAutoSync(hubBlock) {
+  const newKey = hubBlock?.["auto-sync"];
+  const legacyKey = hubBlock?.["auto-upload"];
+  // Explicit undefined check so that auto-sync:false beats auto-upload:true.
+  if (typeof newKey !== "undefined") return Boolean(newKey);
+  if (typeof legacyKey !== "undefined") {
+    if (!_autoUploadDeprecationWarned) {
+      process.stderr.write(
+        "arcanon: config key 'hub.auto-upload' is deprecated — rename to 'hub.auto-sync' (legacy key will be dropped in v0.2.0)\n"
+      );
+      _autoUploadDeprecationWarned = true;
+    }
+    return Boolean(legacyKey);
+  }
+  return false;
+}
+
 function parseArgs(argv) {
   const [sub, ...rest] = argv;
   const flags = {};
@@ -111,7 +140,7 @@ async function cmdLogin(flags) {
 async function cmdStatus(flags) {
   const stats = queueStats();
   const cfg = readProjectConfig();
-  const hubAutoUpload = Boolean(cfg?.hub?.["auto-upload"]);
+  const hubAutoSync = _readHubAutoSync(cfg?.hub);
   const projectSlug = cfg?.hub?.["project-slug"] || cfg?.["project-name"] || null;
 
   const hasCreds = (() => {
@@ -128,7 +157,7 @@ async function cmdStatus(flags) {
     data_dir: resolveDataDir(),
     config_file: resolveConfigPath(process.cwd()),
     project_slug: projectSlug,
-    hub_auto_upload: hubAutoUpload,
+    hub_auto_sync: hubAutoSync,
     credentials: hasCreds ? "present" : "missing",
     queue: stats,
   };
@@ -141,7 +170,7 @@ async function cmdStatus(flags) {
     `Arcanon v${report.plugin_version}`,
     `  project:      ${report.project_slug || "(none — set project-name in arcanon.config.json)"}`,
     `  credentials:  ${report.credentials === "present" ? "✓ present" : "✗ missing (/arcanon:login)"}`,
-    `  auto-upload:  ${hubAutoUpload ? "enabled" : "disabled"}`,
+    `  auto-sync:    ${hubAutoSync ? "enabled" : "disabled"}`,
     `  queue:        ${stats.pending} pending, ${stats.dead} dead${stats.oldestPending ? `, oldest ${stats.oldestPending}` : ""}`,
     `  data dir:     ${report.data_dir}`,
   ];
@@ -306,3 +335,6 @@ async function main() {
 }
 
 main();
+
+// Exported for test access only (_-prefixed = internal helper, not public surface).
+export { _readHubAutoSync };
