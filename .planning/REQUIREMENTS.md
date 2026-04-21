@@ -104,7 +104,8 @@ Ambient protection when Claude Edit/Writes service-load-bearing files.
 **: When file classified as service-load-bearing, hook queries consumer count via worker HTTP `GET /impact?change=<service>` (fall back to direct SQLite if worker down)
 - [x] **HOK-05
 **: Hook output format: `{"systemMessage": "Arcanon: <service> has N consumers: svc-a, svc-b, svc-c. Run /arcanon:impact for details."}` + exit 0 (warn-only, never block)
-- [ ] **HOK-06**: NO Node cold-start in hot path — hook is pure bash + curl + sqlite3 CLI. p99 latency < 50ms (bats-benchmarked).
+- [x] **HOK-06
+**: NO Node cold-start in hot path — hook is pure bash + curl + sqlite3 CLI. p99 latency < 50ms (bats-benchmarked).
 - [x] **HOK-07
 **: Self-exclusion: hook exits 0 silently when edited file is inside `$CLAUDE_PLUGIN_ROOT` (prevents hook-storm when developing Arcanon itself)
 - [x] **HOK-08
@@ -117,7 +118,8 @@ Ambient protection when Claude Edit/Writes service-load-bearing files.
 **: `ARCANON_DISABLE_HOOK=1` env var short-circuits the hook (exits 0 silently) — escape hatch for users who don't want the ambient warnings
 - [x] **HOK-12
 **: New `lib/db-path.sh` helper that resolves per-project DB path from CWD using the exact same hash algorithm as `worker/lib/data-dir.js`
-- [ ] **HOK-13**: bats test fixtures:
+- [x] **HOK-13
+**: bats test fixtures:
   - Tier 1 match (edit `*.proto` → hook fires with warning)
   - Tier 2 match (edit file inside a tracked service's root_path → hook fires)
   - False-positive guard (`auth-legacy` does NOT fire when `auth` service exists)

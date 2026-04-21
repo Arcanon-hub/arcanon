@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.1.1
 milestone_name: Command Cleanup + Update + Ambient Hooks
-status: executing
-stopped_at: Completed 100-impact-hook/100-03-PLAN.md
-last_updated: "2026-04-21T19:40:59.987Z"
+status: verifying
+stopped_at: Completed 100-04-PLAN.md
+last_updated: "2026-04-21T19:51:42.355Z"
 last_activity: 2026-04-21
 progress:
   total_phases: 36
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 12
-  completed_plans: 11
-  percent: 92
+  completed_plans: 12
+  percent: 100
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-04-21)
 
 Phase: 100 (PreToolUse Impact Hook) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-04-21
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -76,6 +76,8 @@ Progress: [█████████░] 92%
 - Trailing-slash normalization prevents auth-legacy false-match: [[ FILE == ${prefix%/}/* ]] with single trailing slash
 - Worker HTTP primary for consumer query; direct SQLite fallback when worker_running returns non-zero (HOK-04)
 - jq @uri encoding for URL params (T-100-10) + sed s/'/''/g for SQLite interpolation (T-100-09)
+- Latency threshold configurable via IMPACT_HOOK_LATENCY_THRESHOLD: default 50ms, actual p99 on macOS arm64 is 145ms (Plan 03 optimization issue)
+- BATS_TEST_DIRNAME used as primary repo-root anchor in fixture factory over BASH_SOURCE[0] which is empty in bash -c context
 
 ### Pending Todos
 
@@ -89,6 +91,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-21T19:40:59.978Z
-Stopped at: Completed 100-impact-hook/100-03-PLAN.md
+Last session: 2026-04-21T19:51:42.346Z
+Stopped at: Completed 100-04-PLAN.md
 Resume file: None
