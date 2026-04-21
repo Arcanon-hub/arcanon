@@ -13,13 +13,17 @@ Remove legacy surface, merge redundant commands, migrate config key.
 
 - [ ] **CLN-01**: `/arcanon:cross-impact` command removed (file `commands/cross-impact.md` deleted)
 - [ ] **CLN-02**: Banner / doc references to `/arcanon:cross-impact` removed from `scripts/session-start.sh`, `README.md`, `docs/commands.md`
-- [ ] **CLN-03**: `/arcanon:sync` absorbs `/arcanon:upload` semantics; supports `--drain` (queue only), `--repo <path>`, `--dry-run`, `--force` flags
-- [ ] **CLN-04**: Default `/arcanon:sync` with no flags does upload-then-drain (push current repo's latest scan, then drain queue)
-- [ ] **CLN-05**: `/arcanon:upload` kept for one version as deprecated stub that forwards to `/arcanon:sync` with a stderr deprecation warning
+- [x] **CLN-03
+**: `/arcanon:sync` absorbs `/arcanon:upload` semantics; supports `--drain` (queue only), `--repo <path>`, `--dry-run`, `--force` flags
+- [x] **CLN-04
+**: Default `/arcanon:sync` with no flags does upload-then-drain (push current repo's latest scan, then drain queue)
+- [x] **CLN-05
+**: `/arcanon:upload` kept for one version as deprecated stub that forwards to `/arcanon:sync` with a stderr deprecation warning
 - [ ] **CLN-06**: Plugin config rename `auto_upload` → `auto_sync` in `.claude-plugin/plugin.json` userConfig
 - [ ] **CLN-07**: Worker `hub.js` line 114 + `manager.js` line 55 use two-read pattern `cfg?.hub?.["auto-sync"] ?? cfg?.hub?.["auto-upload"]`
 - [ ] **CLN-08**: Deprecation warning emitted to stderr when legacy `auto-upload` key is read
-- [ ] **CLN-09**: bats regression test — existing commands still work (`/arcanon:map`, `/arcanon:drift`, `/arcanon:impact`, `/arcanon:sync`, `/arcanon:login`, `/arcanon:status`, `/arcanon:export`)
+- [x] **CLN-09
+**: bats regression test — existing commands still work (`/arcanon:map`, `/arcanon:drift`, `/arcanon:impact`, `/arcanon:sync`, `/arcanon:login`, `/arcanon:status`, `/arcanon:export`)
 - [x] **CLN-10
 **: `/arcanon:impact` absorbs cross-impact's `--exclude <repo>` flag (can be repeated to exclude multiple repos from results) — matches flag parity flagged by review point #8
 - [x] **CLN-11

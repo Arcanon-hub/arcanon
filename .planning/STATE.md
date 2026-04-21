@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1.1
 milestone_name: Command Cleanup + Update + Ambient Hooks
 status: executing
-stopped_at: Completed 97-04-PLAN.md (cross-impact merge into impact.md)
-last_updated: "2026-04-21T18:24:29.484Z"
+stopped_at: Completed 97-command-cleanup/97-02-PLAN.md
+last_updated: "2026-04-21T18:29:33.813Z"
 last_activity: 2026-04-21
 progress:
   total_phases: 36
   completed_phases: 0
   total_plans: 12
-  completed_plans: 1
-  percent: 8
+  completed_plans: 2
+  percent: 17
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-21)
 ## Current Position
 
 Phase: 97 (Command Cleanup) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-21
 
-Progress: [█░░░░░░░░░] 8%
+Progress: [██░░░░░░░░] 17%
 
 ## Performance Metrics
 
@@ -51,6 +51,8 @@ Progress: [█░░░░░░░░░] 8%
 - [v0.1.1]: PreToolUse hook fires on service-load-bearing files (`*.proto`, `openapi.*`, known service entry-points from impact-map) — deterministic, testable, doesn't depend on Claude's probabilistic skill matching.
 - [v0.1.1]: `/arcanon:update` is opt-in: checks remote, asks user, then applies cleanly (reinstall + kill stale worker + prune cache + verify). Addresses the v6.0.0 → v0.1.0 stale-worker incident directly.
 - Merge-then-delete sequencing for cross-impact: absorb all capabilities into impact.md first (Wave 1), then delete cross-impact.md (Wave 2) gated on bats serialization guard
+- upload.md stub shells into hub.sh upload (not hub.sh sync) to preserve exact v0.1.0 code path for one version until v0.2.0
+- Deprecated stub pattern established: [DEPRECATED] frontmatter + printf >&2 + $ARGUMENTS passthrough + v0.2.0 removal anchor
 
 ### Pending Todos
 
@@ -64,6 +66,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-21T18:24:29.475Z
-Stopped at: Completed 97-04-PLAN.md (cross-impact merge into impact.md)
+Last session: 2026-04-21T18:29:33.805Z
+Stopped at: Completed 97-command-cleanup/97-02-PLAN.md
 Resume file: None
