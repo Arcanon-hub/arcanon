@@ -232,3 +232,148 @@ CHG
 
   rm -rf "$ARCANON_DATA_DIR"
 }
+
+# ─── UPD-09 / UPD-10 / UPD-12: --prune-cache and --verify (Phase 98, plan 98-03) ───
+
+# UPD-09: current version is kept, not pruned
+@test "UPD-09: --prune-cache never prunes the current version dir" {
+  TEST_CACHE_HOME="$(mktemp -d)"
+  export HOME="$TEST_CACHE_HOME"
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+
+  CURRENT_VER=$(jq -r '.version' "$PLUGIN_ROOT/.claude-plugin/plugin.json")
+
+  # Synthesize a fake cache layout with the current version present
+  mkdir -p "$TEST_CACHE_HOME/.claude/plugins/cache/arcanon/arcanon/$CURRENT_VER"
+  touch "$TEST_CACHE_HOME/.claude/plugins/cache/arcanon/arcanon/$CURRENT_VER/marker"
+
+  run bash -c "bash '$PLUGIN_ROOT/scripts/update.sh' --prune-cache | jq -r '.kept | length'"
+  assert_success
+  [[ "$output" -ge 1 ]] || { echo "kept list is empty"; return 1; }
+
+  # Current dir must still exist
+  [[ -f "$TEST_CACHE_HOME/.claude/plugins/cache/arcanon/arcanon/$CURRENT_VER/marker" ]] || {
+    echo "current-version dir was wrongly deleted"; return 1;
+  }
+
+  rm -rf "$TEST_CACHE_HOME"
+}
+
+# UPD-09: old version is pruned
+@test "UPD-09: --prune-cache deletes non-current version dirs" {
+  TEST_CACHE_HOME="$(mktemp -d)"
+  export HOME="$TEST_CACHE_HOME"
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+
+  CURRENT_VER=$(jq -r '.version' "$PLUGIN_ROOT/.claude-plugin/plugin.json")
+  OLD_VER="0.0.1-test"
+
+  mkdir -p "$TEST_CACHE_HOME/.claude/plugins/cache/arcanon/arcanon/$CURRENT_VER"
+  mkdir -p "$TEST_CACHE_HOME/.claude/plugins/cache/arcanon/arcanon/$OLD_VER"
+  touch "$TEST_CACHE_HOME/.claude/plugins/cache/arcanon/arcanon/$OLD_VER/old-marker"
+
+  run bash "$PLUGIN_ROOT/scripts/update.sh" --prune-cache
+  assert_success
+
+  # Old dir must be gone
+  [[ ! -d "$TEST_CACHE_HOME/.claude/plugins/cache/arcanon/arcanon/$OLD_VER" ]] || {
+    echo "old-version dir was not pruned"; return 1;
+  }
+  # Current dir must still exist
+  [[ -d "$TEST_CACHE_HOME/.claude/plugins/cache/arcanon/arcanon/$CURRENT_VER" ]] || {
+    echo "current-version dir was wrongly deleted"; return 1;
+  }
+
+  rm -rf "$TEST_CACHE_HOME"
+}
+
+# UPD-09: lsof guard keeps dirs with active handles
+@test "UPD-09: --prune-cache skips dirs with active file handles (lsof guard)" {
+  # Skip if lsof is unavailable (CI without lsof).
+  command -v lsof >/dev/null 2>&1 || skip "lsof not available"
+
+  TEST_CACHE_HOME="$(mktemp -d)"
+  export HOME="$TEST_CACHE_HOME"
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+
+  CURRENT_VER=$(jq -r '.version' "$PLUGIN_ROOT/.claude-plugin/plugin.json")
+  OLD_VER="0.0.2-test"
+
+  mkdir -p "$TEST_CACHE_HOME/.claude/plugins/cache/arcanon/arcanon/$CURRENT_VER"
+  mkdir -p "$TEST_CACHE_HOME/.claude/plugins/cache/arcanon/arcanon/$OLD_VER"
+
+  # Hold an open directory handle via a background subshell cd'ing into the old dir.
+  # lsof +D detects open *directory* handles (cwd of a process), not just open files.
+  # This matches the real-world scenario: a worker process running from inside a cache dir.
+  OLD_CACHE_DIR="$TEST_CACHE_HOME/.claude/plugins/cache/arcanon/arcanon/$OLD_VER"
+  ( cd "$OLD_CACHE_DIR" && sleep 10 ) &
+  HOLD_PID=$!
+  sleep 0.3  # let the subshell establish the directory handle
+
+  run bash "$PLUGIN_ROOT/scripts/update.sh" --prune-cache
+  assert_success
+
+  # Kill the holder BEFORE assertions — so teardown always cleans up even on failure
+  kill "$HOLD_PID" 2>/dev/null || true
+
+  # Old dir must still exist (locked, not pruned)
+  [[ -d "$TEST_CACHE_HOME/.claude/plugins/cache/arcanon/arcanon/$OLD_VER" ]] || {
+    echo "locked dir was wrongly pruned"; return 1;
+  }
+
+  rm -rf "$TEST_CACHE_HOME"
+}
+
+# UPD-10: --verify success path
+@test "UPD-10: --verify starts worker and reports status=verified when versions match" {
+  export ARCANON_DATA_DIR="$(mktemp -d)"
+  export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+  export ARCANON_WORKER_PORT="37997"
+
+  # No worker running — --verify must start one.
+  run bash -c "bash '$PLUGIN_ROOT/scripts/update.sh' --verify | jq -er '.status'"
+  assert_success
+  assert_output "verified"
+
+  # Cleanup
+  bash "$PLUGIN_ROOT/scripts/worker-stop.sh" >/dev/null 2>&1 || true
+  rm -rf "$ARCANON_DATA_DIR"
+}
+
+# UPD-10: --verify exits 0 even on failure (graceful fallback per Pitfall 11)
+# Sabotage: replace worker-start.sh with a no-op so no worker ever spawns.
+# The poll loop times out after 10 iterations and emits verify_failed.
+@test "UPD-10: --verify exits 0 on timeout (does not fail the caller)" {
+  export ARCANON_DATA_DIR="$(mktemp -d)"
+  export ARCANON_WORKER_PORT="37996"
+
+  # Build a fake PLUGIN_ROOT that has the real lib/ dir but a no-op worker-start.sh.
+  FAKE_ROOT="$(mktemp -d)"
+  # Symlink lib/ and .claude-plugin/ so version resolution works
+  ln -s "$PLUGIN_ROOT/lib"             "$FAKE_ROOT/lib"
+  ln -s "$PLUGIN_ROOT/.claude-plugin"  "$FAKE_ROOT/.claude-plugin"
+  ln -s "$PLUGIN_ROOT/package.json"    "$FAKE_ROOT/package.json" 2>/dev/null || true
+  mkdir -p "$FAKE_ROOT/scripts"
+  # No-op worker-start.sh — exits immediately without spawning a worker
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE_ROOT/scripts/worker-start.sh"
+  chmod +x "$FAKE_ROOT/scripts/worker-start.sh"
+
+  export CLAUDE_PLUGIN_ROOT="$FAKE_ROOT"
+
+  # Run the real update.sh (from PLUGIN_ROOT) but with CLAUDE_PLUGIN_ROOT=FAKE_ROOT
+  # so it picks up the no-op worker-start.sh and never gets a worker response.
+  run bash "$PLUGIN_ROOT/scripts/update.sh" --verify
+  assert_success  # exit 0 even on timeout
+
+  VERIFY_STATUS=$(printf '%s' "$output" | jq -r '.status' 2>/dev/null || true)
+  [[ "$VERIFY_STATUS" == "verify_failed" ]] || { echo "expected verify_failed, got: $VERIFY_STATUS (output: $output)"; return 1; }
+
+  rm -rf "$ARCANON_DATA_DIR" "$FAKE_ROOT"
+}
+
+# UPD-12: final "Restart Claude Code" message is present in commands/update.md
+@test "UPD-12: commands/update.md contains 'Restart Claude Code to activate' in a success path" {
+  run grep -cE 'Restart Claude Code to activate' "$PLUGIN_ROOT/commands/update.md"
+  assert_success
+  [[ "$output" -ge 1 ]] || { echo "final message missing from commands/update.md"; return 1; }
+}
