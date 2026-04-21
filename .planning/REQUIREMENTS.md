@@ -98,13 +98,17 @@ Ambient protection when Claude Edit/Writes service-load-bearing files.
 **: Hook implements two-tier file classification:
   - **Tier 1** (pure bash, ~0ms): file matches `*.proto`, `openapi.yaml|yml|json`, `swagger.yaml|yml|json`
   - **Tier 2** (SQLite prefix match, ~5-15ms): file path starts with any `services.root_path` value from impact-map.db
-- [ ] **HOK-03**: `root_path` prefix match must normalize trailing slashes: `[[ "$FILE" == "${root_path%/}/"* ]]` — prevents `services/auth` falsely matching `services/auth-legacy`
-- [ ] **HOK-04**: When file classified as service-load-bearing, hook queries consumer count via worker HTTP `GET /impact?change=<service>` (fall back to direct SQLite if worker down)
-- [ ] **HOK-05**: Hook output format: `{"systemMessage": "Arcanon: <service> has N consumers: svc-a, svc-b, svc-c. Run /arcanon:impact for details."}` + exit 0 (warn-only, never block)
+- [x] **HOK-03
+**: `root_path` prefix match must normalize trailing slashes: `[[ "$FILE" == "${root_path%/}/"* ]]` — prevents `services/auth` falsely matching `services/auth-legacy`
+- [x] **HOK-04
+**: When file classified as service-load-bearing, hook queries consumer count via worker HTTP `GET /impact?change=<service>` (fall back to direct SQLite if worker down)
+- [x] **HOK-05
+**: Hook output format: `{"systemMessage": "Arcanon: <service> has N consumers: svc-a, svc-b, svc-c. Run /arcanon:impact for details."}` + exit 0 (warn-only, never block)
 - [ ] **HOK-06**: NO Node cold-start in hot path — hook is pure bash + curl + sqlite3 CLI. p99 latency < 50ms (bats-benchmarked).
 - [x] **HOK-07
 **: Self-exclusion: hook exits 0 silently when edited file is inside `$CLAUDE_PLUGIN_ROOT` (prevents hook-storm when developing Arcanon itself)
-- [ ] **HOK-08**: Staleness signal in warning text: prepend `[stale map — scanned Xd ago]` when impact-map is > 48h old
+- [x] **HOK-08
+**: Staleness signal in warning text: prepend `[stale map — scanned Xd ago]` when impact-map is > 48h old
 - [x] **HOK-09
 **: On any error (db missing, worker down, query timeout), hook exits 0 silently — NEVER blocks an edit
 - [x] **HOK-10

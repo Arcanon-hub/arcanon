@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1.1
 milestone_name: Command Cleanup + Update + Ambient Hooks
 status: executing
-stopped_at: Completed 100-impact-hook/100-02-PLAN.md
-last_updated: "2026-04-21T19:36:42.541Z"
+stopped_at: Completed 100-impact-hook/100-03-PLAN.md
+last_updated: "2026-04-21T19:40:59.987Z"
 last_activity: 2026-04-21
 progress:
   total_phases: 36
   completed_phases: 3
   total_plans: 12
-  completed_plans: 10
-  percent: 83
+  completed_plans: 11
+  percent: 92
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-21)
 ## Current Position
 
 Phase: 100 (PreToolUse Impact Hook) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-04-21
 
-Progress: [████████░░] 83%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -72,6 +72,10 @@ Progress: [████████░░] 83%
 - _ms_now() validates date +%s%3N output before trusting it — macOS BSD date exits 0 with garbage
 - Self-exclusion uses CLAUDE_PLUGIN_ROOT prefix match to prevent hook-storm during Arcanon dev
 - TIER_2_ANCHOR comment placed after Tier 1 block for Plan 03 insertion without full-file scan
+- root_path is always relative in production DBs (pre-flight Finding 3): JOIN repos.path to reconstruct absolute prefix
+- Trailing-slash normalization prevents auth-legacy false-match: [[ FILE == ${prefix%/}/* ]] with single trailing slash
+- Worker HTTP primary for consumer query; direct SQLite fallback when worker_running returns non-zero (HOK-04)
+- jq @uri encoding for URL params (T-100-10) + sed s/'/''/g for SQLite interpolation (T-100-09)
 
 ### Pending Todos
 
@@ -85,6 +89,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-21T19:36:42.531Z
-Stopped at: Completed 100-impact-hook/100-02-PLAN.md
+Last session: 2026-04-21T19:40:59.978Z
+Stopped at: Completed 100-impact-hook/100-03-PLAN.md
 Resume file: None
