@@ -685,7 +685,11 @@ Plans:
   5. Worker shutdown uses SIGTERM → 5s wait → SIGKILL (kill-only, does NOT invoke `restart_worker_if_stale`)
   6. After update completes, the command prints "Restart Claude Code to activate v{newver}"
   7. When the marketplace fetch fails (curl --max-time 5 timeout), the command exits 0 with "could not reach update server, current version is X.Y.Z"
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 98-01-PLAN.md — /arcanon:update command scaffold + scripts/update.sh --check (semver + offline fallback + CHANGELOG preview + bats matrix) (UPD-01, UPD-02, UPD-03, UPD-04, UPD-11, UPD-13)
+- [ ] 98-02-PLAN.md — Confirmation prompt (default No) + scripts/update.sh --kill (scan-lock guard + SIGTERM-5s-SIGKILL kill-only) + claude plugin update invocation (UPD-05, UPD-06, UPD-07, UPD-08)
+- [ ] 98-03-PLAN.md — scripts/update.sh --prune-cache (lsof-guarded) + --verify (10s health poll) + final "Restart Claude Code to activate v{newver}" message (UPD-09, UPD-10, UPD-12)
 
 ### Phase 99: SessionStart Enrichment
 **Goal**: Every new Claude session in an Arcanon-scanned project automatically receives a concise impact-map summary — so Claude has ambient cross-repo awareness without the user having to run any command
@@ -744,6 +748,6 @@ Plans:
 | 89-91 | v5.7.0 | 3/3 | Complete | 2026-03-23 |
 | 92-96 | v5.8.0 | 16/16 | Complete | 2026-04-19 |
 | 97 | v0.1.1 | 0/3 | Not started | - |
-| 98 | v0.1.1 | 0/TBD | Not started | - |
+| 98 | v0.1.1 | 0/3 | Not started | - |
 | 99 | v0.1.1 | 0/TBD | Not started | - |
 | 100 | v0.1.1 | 0/TBD | Not started | - |
