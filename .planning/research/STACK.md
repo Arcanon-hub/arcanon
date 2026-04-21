@@ -1,629 +1,516 @@
 # Stack Research
 
-**Domain:** Claude Code plugin — Language Parity & Library Drift milestone (v5.8.0)
-**Researched:** 2026-04-19
-**Confidence:** HIGH (shell parsing patterns, SQLite migration design), MEDIUM (auth/db signal tables for Java/C#/Ruby)
+**Domain:** Claude Code plugin — self-update CLI, ambient PreToolUse hooks, SessionStart enrichment
+**Milestone:** v0.1.1 Command Cleanup + Update + Ambient Hooks
+**Researched:** 2026-04-21
+**Confidence:** HIGH (all CLI surface verified live against `claude plugin --help`; hooks.json verified against shipped file; schema verified against all 10 migrations; cache paths verified by filesystem inspection)
 
 ---
 
-## Scope
+## 1. Claude Code Plugin-Management CLI Surface
 
-This document covers ONLY what is NEW in v5.8.0. All existing validated technology
-(better-sqlite3, Node.js worker, bats, jq, awk-based parsers for npm/go/cargo/pypi) is
-excluded — it is already shipped and should not be revisited.
+### Verified Commands (live `--help` output, April 2026)
 
----
+```
+claude plugin update   <plugin>           --scope user|project|local|managed
+claude plugin install  <plugin>[@market]  --scope user|project|local
+claude plugin uninstall <plugin>          --scope user|project|local  --keep-data
+claude plugin marketplace update [name]   (no flags)
+claude plugin marketplace list
+```
 
-## 1. Manifest Parsing — Shell Layer (`drift-versions.sh`)
+**`/arcanon:update` will need these three shell calls in sequence:**
 
-### What already exists
+| Step | Command | Notes |
+|------|---------|-------|
+| 1. Refresh marketplace manifest | `claude plugin marketplace update arcanon` | Fetches latest `marketplace.json` from GitHub into `~/.claude/plugins/marketplaces/arcanon/`. No flags, always fetches all sources. |
+| 2. Detect remote version | Read `~/.claude/plugins/marketplaces/arcanon/plugins/arcanon/.claude-plugin/marketplace.json` → `.version` field (currently `"0.1.0"`) | File-system read, no CLI call needed. This is the canonical remote version after step 1. |
+| 3. Apply update | `claude plugin update arcanon --scope user` | Downloads new cache under `~/.claude/plugins/cache/arcanon/arcanon/<newver>/`, updates `installed_plugins.json`. Prints "(restart required to apply)". |
 
-`extract_versions()` in `drift-versions.sh` handles: `package.json` (jq), `go.mod` (awk),
-`Cargo.toml` (yq or awk fallback), `pyproject.toml` (yq or awk fallback). The pattern is:
-detect manifest file -> parse to `NAME=VERSION` lines -> feed into the shared comparison loop.
-New ecosystems MUST produce the same `NAME=VERSION` line format to slot into the existing
-comparison loop without modification.
+All three require shell invocation from inside the `/arcanon:update` command markdown. None can be done via pure file-system inspection alone (step 2 is fs, steps 1 and 3 are CLI).
 
----
+### How to Query Installed Version Without Reinstalling
 
-### 1a. Maven `pom.xml`
+Two equivalent paths, both verified:
 
-**Tool:** stdlib only — awk (POSIX). No xmlstarlet, no mvn invocation required.
+1. **From `installed_plugins.json`** — `~/.claude/plugins/installed_plugins.json` is a JSON file with a `plugins["arcanon@arcanon"][0].version` field. Read with `jq`.
+2. **From cache `package.json`** — `~/.claude/plugins/cache/arcanon/arcanon/<ver>/package.json` → `.version`. This is the ground truth used by `worker-restart.sh` for the running worker.
 
-**Rationale:** xmlstarlet is not universally available (macOS Homebrew only, absent on most
-CI Linux images without explicit install). The plugin zero-external-dep constraint —
-already honoured for Cargo/pypi — must hold. `pom.xml` is well-formatted by Maven
-convention (the build tool enforces consistent indentation), so line-based awk parsing is
-reliable for dependency extraction. This is a drift checker, not an XML validator.
+Use path (2) for the running-worker comparison (already done in `lib/worker-restart.sh` via `CLAUDE_PLUGIN_ROOT/package.json`) and path (1) for the `/arcanon:update` pre-flight check.
 
-**Format handled:**
+### Cache Path — Stability Assessment
 
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
-      <version>3.2.1</version>
-    </dependency>
+Observed layout:
+```
+~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/
+  ├── package.json          ← version field used by worker-restart.sh
+  ├── scripts/
+  ├── worker/
+  └── ...full plugin source
+```
 
-The unique key is `groupId:artifactId`. Version may be absent when managed via a BOM
-(`<dependencyManagement>` block). The extractor emits `groupId:artifactId=VERSION` when
-version is present, and `groupId:artifactId=managed` when absent, so the drift comparator
-can flag pinned vs managed as WARN (matches the existing "different locking strategies"
-path in `normalize_version()`/`has_range_specifier()`).
+**Assessment: treat as stable for v0.1.1 purposes.** The path is written by `claude plugin install/update` and read by `installed_plugins.json` (official file). The `~/.claude/plugins/` prefix matches `CLAUDE_PLUGIN_DATA` which Claude Code sets as an env var during hook execution. The `<marketplace>/<plugin>/<version>/` suffix matches what `installed_plugins.json` records as `installPath`. No documentation promises permanence, but the structure is load-bearing in the CLI's own manifest file — it is unlikely to change without a migration path.
 
-**awk state machine idiom:**
-Track an `in_dep` flag toggled on `<dependency>` (reset on `</dependency>` and on
-`</dependencies>`). Also track an `in_parent` flag to skip the `<parent>` block, which
-contains its own `<artifactId>` and `<version>` that must not be emitted as a dependency.
-Accumulate groupId/artifactId/version within the block, print on `</dependency>`. Roughly
-20-25 lines of POSIX awk.
+**Mitigation if it does change:** The `/arcanon:update` command reads version via `claude plugin list --json` (which returns `installPath` from the same manifest) rather than hardcoding the path, so a layout change would surface as a read failure rather than a silent wrong answer.
 
-**yq note:** yq TOML/YAML mode cannot parse XML. No yq fast-path is available for this
-format regardless. The awk fallback is the only path.
+### Detecting a Newer Remote Version Without Reinstalling
 
----
+The correct sequence is:
 
-### 1b. Gradle `build.gradle` (Groovy DSL) and `build.gradle.kts` (Kotlin DSL)
+```bash
+# Step A: refresh marketplace (required — without this, the local manifest is stale)
+claude plugin marketplace update arcanon
 
-**Tool:** stdlib only — grep + awk. No Gradle executable, no groovy/kotlin required.
+# Step B: read remote version from refreshed manifest
+REMOTE_VER=$(jq -r '.version // empty' \
+  ~/.claude/plugins/marketplaces/arcanon/plugins/arcanon/.claude-plugin/marketplace.json 2>/dev/null)
 
-**Rationale:** Invoking `gradle dependencies` requires Gradle to be installed and the
-project to be buildable from the drift checker context, which violates the no-build-tool
-assumption. The plugin must work on bare clones. Static grep of the build file covers the
-vast majority of real projects.
+# Step C: read installed version
+INSTALLED_VER=$(jq -r \
+  '.plugins["arcanon@arcanon"][0].version // empty' \
+  ~/.claude/plugins/installed_plugins.json 2>/dev/null)
+# OR: from CLAUDE_PLUGIN_ROOT/package.json (same value, slightly shorter)
+INSTALLED_VER=$(jq -r '.version // empty' "${CLAUDE_PLUGIN_ROOT}/package.json" 2>/dev/null)
 
-**Formats handled (both DSL flavours):**
+# Step D: compare
+[[ "$REMOTE_VER" != "$INSTALLED_VER" ]] && echo "update available: $INSTALLED_VER -> $REMOTE_VER"
+```
 
-Groovy DSL single-string shorthand (most common):
+The `marketplace.json` under `~/.claude/plugins/marketplaces/arcanon/` is a full git clone of `arcanon-hub/arcanon`, so the `plugins/arcanon/.claude-plugin/marketplace.json` inside it is the same file published in the repo. Its `.version` field is the authoritative remote version.
 
-    implementation 'com.google.guava:guava:32.1.3-jre'
-    testImplementation "junit:junit:4.13.2"
+### CLI vs File-System Decision Table
 
-Kotlin DSL (same shorthand, parenthesised):
-
-    implementation("com.google.guava:guava:32.1.3-jre")
-
-Named-args Groovy form (less common, second awk pass):
-
-    implementation group: 'org.springframework', name: 'spring-core', version: '6.1.0'
-
-**Extraction pattern for shorthand form** — grep for dependency configuration keywords,
-then awk to split the `group:artifact:version` triplet and emit `group:artifact=version`.
-Approximately 10 lines of grep + awk. Multi-project `settings.gradle` submodule resolution
-is out of scope for v5.8.0 — single root `build.gradle(.kts)` only.
+| Operation | Method | Reason |
+|-----------|--------|--------|
+| Refresh remote manifest | `claude plugin marketplace update arcanon` (CLI) | No fs equivalent — requires GitHub fetch |
+| Read remote version after refresh | fs read of `~/.claude/plugins/marketplaces/arcanon/...` | Faster, no subprocess |
+| Read installed version | fs read of `CLAUDE_PLUGIN_ROOT/package.json` | Already done in `worker-restart.sh` |
+| Apply plugin update | `claude plugin update arcanon --scope user` (CLI) | No fs equivalent — requires download + manifest rewrite |
+| Prune old cache versions | `rm -rf ~/.claude/plugins/cache/arcanon/arcanon/<oldver>/` | Explicit fs operation; `--keep-data` on uninstall preserves `data/`, not `cache/` |
+| Kill stale worker after update | `source lib/worker-restart.sh && restart_worker_if_stale` | Already exists; version mismatch path handles this |
 
 ---
 
-### 1c. NuGet `.csproj` (SDK-style PackageReference)
+## 2. PreToolUse Hook Shape
 
-**Tool:** stdlib only — grep + sed.
+### Verified Schema (from shipped `hooks/hooks.json`)
 
-**Rationale:** SDK-style `.csproj` is flat XML with `<PackageReference Include="..." Version="..." />`
-on a single line in the vast majority of projects generated by `dotnet new` since 2017.
-Pattern is directly greppable without an XML parser.
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/file-guard.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
-**Dominant single-line form:**
+**Key facts verified from the live file:**
+- `matcher` is a pipe-delimited regex string matching tool names. No glob, no path-scoping at the JSON level.
+- `timeout` is in seconds. Current guard uses 10s. Impact hook should use the same.
+- `"type": "command"` is the only observed type; `"command"` is the shell path, `${CLAUDE_PLUGIN_ROOT}` is interpolated at runtime.
+- Multiple hooks under the same event+matcher run sequentially. The impact hook can be added as a second entry alongside `file-guard.sh` without restructuring.
 
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+**The hook JSON schema has no path-filter field.** Path filtering must be done inside the script itself. The `file-guard.sh` convention (read `jq -r '.tool_input.file_path // .tool_input.path // empty'` from stdin) is the correct pattern to copy.
 
-Extraction: grep for `<PackageReference`, then sed to capture Include and Version attribute
-values as `name=version`.
+### How a Hook Injects Context Into the Conversation
 
-**Two-line form** (present in migrated SDK-style projects):
+Two output contracts, verified from `file-guard.sh`:
 
-    <PackageReference Include="Newtonsoft.Json">
-      <Version>13.0.3</Version>
-    </PackageReference>
+**Soft warn (exit 0 + stdout JSON):**
+```bash
+printf '{"systemMessage": "Arcanon: <message>"}\n'
+exit 0
+```
+Claude Code injects `systemMessage` into the next assistant turn as a system-level reminder. This is appropriate for the impact hook — it should advise Claude without blocking the edit.
 
-This requires the same awk state machine used for pom.xml — track `in_pkg` flag,
-accumulate name/version, emit on `</PackageReference>`.
+**Hard block (exit 2 + stdout JSON):**
+```bash
+printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}\n'
+exit 2
+```
+The impact hook must never block (exit 2). It should always exit 0 with an optional `systemMessage` when consumers are found, or exit 0 with no output when the file is not service-load-bearing.
 
-**Legacy `packages.config`** (old non-SDK projects — still present in migrated codebases):
+**SessionStart / UserPromptSubmit additionalContext injection:**
+```bash
+printf '{"hookSpecificOutput":{"hookEventName":"%s","additionalContext":%s}}\n' "$EVENT" "$CONTEXT_JSON"
+```
+This is the `session-start.sh` pattern. `additionalContext` is the correct key for injecting structured text into session context (not just a system message). This is richer than `systemMessage` — it becomes part of the conversation context the model sees at session start.
 
-    <package id="Newtonsoft.Json" version="13.0.3" targetFramework="net48" />
+### Tool Matchers for Impact Hook
 
-Single grep+sed pass. Worth including — low effort, detects brownfield .NET repos.
+Use `"Write|Edit|MultiEdit"` — identical to `file-guard.sh`. This covers:
+- `Edit` — the most common single-file edit
+- `Write` — new file creation or full overwrite
+- `MultiEdit` — batch edits across a file
 
----
+Do not add `Bash` — bash tool use cannot have a meaningful file path extracted.
 
-### 1d. Bundler `Gemfile.lock`
+### Path Filtering Inside the Hook
 
-**Tool:** stdlib only — awk (POSIX). No ruby runtime, no bundler executable required.
+The impact hook needs to classify the file being edited. No platform-level path filter exists in `hooks.json`. The script must implement it:
 
-**Rationale:** The drift checker must work without a Ruby runtime (same reasoning as not
-requiring `mvn` or `gradle`). `Gemfile.lock` is a deterministic, machine-generated lockfile
-with a documented, stable fixed-indentation format (unchanged since Bundler 1.x).
-This is the correct manifest to parse for version drift: `Gemfile` contains ranges,
-`Gemfile.lock` contains resolved pinned versions.
+```bash
+INPUT=$(cat)
+RAW_FILE=$(printf '%s\n' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)
+[[ -z "$RAW_FILE" ]] && exit 0   # not a file op
 
-**Format (Bundler-generated, stable):**
+BASENAME=$(basename "$RAW_FILE")
 
-    GEM
-      remote: https://rubygems.org/
-      specs:
-        devise (4.9.3)
-          bcrypt (~> 3.1.7)
-        rails (7.1.3)
-          ...
+# Tier 1: Known service-contract files — always check
+case "$BASENAME" in
+  *.proto | openapi.yaml | openapi.json | swagger.yaml | swagger.json)
+    IS_CONTRACT_FILE=true ;;
+  *)
+    IS_CONTRACT_FILE=false ;;
+esac
 
-    PLATFORMS
-      ...
+# Tier 2: Service root-path prefix match via SQLite (see section 4)
+```
 
-    DEPENDENCIES
-      devise (~> 4.9)
+### Hook Latency Budget
 
-Top-level gem entries in the `specs:` subsection use exactly 4-space indent.
-Transitive dependencies use 6-space indent. Only 4-space entries are the direct deps.
+The existing `file-guard.sh` completes in under 5ms on warm runs (pure bash + jq string matching, no subprocesses). The impact hook will need a SQLite query or HTTP call to the worker, adding latency.
 
-**awk extraction:**
+**Latency estimates:**
+- SQLite direct read (no worker): ~2–10ms (better-sqlite3 synchronous, single SELECT)
+- Worker HTTP call via `worker_call GET /impact?change=...`: ~15–50ms (loopback HTTP, fastify)
+- `claude plugin marketplace update` (for update command, NOT hook): ~2–8s (GitHub fetch)
 
-    /^GEM/        { in_gem=1; next }
-    /^[A-Z][A-Z]/ { in_gem=0 }           # next all-caps section header ends GEM block
-    /^  specs:/   { in_specs=1; next }
-    in_gem && in_specs && /^    [^ ]/ {   # exactly 4-space indent = top-level gem
-      match($0, /^    ([a-zA-Z0-9_-]+) \(([^)]+)\)/, arr)
-      if (arr[1] != "") print arr[1] "=" arr[2]
-    }
+**Budget recommendation: 10s timeout** (matches file-guard.sh). The actual work should complete in under 100ms. Use the same `timeout: 10` value in `hooks.json`. The hook must exit 0 on any error or timeout — `trap 'exit 0' ERR` is the established pattern.
 
-Emits `name=version` (pinned, no specifier). The `has_range_specifier` check in the
-comparison loop correctly classifies these as non-ranged.
+### Can Hooks Call MCP Tools?
 
-**Do not parse `Gemfile`** — it contains range specifiers, not resolved versions.
+No. Hooks are shell scripts that execute independently. They receive tool-use context via stdin JSON. They cannot call MCP tools directly because MCP tools are invoked by the Claude model, not by the shell environment. The impact hook must either:
 
----
+1. Call the worker HTTP API directly (via `worker_call` from `lib/worker-client.sh`), or
+2. Query SQLite directly via `node --input-type=module` or a small Node script, or
+3. Use `sqlite3` CLI if available
 
-## 2. Project-Type Detection — `lib/detect.sh`
-
-### What already exists
-
-`detect_project_type()` recognises `python > rust > node > go` via manifest presence.
-`detect_all_project_types()` returns all matching types. `detect_language()` maps file
-extensions to language tokens.
-
-### 2a. Java
-
-**Manifests to probe (priority order):**
-1. `pom.xml` — Maven (dominant in enterprise Java)
-2. `build.gradle` or `build.gradle.kts` — Gradle (Android, Spring Boot with Gradle)
-
-A repo can have both (migration scenarios). Maven is probed first. The returned token is
-always `java` regardless of build tool — the build tool is an implementation detail exposed
-only to the manifest parser, not to callers of `detect_project_type()`.
-
-New `detect_project_type()` branch:
-
-    elif [[ -f "$dir/pom.xml" || -f "$dir/build.gradle" || -f "$dir/build.gradle.kts" ]]; then
-      echo "java"
-
-`detect_language()` extensions:
-
-    java) echo "java" ;;
-    kt)   echo "java" ;;   # Kotlin — same ecosystem and drift parsers
-
-### 2b. C# / .NET
-
-**Manifests to probe:**
-1. Any `*.csproj` in root (glob check)
-2. `*.sln` solution file (does not contain deps itself but confirms .NET repo)
-
-New branch:
-
-    elif ls "$dir"/*.csproj "$dir"/*.sln 2>/dev/null | grep -q .; then
-      echo "dotnet"
-
-Token: `dotnet` (not `csharp` — aligns with CLI name `dotnet`; same reasoning as `node`
-vs `typescript`).
-
-`detect_language()` extension:
-
-    cs)  echo "csharp" ;;
-
-### 2c. Ruby
-
-**Manifests to probe (priority order):**
-1. `Gemfile.lock` — present in virtually every Ruby project after `bundle install`
-2. `Gemfile` — present in all Bundler projects even before first install
-
-New branch:
-
-    elif [[ -f "$dir/Gemfile.lock" || -f "$dir/Gemfile" ]]; then
-      echo "ruby"
-
-`detect_language()` extensions:
-
-    rb)  echo "ruby" ;;
-    erb) echo "ruby" ;;
-
-### Full revised priority order for `detect_project_type()`
-
-    python > rust > node > go > java > dotnet > ruby > unknown
-
-New languages append after the existing four — no priority collisions with shipped tests.
+**Recommended: worker HTTP API call.** The `worker-client.sh` library already provides `worker_call`, handles port resolution from `$ARCANON_DATA_DIR/worker.port`, and has a 1s curl timeout. This is consistent with how `session-start.sh` checks worker status.
 
 ---
 
-## 3. Type Extraction — `drift-types.sh`
+## 3. SessionStart Hook Context-Injection Patterns
 
-### What already exists
+### How the Existing Hook Injects the Banner
 
-`extract_type_names()` dispatches via `case "$lang"` to four functions:
-`extract_ts_types | extract_go_structs | extract_py_classes | extract_rs_structs`.
-Each uses `grep -rh --include="*.EXT" -E "PATTERN"` + awk/sed to extract capitalised,
-exported type names. `extract_type_body()` does a per-file awk body extraction.
-`detect_repo_language()` in `drift-types.sh` maps repo to language tag (`ts|go|py|rs`);
-needs new branches for `java|dotnet|ruby`.
+From `scripts/session-start.sh` (verified, lines 110–122):
 
-### 3a. Java (`java` tag -> `extract_java_types()`)
+1. Build a plain-text string: `"Arcanon active. Detected: ${PROJECT_TYPES}. Commands: ..."`
+2. JSON-encode it with `printf '%s' "$CONTEXT" | jq -Rs .`
+3. Output: `{"hookSpecificOutput":{"hookEventName":"<event>","additionalContext":<json-string>}}`
 
-**File extension:** `*.java`
+The `additionalContext` field is injected once per session (dedup via `/tmp/arcanon_session_${SESSION_ID}.initialized`). The UserPromptSubmit fallback fires on every prompt but exits early after the first injection (except for the version-mismatch worker restart check, which runs unconditionally before the dedup guard).
 
-**Type tokens to extract (public declarations only):**
-- `public class ClassName`
-- `public interface InterfaceName`
-- `public enum EnumName`
-- `public record RecordName` (Java 16+, JEP 440 — universal in Spring Boot 3+)
-- `public abstract class`, `public final class` etc. (handled by optional modifier regex)
+### Richer Structured Context — Impact Map Summary
 
-**grep pattern:**
+For v0.1.1 SessionStart enrichment, the goal is: if an `impact-map.db` exists for the current project, inject a summary of the service topology so Claude has architecture awareness from the first prompt.
 
-    grep -rh --include="*.java" \
-      -E "^[[:space:]]*(public[[:space:]]+)?(abstract[[:space:]]+|final[[:space:]]+)?(class|interface|enum|record)[[:space:]]+[A-Z][A-Za-z0-9_]+" \
-      "${repo_dir}/src" 2>/dev/null |
-      sed -E 's/.*(class|interface|enum|record)[[:space:]]+([A-Z][A-Za-z0-9_]+).*/\2/' |
-      sort -u
+**Recommended output format** (additionalContext string, not separate JSON):
 
-**Search scope:** `src/` (Maven/Gradle convention: `src/main/java/`). Fall back to repo
-root if `src/` absent.
+```
+Arcanon active. Detected: TypeScript.
+Architecture: 7 services scanned (api-gateway, auth-service, user-service, billing-service, notification-service, analytics-service, shared-lib).
+Key connections: api-gateway → auth-service (REST), api-gateway → user-service (REST), user-service → billing-service (gRPC).
+Run /arcanon:impact <name> for blast-radius analysis. Commands: /arcanon:map, /arcanon:drift, /arcanon:impact, /arcanon:sync, /arcanon:status, /arcanon:export, /arcanon:update.
+```
 
-**Body extraction:** brace-counting awk — identical to the existing TypeScript extractor
-in `extract_type_body()`. Java is brace-delimited; the `{`/`}` depth tracking is directly
-reusable.
+**Implementation approach:**
+- Query the worker `GET /graph` via `worker_call` (already used in cross-impact.md)
+- Extract service names and top-N connections from the response
+- Cap at ~5 service names + ~5 connection pairs to avoid context bloat
+- Guard: only enrich if worker is running AND graph has at least 2 services
+- On any error: fall back to the plain-text banner (never block)
 
-### 3b. C# (`dotnet` tag -> `extract_cs_types()`)
+**Conditional injection:**
+```bash
+if [[ -f "$CONFIG_FILE" ]] && jq -e '.["impact-map"]' "$CONFIG_FILE" >/dev/null 2>&1; then
+  # Only attempt graph enrichment if impact-map config exists
+  GRAPH_JSON=$(worker_call GET /graph 2>/dev/null || echo "{}")
+  SERVICE_COUNT=$(printf '%s\n' "$GRAPH_JSON" | jq -r '.services | length // 0' 2>/dev/null || echo "0")
+  if [[ "$SERVICE_COUNT" -ge 2 ]]; then
+    # build enriched context
+  fi
+fi
+```
 
-**File extension:** `*.cs`
-
-**Type tokens to extract (public only):**
-- `public class ClassName`
-- `public interface IInterfaceName`
-- `public enum EnumName`
-- `public struct StructName`
-- `public record RecordName` (C# 9+ — universal in .NET 6+)
-- `public record struct RecordStructName` (C# 10+)
-
-**grep pattern:**
-
-    grep -rh --include="*.cs" \
-      -E "^[[:space:]]*(public[[:space:]]+)?(static[[:space:]]+|abstract[[:space:]]+|sealed[[:space:]]+|partial[[:space:]]+)*(class|interface|enum|struct|record)[[:space:]]+[A-Z][A-Za-z0-9_]+" \
-      "${repo_dir}" 2>/dev/null |
-      sed -E 's/.*(class|interface|enum|struct|record)[[:space:]]+([A-Z][A-Za-z0-9_]+).*/\2/' |
-      sort -u
-
-**Search scope:** repo root (C# has no mandatory `src/` convention). Must exclude `bin/`
-and `obj/` subdirectories to avoid scanning generated `.cs` files from MSBuild source
-generators. Add `bin` and `obj` to the directory exclusion list in the shell extractor
-(analogous to `node_modules` for TypeScript).
-
-**Body extraction:** brace-counting awk — same as TypeScript/Java.
-
-### 3c. Ruby (`ruby` tag -> `extract_ruby_types()`)
-
-**File extension:** `*.rb`
-
-**Type tokens to extract:**
-- `class ClassName` — Ruby classes always start with uppercase (runtime-enforced)
-- `module ModuleName` — modules serve as namespaces and mixins
-
-**Ruby does NOT have** (do not search for): `struct` as a top-level declaration (`Struct.new`
-is a runtime call, not a keyword), `interface`, `enum`. These are absent from the language.
-
-**grep pattern:**
-
-    grep -rh --include="*.rb" \
-      -E "^[[:space:]]*(class|module)[[:space:]]+[A-Z][A-Za-z0-9_:]*" \
-      "${repo_dir}" 2>/dev/null |
-      sed -E 's/.*(class|module)[[:space:]]+([A-Z][A-Za-z0-9_:]*).*/\2/' |
-      sed 's/::.*$//' |
-      grep -E '^[A-Z][A-Za-z0-9_]+' |
-      sort -u
-
-The `sed 's/::.*$//'` strips namespace qualifiers (`Foo::Bar` -> `Foo`) — the same
-pragmatic simplification used for Python class detection.
-
-**Search scope:** `app/`, `lib/` for Rails projects; fall back to repo root. Rails
-convention is strong enough to hard-code these as primary search paths.
-
-**Body extraction:** `end`-keyword awk (Ruby is `end`-delimited, not brace-delimited).
-Pattern: scan forward from the `class`/`module` declaration line, emit body lines, stop
-on a bare `end` at the same or lower indentation level. This is the same logic as the
-existing Python extractor adapted for `end` keyword instead of dedent.
+The existing `arcanon.config.json` + `impact-map` key check (already in session-start.sh line 74) is the right gate. The DB file existence check is less reliable than the config key check because the DB path requires resolving `resolve_arcanon_data_dir`.
 
 ---
 
-## 4. Auth/DB Enrichment — `auth-db-extractor.js`
+## 4. Arcanon-Specific Plumbing for the PreToolUse Hook
 
-### What already exists
+### How to Resolve "Am I Editing a Service-Load-Bearing File" Fast Enough
 
-`AUTH_SIGNALS` and `DB_SOURCE_SIGNALS` objects keyed by language string, each an ordered
-array of `{ mechanism|backend, regex }` entries. `LANG_EXTENSIONS` maps language to file
-extensions for `collectSourceFiles()`. First-match-wins within each language.
-`detectDbFromEnv()` probes `.env`, `.env.local`, `.env.production`, `docker-compose.yml`
-for `DATABASE_URL`. Adding a new language requires: add key to `AUTH_SIGNALS`, add key to
-`DB_SOURCE_SIGNALS`, add key to `LANG_EXTENSIONS`.
+**Two-tier classification, both fast:**
 
-### 4a. Java (`java` key)
+**Tier 1 — Extension/name pattern match (pure bash, ~0ms):**
+```bash
+case "$BASENAME" in
+  *.proto)            REASON="protobuf contract file" ;;
+  openapi.yaml | openapi.json | swagger.yaml | swagger.json)
+                      REASON="OpenAPI spec file" ;;
+  *.graphql | *.gql)  REASON="GraphQL schema file" ;;
+  *)                  REASON="" ;;
+esac
+```
+If Tier 1 matches, skip Tier 2 and proceed to impact query immediately. These files are inherently service-contract files regardless of what the SQLite map says.
 
-**`LANG_EXTENSIONS.java`:** `['.java']`
+**Tier 2 — SQLite root_path prefix match (~5–15ms):**
+Used when the file doesn't match a known extension but the path might fall inside a known service root.
 
-**`AUTH_SIGNALS.java`** (ordered, first match wins):
+```sql
+SELECT s.name, s.id
+FROM services s
+JOIN repos r ON r.id = s.repo_id
+WHERE :file_path LIKE (s.root_path || '%')
+  AND r.path = :repo_path
+LIMIT 5;
+```
 
-    java: [
-      // jjwt (io.jsonwebtoken) is the dominant JWT library; spring-security-oauth2-jose is
-      // the Spring Boot 3+ OAuth2 Resource Server JWT module. Match either.
-      { mechanism: 'jwt',     regex: /(io\.jsonwebtoken|jjwt|JwtDecoder|JwtEncoder|BearerTokenAuthentication|spring-security.*oauth2.*jose)/i },
-      // OAuth2 Authorization Server or OIDC login flow
-      { mechanism: 'oauth2',  regex: /(OAuth2AuthorizationServer|OAuth2LoginConfigurer|OidcUserService|oauth2Login\(\)|\.oauth2ResourceServer\()/i },
-      // Spring Security form login / session management
-      { mechanism: 'session', regex: /(SecurityFilterChain|\.formLogin\(\)|\.sessionManagement\(\)|SecurityContextHolder|HttpSessionSecurityContextRepository)/i },
-      // Custom API key filter — common in microservice-to-microservice auth
-      { mechanism: 'api-key', regex: /(X-API-Key|ApiKeyAuthFilter|OncePerRequestFilter.*api.key|getHeader.*api)/i },
-    ],
+Where `:file_path` is the absolute path of the file being edited and `:repo_path` is the current git repo root (detected via `git -C "$(dirname "$RAW_FILE")" rev-parse --show-toplevel 2>/dev/null`).
 
-**`DB_SOURCE_SIGNALS.java`**:
+`root_path` in the `services` table is relative to the repo root (e.g., `"services/auth-service"` or `"."` for mono-service repos). The query needs `r.path || '/' || s.root_path || '%'` if root_path is relative — see note below.
 
-    java: [
-      // Driver class or datasource URL — more reliable than JPA annotations alone
-      { backend: 'postgresql', regex: /(org\.postgresql|spring\.datasource\.url.*postgres|r2dbc.*postgresql)/i },
-      { backend: 'mysql',      regex: /(com\.mysql|mysql\.jdbc|spring\.datasource\.url.*mysql|r2dbc.*mysql)/i },
-      { backend: 'mongodb',    regex: /(org\.springframework\.data\.mongodb|MongoClient|MongoRepository|@Document)/i },
-      { backend: 'redis',      regex: /(spring\.data\.redis|LettuceConnectionFactory|RedisTemplate|JedisConnectionFactory)/i },
-      { backend: 'h2',         regex: /(com\.h2database|spring\.datasource\.url.*h2:|H2ConsoleAutoConfiguration)/i },
-    ],
+**Schema reality check (from migrations 001 + 005):**
+```
+services.root_path  — TEXT NOT NULL (relative or absolute, populated by agent scan)
+repos.path          — TEXT NOT NULL (absolute path to repo root)
+```
 
-**`EXCLUDED_DIRS` change:** Add `target` (Maven build output) to the existing `EXCLUDED_DIRS`
-set. Currently the set includes `build` (Gradle output) but not `target`. Without this, the
-extractor traverses `target/generated-sources/` which contains auto-generated `.java` files
-that pollute auth/db detection.
+The `root_path` value is agent-supplied. Convention from the agent prompts is that it is relative to the repo root (e.g., `"services/payment"`), but some agents may write absolute paths. The hook should handle both:
 
-### 4b. C# (`csharp` key — matches `detect_language()` output for `.cs` files)
+```bash
+# Build absolute candidate prefix
+ABS_ROOT="${REPO_ROOT}/${SERVICE_ROOT_PATH}"
+# Normalize double slashes
+ABS_ROOT="${ABS_ROOT//\/\///}"
+if [[ "$RAW_FILE" == "${ABS_ROOT}"* ]]; then
+  IS_SERVICE_FILE=true
+fi
+```
 
-**`LANG_EXTENSIONS.csharp`:** `['.cs']`
+Or equivalently in SQL with `repos.path || '/' || services.root_path`:
+```sql
+SELECT s.name, s.id
+FROM services s
+JOIN repos r ON r.id = s.repo_id
+WHERE (
+  -- root_path is relative: prepend repo path
+  :file_path LIKE (r.path || '/' || s.root_path || '%')
+  OR
+  -- root_path is absolute (defensive fallback)
+  (:file_path LIKE (s.root_path || '%') AND s.root_path LIKE '/%')
+)
+LIMIT 5;
+```
 
-**`AUTH_SIGNALS.csharp`** (ordered):
+### SQLite Query for Impact Context Given a File Path
 
-    csharp: [
-      // AddJwtBearer is the canonical ASP.NET Core JWT setup call in Program.cs/Startup.cs
-      { mechanism: 'jwt',     regex: /(AddJwtBearer|JwtBearerDefaults|JwtSecurityToken|Microsoft\.AspNetCore\.Authentication\.JwtBearer|System\.IdentityModel\.Tokens\.Jwt)/i },
-      // ASP.NET Core Identity — session/cookie-based, AddDefaultIdentity/AddIdentity
-      { mechanism: 'session', regex: /(AddDefaultIdentity|AddIdentity|IdentityUser|SignInManager|UserManager|\.AddCookie\()/i },
-      // OAuth2/OIDC — Azure AD, Okta, Google
-      { mechanism: 'oauth2',  regex: /(AddOpenIdConnect|AddMicrosoftIdentityWebApp|OAuthOptions|OpenIdConnectOptions)/i },
-      // Custom API key middleware — common in .NET microservices
-      { mechanism: 'api-key', regex: /(ApiKeyMiddleware|IApiKeyValidator|X-API-Key|ApiKeyAttribute)/i },
-    ],
+**Full query: given a file path, which services does it belong to, and what services consume them?**
 
-**`DB_SOURCE_SIGNALS.csharp`**:
+```sql
+-- Step 1: resolve owning services via root_path prefix
+WITH owner_services AS (
+  SELECT s.id, s.name
+  FROM services s
+  JOIN repos r ON r.id = s.repo_id
+  WHERE :abs_file_path LIKE (r.path || '/' || s.root_path || '%')
+     OR (:abs_file_path LIKE (s.root_path || '%') AND s.root_path LIKE '/%')
+)
+-- Step 2: find direct upstream consumers (services that call the owner)
+SELECT
+  os.name  AS owner_service,
+  cs.name  AS consumer_service,
+  c.protocol,
+  c.method,
+  c.path   AS endpoint
+FROM owner_services os
+JOIN connections c ON c.target_service_id = os.id
+JOIN services cs   ON cs.id = c.source_service_id
+ORDER BY consumer_service
+LIMIT 20;
+```
 
-    csharp: [
-      // Npgsql is the de-facto PostgreSQL driver for .NET
-      { backend: 'postgresql', regex: /(Npgsql|NpgsqlConnection|\.UseNpgsql\(|Npgsql\.EntityFrameworkCore)/i },
-      // Pomelo is the dominant open-source MySQL driver
-      { backend: 'mysql',      regex: /(Pomelo\.EntityFrameworkCore\.MySql|MySql\.EntityFrameworkCore|\.UseMySql\()/i },
-      // UseSqlServer is the SQL Server signal — Microsoft-first ecosystem
-      { backend: 'sqlserver',  regex: /(SqlConnection|\.UseSqlServer\(|Microsoft\.EntityFrameworkCore\.SqlServer)/i },
-      { backend: 'sqlite',     regex: /(SQLiteConnection|\.UseSqlite\(|Microsoft\.EntityFrameworkCore\.Sqlite)/i },
-      { backend: 'mongodb',    regex: /(MongoDB\.Driver|MongoClient|IMongoDatabase)/i },
-      { backend: 'cosmosdb',   regex: /(CosmosClient|\.UseCosmos\(|Microsoft\.EntityFrameworkCore\.Cosmos)/i },
-    ],
+This is a two-hop query: file → service → consumers. It's bounded (no recursion) and will return in under 10ms on any realistic database size (<500 services).
 
-**`EXCLUDED_DIRS` change:** Add `obj` and `bin` (MSBuild build output) to `EXCLUDED_DIRS`.
-Currently neither is present. Without them, the extractor traverses auto-generated `.cs`
-files such as `AssemblyInfo.cs` and `TemporaryGeneratedFile_*.cs`.
+**For the hook, direct SQLite is preferred over HTTP.**
 
-### 4c. Ruby (`ruby` key — matches `detect_language()` output for `.rb` files)
+### MCP `impact_query` vs Direct SQLite — Which to Use in a Hook?
 
-**`LANG_EXTENSIONS.ruby`:** `['.rb']`
+**Verdict: direct SQLite query via a small Node.js inline script, not MCP.**
 
-**`AUTH_SIGNALS.ruby`** (ordered):
+| Criterion | MCP `impact_query` | Direct SQLite |
+|-----------|-------------------|---------------|
+| Availability | Requires MCP server to be running; MCP is only available to the Claude model, not to shell hooks | Available any time the DB file exists |
+| Latency | N/A — not callable from shell | ~5–15ms (better-sqlite3 synchronous) |
+| Complexity | Not callable from shell at all | Requires small inline Node.js script |
+| Correctness | `queryImpact` takes a service name, not a file path — requires file→service resolution first anyway | Handles file→service→consumer in one query |
 
-    ruby: [
-      // Devise is THE dominant Rails auth gem; its presence is the strongest session signal
-      { mechanism: 'session', regex: /(devise|devise_for|before_action :authenticate_user!|Devise::RegistrationsController)/i },
-      // JWT via the 'jwt' gem or the Knock/simple_command pattern
-      { mechanism: 'jwt',     regex: /(require.*['"]jwt['"]|JWT\.decode|JWT\.encode|JsonWebToken|knock)/i },
-      // OmniAuth provides OAuth2/OIDC — commonly used alongside Devise
-      { mechanism: 'oauth2',  regex: /(omniauth|OmniAuth::Builder|provider :google|provider :github|provider :facebook)/i },
-      // Warden directly (when Devise is not used)
-      { mechanism: 'session', regex: /(Warden::Manager|warden\.authenticate|env\['warden'\])/i },
-      // Custom API key — common in API-only Rails apps
-      { mechanism: 'api-key', regex: /(authenticate_api_key|api_key_header|ApiKey\.find_by|X-Api-Key)/i },
-    ],
+**Implementation pattern for the hook:**
 
-**`DB_SOURCE_SIGNALS.ruby`**:
+```bash
+# Call a small Node.js helper that reads the DB directly
+DB_PATH="${ARCANON_DATA_DIR}/impact-map.db"
+if [[ ! -f "$DB_PATH" ]]; then
+  exit 0  # no map, nothing to check
+fi
 
-    ruby: [
-      // database.yml adapter field is the authoritative Rails DB signal
-      { backend: 'postgresql', regex: /(adapter: postgresql|adapter: postgis|pg\b|activerecord-postgresql)/i },
-      { backend: 'mysql',      regex: /(adapter: mysql2|mysql2|activerecord-mysql)/i },
-      { backend: 'sqlite',     regex: /(adapter: sqlite3|sqlite3)/i },
-      { backend: 'mongodb',    regex: /(mongoid|Mongoid::Document|MongoClient)/i },
-      { backend: 'redis',      regex: /(redis|Redis\.new|Sidekiq\.configure_server)/i },
-    ],
+IMPACT_JSON=$(node --input-type=module <<EOF 2>/dev/null
+import Database from '${CLAUDE_PLUGIN_ROOT}/node_modules/better-sqlite3/lib/index.cjs';
+const db = new Database('${DB_PATH}', { readonly: true });
+const rows = db.prepare(\`
+  WITH owner_services AS (
+    SELECT s.id, s.name FROM services s JOIN repos r ON r.id = s.repo_id
+    WHERE ('${ABS_FILE}' LIKE r.path || '/' || s.root_path || '%')
+       OR ('${ABS_FILE}' LIKE s.root_path || '%' AND s.root_path LIKE '/%')
+  )
+  SELECT os.name AS owner, cs.name AS consumer, c.protocol
+  FROM owner_services os
+  JOIN connections c ON c.target_service_id = os.id
+  JOIN services cs ON cs.id = c.source_service_id
+  LIMIT 10
+\`).all();
+db.close();
+process.stdout.write(JSON.stringify(rows));
+EOF
+)
+```
 
-**`detectDbFromEnv()` change:** Add `config/database.yml` to the files probed. This is
-the canonical Rails DB config location — `DATABASE_URL` is not the Rails default. Probe
-for `adapter:` key separately from the existing `DATABASE_URL` ENV_DB_PATTERNS match:
+**Note:** `better-sqlite3` in `CLAUDE_PLUGIN_ROOT/node_modules/` is available after the SessionStart `install-deps.sh` runs. The hook must guard: `[[ -d "${CLAUDE_PLUGIN_ROOT}/node_modules/better-sqlite3" ]] || exit 0`.
 
-    // In detectDbFromEnv(), add to envFiles array:
-    'config/database.yml'
-    // After the DATABASE_URL match block, add:
-    const adapterMatch = content.match(/adapter:\s*(\S+)/);
-    if (adapterMatch) {
-      const adapter = adapterMatch[1].toLowerCase();
-      if (adapter.includes('postgresql') || adapter.includes('postgis')) return 'postgresql';
-      if (adapter.includes('mysql'))   return 'mysql';
-      if (adapter.includes('sqlite'))  return 'sqlite';
-    }
-
----
-
-## 5. SQLite Migration 010 — `service_dependencies` Table
-
-### Table design
-
-    CREATE TABLE IF NOT EXISTS service_dependencies (
-      id              INTEGER PRIMARY KEY AUTOINCREMENT,
-      service_id      INTEGER NOT NULL REFERENCES services(id) ON DELETE CASCADE,
-      name            TEXT    NOT NULL,
-      ecosystem       TEXT    NOT NULL,   -- "maven"|"gradle"|"npm"|"cargo"|"pypi"|"nuget"|"bundler"
-      version         TEXT,               -- NULL when managed/BOM-inherited (Maven)
-      version_raw     TEXT,               -- original unparsed string ("~> 4.9", "^1.2.3")
-      scope           TEXT,               -- "compile"|"test"|"dev"|NULL
-      scan_version_id INTEGER REFERENCES scan_versions(id),
-      UNIQUE(service_id, name, ecosystem)
-    );
-    CREATE INDEX IF NOT EXISTS idx_service_deps_name         ON service_dependencies(name);
-    CREATE INDEX IF NOT EXISTS idx_service_deps_ecosystem    ON service_dependencies(ecosystem);
-    CREATE INDEX IF NOT EXISTS idx_service_deps_scan_version ON service_dependencies(scan_version_id);
-
-**`ON DELETE CASCADE`:** When a service row is deleted (endScan stale cleanup), all its
-dependency rows are deleted automatically. No orphan cleanup query needed.
-
-**`UNIQUE(service_id, name, ecosystem)`:** Same package name can appear under different
-ecosystems in mono-repos (rare but possible). The triple uniqueness prevents phantom dupes
-while enabling correct upsert on re-scan.
-
-**`version_raw` column:** Preserves the original specifier string (`~> 4.9`, `>=3.0`,
-`^1.2.3`) for drift comparison. The existing `normalize_version()` shell function strips
-specifiers for equality comparison — the raw column restores the distinction between pinned
-and ranged for the WARN-level "different locking strategies" path already present in
-`drift-versions.sh`.
-
-### Upsert pattern (better-sqlite3)
-
-    const upsertDep = db.prepare(`
-      INSERT INTO service_dependencies
-        (service_id, name, ecosystem, version, version_raw, scope, scan_version_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(service_id, name, ecosystem) DO UPDATE SET
-        version         = excluded.version,
-        version_raw     = excluded.version_raw,
-        scope           = excluded.scope,
-        scan_version_id = excluded.scan_version_id
-    `);
-
-**Why `ON CONFLICT DO UPDATE` and not `INSERT OR REPLACE`:** Established project decision
-(PROJECT.md: "ON CONFLICT DO UPDATE over INSERT OR REPLACE — INSERT OR REPLACE
-cascade-deletes FK child rows; ON CONFLICT preserves row ID"). This table has no FK
-children yet, but row ID stability must be maintained for future migrations.
-
-### `endScan()` stale-row cleanup addition
-
-The existing `endScan()` deletes stale rows from `services`, `connections`,
-`exposed_endpoints`, `schemas`, `fields` by `scan_version_id`. Add:
-
-    db.prepare(
-      `DELETE FROM service_dependencies WHERE scan_version_id IS NULL OR scan_version_id != ?`
-    ).run(scanVersionId);
-
-### Migration idempotency
-
-Follow the existing pattern from migration 009: use `CREATE TABLE IF NOT EXISTS`, use
-`CREATE INDEX IF NOT EXISTS`. Since this is a new table (not an ALTER), `IF NOT EXISTS`
-covers the idempotency requirement completely. No `hasCol()` guards needed.
-
-### Migration file: `010_service_dependencies.js`
-
-    export const version = 10;
-    export function up(db) {
-      db.exec(`CREATE TABLE IF NOT EXISTS service_dependencies ( ... );`);
-      db.exec(`CREATE INDEX IF NOT EXISTS idx_service_deps_name ...`);
-      // indexes for ecosystem and scan_version_id
-    }
+**Alternative: worker HTTP call.** If the worker is running, `worker_call GET "/impact?change=${SERVICE_NAME}"` (after resolving file→service via Tier 1/2 above) is simpler and does not require inline JS. Use this as the primary path; fall back to direct SQLite only if the worker is not running.
 
 ---
 
-## 6. ScanPayloadV1 v1.1 — `payload.js` Addition
+## 5. `/arcanon:sync` Flag Design
 
-`buildFindingsBlock()` currently emits `services`, `connections`, `schemas`, `actors`.
-v1.1 adds a `dependencies` array (additive, non-breaking for v1.0 Hub consumers):
+### Current State (from `hub.js` + command markdown)
 
-    // In buildFindingsBlock():
-    dependencies: Array.isArray(findings?.dependencies) ? findings.dependencies : [],
+- `/arcanon:upload` → `cmdUpload`: reads latest local scan for `--repo PATH`, uploads via `syncFindings()`, enqueues on failure.
+- `/arcanon:sync` → `cmdSync`: drains the queue via `drainQueue()`, optionally `--prune-dead`, `--limit N`.
 
-Each entry shape:
+These are **different operations** with no overlap. The merge is a UX consolidation, not a code merge.
 
-    {
-      "service": "my-service",
-      "ecosystem": "maven",
-      "name": "spring-boot-starter-web",
-      "version": "3.2.1",
-      "scope": "compile"
-    }
+### Recommended Flag Design for Merged `/arcanon:sync`
 
-The `version` field maps to `service_dependencies.version` (NULL for BOM-managed deps —
-emit as `"managed"` rather than null to avoid JSON null parsing issues on the Hub side).
+```
+/arcanon:sync [--dry-run] [--repo <path>] [--force] [--drain]
+```
 
-Hub-side validation for this block is THE-1018 (out of scope for this milestone). The
-plugin emits it unconditionally; the Hub ignores unknown fields until THE-1018 lands.
+| Flag | Behavior | Notes |
+|------|----------|-------|
+| *(no flags)* | Smart default: upload current repo's scan, then drain queue | The action most users want 95% of the time |
+| `--repo <path>` | Override which repo's findings to upload (passed through to `hub.js upload --repo`) | Matches existing `cmdUpload` flag |
+| `--dry-run` | Show what would be uploaded/drained without sending anything | New behavior; requires `hub.js sync --dry-run` support or command-markdown simulation |
+| `--force` | Re-upload even if scan was already uploaded (bypass `scan_upload_id` dedup) | Maps to `hub.js upload --force` (new flag needed in hub.js) |
+| `--drain` | Drain queue only, skip the upload step | For users who want the old `/arcanon:sync` behavior exactly |
+
+**Default behavior with no flags — rationale:** "upload + drain" is the right default because a user typing `/arcanon:sync` after finishing work wants both: push the fresh scan AND clear the retry queue. This collapses the mental model from "know whether to use upload or sync" to "just run sync."
+
+**Implementation in the command markdown:**
+
+```bash
+# Default: upload then drain
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/hub.sh upload $([[ -n "$REPO_FLAG" ]] && echo "--repo $REPO_FLAG") $([[ "$FORCE_FLAG" == "true" ]] && echo "--force")
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/hub.sh sync
+```
+
+**Backward-compat for `/arcanon:upload`:**
+
+Do NOT silently alias `upload → sync`. Instead:
+1. Keep `upload.md` in place for v0.1.1 but mark it deprecated in its description frontmatter.
+2. Remove `/arcanon:upload` in v0.2.0 after one version of overlap.
+3. The `hub.js upload` subcommand stays — the command markdown is the only thing being removed.
+
+**Rationale for keeping one-version overlap:** Users who have muscle memory of `/arcanon:upload` or have it in scripts will see the deprecation notice in the command description rather than a confusing "command not found."
+
+### `auto_upload` → `auto_sync` Migration
+
+The `plugin.json` has `"auto_upload"` as a `userConfig` key. For v0.1.1:
+- Add `"auto_sync"` as the new canonical key.
+- In `hub.js`, read `cfg?.hub?.["auto-sync"] || cfg?.hub?.["auto-upload"]` (legacy fallback).
+- The `plugin.json` change renames the config UI label; existing stored values are not migrated automatically (Claude Code stores `userConfig` values by key name).
+- Document in CHANGELOG: "rename `auto_upload` → `auto_sync` in `arcanon.config.json`; `auto_upload` honored for one version."
 
 ---
 
-## 7. No New Runtime Dependencies
+## 6. New Runtime Dependencies
 
-All new functionality uses:
-- Shell layer: POSIX awk, grep, sed (already required by existing scripts)
-- Node.js layer: `node:fs`, `node:path` (already used), better-sqlite3 (already a runtime dep)
+No new runtime npm dependencies are required for any of the v0.1.1 features:
 
-| Parser | Manifest | Tool | External dep? |
-|--------|----------|------|---------------|
-| Maven | `pom.xml` | awk (POSIX) | No |
-| Gradle | `build.gradle(.kts)` | grep + awk | No |
-| NuGet | `*.csproj` | grep + sed | No |
-| Bundler | `Gemfile.lock` | awk (POSIX) | No |
+| Feature | Runtime Dep | Status |
+|---------|-------------|--------|
+| `/arcanon:update` | Shell + `claude` CLI + `jq` | All already required by existing hooks |
+| PreToolUse impact hook | `better-sqlite3` (inline Node) + `worker-client.sh` | Already installed by `install-deps.sh` |
+| SessionStart enrichment | `worker-client.sh` + `jq` | Already used in `session-start.sh` |
+| `/arcanon:sync` merged command | `hub.js` (existing) | No changes to Node deps |
 
-`yq` remains optional for the existing Cargo/pypi fast-paths only — it cannot parse XML
-and is not needed for the new parsers. `jq` (already required per PLGN-07) is unchanged.
-No new `npm install` required.
+The only new shell tool dependency is `sqlite3` CLI — and only if the fallback direct-query path uses it instead of inline Node. Recommend inline Node via `better-sqlite3` to avoid this dependency.
 
 ---
 
-## Alternatives Considered
+## 7. Key Constraints and Gotchas
 
-| Recommended | Alternative | Why Not |
-|-------------|-------------|---------|
-| POSIX awk for `pom.xml` | xmlstarlet | Not universally available; breaks zero-external-dep |
-| POSIX awk for `pom.xml` | `mvn help:evaluate` | Requires buildable Maven project; fails on bare clones |
-| grep+awk for Gradle | `gradle dependencies` | Requires Gradle wrapper; fails on bare clones |
-| Parse `Gemfile.lock` | Parse `Gemfile` | Gemfile has range specifiers, not resolved versions |
-| `ON CONFLICT DO UPDATE` | `INSERT OR REPLACE` | INSERT OR REPLACE cascade-deletes FK children; established project decision |
-| POSIX awk for Gemfile.lock | `@snyk/gemfile` npm package | Runtime dep for a task solvable with 8 lines of awk |
-| POSIX awk for Gemfile.lock | `Bundler::LockfileParser` (Ruby) | Requires Ruby runtime; violates no-external-dep constraint |
-| `UNIQUE(service_id, name, ecosystem)` | `UNIQUE(service_id, name)` | Same name can exist under different ecosystems in mono-repos |
+### `hooks.json` lives in `plugins/arcanon/hooks/hooks.json` (not `plugins/arcanon/hooks.json`)
 
-## What NOT to Add
+The file is at `plugins/arcanon/hooks/hooks.json` — a subdirectory named `hooks/` containing a file named `hooks.json`. This is the actual path used by the plugin runtime. Do not confuse with a top-level `hooks.json`.
 
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| xmlstarlet | Not universally available; breaks zero-external-dep | POSIX awk state machine |
-| Any AST parser (tree-sitter, JavaParser, Roslyn) | Explicit "agent-first, no AST" constraint in PROJECT.md | regex-based line extraction as existing `drift-types.sh` does |
-| `mvn`/`gradle`/`dotnet list` invocation | Requires buildable project; fails on bare clones | Static file parsing |
-| `config/database.yml` full YAML parser | Requires yaml npm package or Ruby runtime | `grep 'adapter:'` covers 99% of Rails projects |
-| `bin`/`obj`/`target` directory scanning | Generated files pollute auth/db signal detection | Add to EXCLUDED_DIRS |
+### `$CLAUDE_PLUGIN_ROOT` vs `$CLAUDE_PLUGIN_DATA`
+
+- `CLAUDE_PLUGIN_ROOT` = `~/.claude/plugins/cache/arcanon/arcanon/0.1.0/` (immutable plugin source, version-stamped)
+- `CLAUDE_PLUGIN_DATA` = `~/.claude/plugins/data/arcanon-arcanon/` (mutable persistent data, survives updates)
+
+The impact-map SQLite DB lives under `ARCANON_DATA_DIR` (resolved by `lib/data-dir.sh`), which is derived from `CLAUDE_PLUGIN_DATA`. After `claude plugin update arcanon`, `CLAUDE_PLUGIN_ROOT` changes to the new version path; `CLAUDE_PLUGIN_DATA` does not change.
+
+**Implication for `/arcanon:update`:** After the update, the old worker process still references the old `CLAUDE_PLUGIN_ROOT` path. `restart_worker_if_stale` will detect the version mismatch on the next prompt (via the existing `version_mismatch` restart path in `worker-restart.sh`) and restart from the new path. The `/arcanon:update` command should also explicitly call `restart_worker_if_stale` after confirming the update applied.
+
+### PreToolUse Hook Must Never Block (exit 2) for Impact Warnings
+
+The impact hook is advisory. `exit 2` is reserved for `file-guard.sh`'s hard-block behavior (secrets, lock files, generated dirs). Impact context must always use `systemMessage` + `exit 0`. If the hook exits 2 for an impact warning, it blocks the edit, which violates the "non-blocking hooks" constraint in `PROJECT.md`.
+
+### Hook Registration in `hooks.json` — Ordering
+
+Hooks under the same `matcher` run sequentially in array order. The impact hook should be placed AFTER `file-guard.sh` in the `PreToolUse` array. This way:
+1. `file-guard.sh` blocks hard-blocked files first (secrets, lock files).
+2. The impact hook only runs for files that passed the guard.
+
+This avoids running a SQLite query on a file that is about to be blocked anyway.
+
+### `claude plugin update` Requires Restart
+
+The `--help` output explicitly says "(restart required to apply)." This means after running `claude plugin update arcanon`, the new plugin code is downloaded to cache but not yet active. The `/arcanon:update` command must tell the user: "Update downloaded. Claude Code must be restarted to activate v{newver}." The worker restart (via `restart_worker_if_stale`) handles the worker side; the Claude Code session restart is the user's responsibility.
+
+### macOS `realpath` Portability
+
+`file-guard.sh` already has a macOS-compatible fallback for `realpath -m` (GNU coreutils not available on macOS). The impact hook must copy the same pattern — do not use `realpath -m` without the macOS fallback.
 
 ---
 
 ## Sources
 
-- SQLite UPSERT: https://sqlite.org/lang_upsert.html — `ON CONFLICT DO UPDATE` syntax (HIGH confidence)
-- NuGet PackageReference format: https://learn.microsoft.com/en-us/nuget/consume-packages/package-references-in-project-files — SDK-style `.csproj` shape (HIGH confidence)
-- Gemfile.lock format: https://blog.saeloun.com/2022/08/16/understanding-gemfile-and-gemfile-lock/ — GEM/specs section indent convention (HIGH confidence)
-- Java record patterns (JEP 440): https://openjdk.org/jeps/440 — `record` as public top-level type declaration (HIGH confidence)
-- Spring Boot JWT patterns (2025): https://www.javacodegeeks.com/2025/05/how-to-secure-rest-apis-with-spring-security-and-jwt-2025-edition.html — jjwt + spring-security-oauth2-jose signals (MEDIUM confidence)
-- ASP.NET Core Identity / JWT: https://learn.microsoft.com/en-us/aspnet/core/security/authentication/identity — `AddJwtBearer`, `AddDefaultIdentity` patterns (HIGH confidence)
-- Devise (Ruby): https://github.com/heartcombo/devise — `devise_for`, `authenticate_user!`, Warden integration (HIGH confidence)
-- pom.xml awk parsing approach: https://commandlinefanatic.com/cgi-bin/showarticle.cgi?article=art020 — awk feasibility validation (MEDIUM confidence)
-- Gradle dependency string format: https://docs.gradle.org/current/userguide/viewing_debugging_dependencies.html — single-string shorthand confirmed (HIGH confidence)
-
----
-*Stack research for: v5.8.0 Library Drift & Language Parity (Java/C#/Ruby parity + service_dependencies table)*
-*Researched: 2026-04-19*
+All findings verified directly against:
+- Live `claude plugin --help` output (April 2026, version running on this machine)
+- `plugins/arcanon/hooks/hooks.json` (shipped in v0.1.0)
+- `plugins/arcanon/scripts/file-guard.sh` (shipped in v0.1.0)
+- `plugins/arcanon/scripts/session-start.sh` (shipped in v0.1.0)
+- `plugins/arcanon/scripts/install-deps.sh` (shipped in v0.1.0)
+- `plugins/arcanon/lib/worker-restart.sh` (shipped in v5.8.0 / v0.1.0)
+- `plugins/arcanon/worker/cli/hub.js` (shipped in v0.1.0)
+- `plugins/arcanon/worker/server/http.js` (shipped in v0.1.0)
+- `plugins/arcanon/worker/mcp/server.js` (shipped in v0.1.0)
+- `plugins/arcanon/worker/db/migrations/001–010` (all 10 migrations)
+- `~/.claude/plugins/installed_plugins.json` (live filesystem)
+- `~/.claude/plugins/known_marketplaces.json` (live filesystem)
+- `~/.claude/plugins/cache/arcanon/arcanon/0.1.0/` (live filesystem)
+- `~/.claude/plugins/marketplaces/arcanon/` (live filesystem after marketplace update)

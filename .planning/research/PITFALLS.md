@@ -1,313 +1,322 @@
 # Pitfalls Research
 
-**Domain:** Library-drift persistence + multi-language parity + shell cleanup additions to the arcanon Claude Code plugin
-**Researched:** 2026-04-19
-**Confidence:** HIGH (code-grounded; all pitfalls derived from direct inspection of existing files)
+**Domain:** Claude Code plugin — v0.1.1 feature additions (update command, impact hook, SessionStart enrichment, command merge)
+**Researched:** 2026-04-21
+**Confidence:** HIGH (grounded in existing codebase patterns in hooks.json, file-guard.sh, worker-stop.sh)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Maven `<parent>` inheritance silently inflates the dep list
+### Pitfall 1: Semver String Comparison in `/arcanon:update`
 
 **What goes wrong:**
-A multi-module Maven project has a root `pom.xml` that declares `<dependencyManagement>` versions and a child module `pom.xml` that lists dependencies with no version (because the parent supplies it via `${project.version}` or the BOM). A naive reader of the child POM produces packages with blank versions — the `pkg=` lines are emitted with an empty right-hand side and filtered out by the existing `[[ -z "${ver:-}" ]] && continue` guard in the main loop, silently dropping those packages entirely. The drift report then shows fewer deps than the service actually has.
+Comparing version strings with lexicographic operators (`<`, `>`, `[[ "0.10.0" > "0.9.0" ]]`) produces wrong results because `"0.10.0" < "0.9.0"` lexicographically. An installed v0.10.0 would be offered a downgrade to v0.9.0.
 
 **Why it happens:**
-Maven's version inheritance is a two-document lookup: version lives in `<parent>` or `<dependencyManagement>`, not in the leaf `<dependency>` element. Single-file parsers always miss this.
+Shell has no native semver comparison. Developers reach for `[[ "$installed" < "$latest" ]]` or `sort -V` without verifying macOS BSD `sort` doesn't support `-V` (it's GNU-only).
 
 **How to avoid:**
-Parse both files: read `<parent>/<relativePath>` (default `../pom.xml`), extract `<dependencyManagement>` entries into a name-to-version map, then resolve leaf `<dependency>` nodes against that map. Record unresolved versions as `MANAGED` (a sentinel string) rather than dropping them — drift output should say `"version: MANAGED (parent)"` so the operator knows the dep exists. Write a unit test with a two-level pom fixture that asserts the child dep appears in output.
+Use the worker's Node runtime (already required) for version comparison: `node -e "const s=require('semver'); process.exit(s.gt(latest,installed)?0:1)"`. Do not shell-compare version strings. Alternatively use `sort -t. -k1,1n -k2,2n -k3,3n` as a portable fallback, but this fails on pre-release tags (e.g. `0.1.1-rc.1`).
 
 **Warning signs:**
-- A Java service shows zero or suspiciously few deps from `pom.xml` parsing
-- `pkg=` lines with empty version halves appearing in debug output of `extract_versions`
+Bats test showing update offered when already on latest, or no update offered when behind by a minor version bump only.
 
-**Phase to address:** Phase 1 (Maven + Gradle manifest parser foundation) — correctness must be established before the DB persistence layer is built on top, because wrong parse output feeds wrong DB rows.
+**Phase to address:**
+Phase implementing `/arcanon:update` version check logic. Add a dedicated bats test matrix: `0.1.0 < 0.1.1`, `0.9.0 < 0.10.0`, `1.0.0 == 1.0.0`, `2.0.0 > 1.99.99`.
 
 ---
 
-### Pitfall 2: Gradle Kotlin DSL vs. Groovy DSL — same semantics, incompatible syntax
+### Pitfall 2: Worker Killed Mid-Scan During `/arcanon:update`
 
 **What goes wrong:**
-`build.gradle` (Groovy) uses single-quoted strings and method-call syntax: `implementation 'com.example:lib:1.0'`. `build.gradle.kts` (Kotlin) requires double-quoted strings and parenthesis-wrapped arguments: `implementation("com.example:lib:1.0")`. A single regex matching one will fail silently on the other. Additionally, `platform(libs.spring.bom)` BOM references in a version catalog (`gradle/libs.versions.toml`) produce no inline version string at all — the version lives in the TOML file under `[versions]`. Missing these means entire BOM-managed dependency trees vanish from drift output.
+`/arcanon:update` calls `worker-stop.sh` (SIGTERM → 5s poll → SIGKILL) while the worker is mid-scan writing to its SQLite DB. A SIGKILL after 5 s leaves the DB in a partial WAL state. The new worker version starts, reads a corrupt DB, and silently produces wrong impact-map results.
 
 **Why it happens:**
-The existing `drift-versions.sh` only handles `package.json`, `go.mod`, `Cargo.toml`, and `pyproject.toml` — Gradle is entirely new territory. It is easy to only implement one DSL dialect when writing the initial parser.
+`worker-stop.sh` already has the right SIGTERM pattern, but 5 seconds is insufficient for a large-repo scan. The update command will reuse this script without considering the scan-in-progress case.
 
 **How to avoid:**
-Implement two separate awk/grep passes: one for `build.gradle` (single-quote, space-separated) and one for `build.gradle.kts` (double-quote, parenthesis-wrapped). For `platform()` BOM entries, parse `gradle/libs.versions.toml` as a secondary source: extract `[versions]` key-value pairs and produce `BOM:alias=version` lines so the operator knows BOM-managed deps exist even when individual versions are not pinned. Add a test fixture with both DSL variants.
+Before stopping: query the worker's HTTP health endpoint for `{"status":"scanning"}` and either (a) wait for scan completion up to a configurable timeout, or (b) abort with a user prompt: "Scan in progress — update anyway? This will interrupt the scan." Never proceed to SIGKILL when a scan flag is set. Add a `scan_in_progress` flag file (`$DATA_DIR/scan.lock`) that the worker creates at scan start and removes at scan end, so the update script can check it without an HTTP round-trip.
 
 **Warning signs:**
-- Kotlin-DSL repos show empty or partial dep lists while equivalent Groovy-DSL repos scan correctly
-- Repos using `gradle/libs.versions.toml` show zero deps
+SQLite `PRAGMA integrity_check` returning errors after update. Worker log line: "database disk image is malformed."
 
-**Phase to address:** Phase 1 (manifest parsers). The two-dialect problem is a known day-one issue that must be test-driven from the start, not retrofitted.
+**Phase to address:**
+Phase implementing `/arcanon:update` — requires coordination with worker scan lifecycle before stop is called.
 
 ---
 
-### Pitfall 3: Gemfile.lock section parsing — GEM vs GIT vs PATH sections have different formats
+### Pitfall 3: PreToolUse Impact Hook Latency Kills Usability
 
 **What goes wrong:**
-`Gemfile.lock` has multiple source sections. The `GEM` section lists gems with indented `specs:` blocks. The `GIT` section (for gems sourced from GitHub) uses a different indented structure where the gem name and version appear under the repo URL. The `PATH` section (local gems) has yet another layout. A parser that only handles `GEM > specs:` will miss all git-sourced and path-sourced gems, which are often the most version-sensitive (internal libraries pinned to exact commits or local paths that drift independently).
-
-Separately: if you parse `Gemfile` instead of `Gemfile.lock`, you get constraint expressions like `gem 'rails', '~> 7.0'`, not the resolved pin. Drift comparison requires resolved pins — two repos both saying `~> 7.0` but running 7.0.2 vs. 7.1.3 will appear identical.
+Every `Write|Edit|MultiEdit` fires the hook. If the hook shells out to Node.js cold (e.g. `node impact-lookup.js`), each invocation pays ~300 ms Node startup. With a session that edits 50 files, that is 15 seconds of accumulated blocking latency. Claude Code's PreToolUse hook is synchronous — the tool call is blocked until the hook exits.
 
 **Why it happens:**
-`Gemfile.lock` format is underdocumented. The natural first instinct is to parse `Gemfile` because it is simpler and well-understood.
+The existing `file-guard.sh` (PreToolUse) is pure bash and exits in <5 ms. When the impact hook is added alongside it, the temptation is to call the worker's Node CLI directly from shell. The existing `hooks.json` already has `"timeout": 10` on PreToolUse hooks — exceeding that timeout causes the hook to be killed silently and the tool allowed (fail-open), making the feature invisible at scale.
 
 **How to avoid:**
-Always parse `Gemfile.lock` (not `Gemfile`) as the canonical source. Implement all three section parsers: `GEM > specs:` (name (version)), `GIT > specs:` (name (version) under remote URL), `PATH > specs:` (same structure). Write a fixture covering all three and assert each gem appears in the output.
+The impact hook MUST be pure bash that queries the already-running worker daemon over its local HTTP socket (e.g. `curl -s --max-time 0.5 http://localhost:$PORT/impact?file=$FILE`). The daemon has the impact-map loaded in memory — response time is <10 ms. Never spawn Node in the hot path. If the worker is not running, exit 0 silently (fail-open) rather than blocking. Keep the hook co-located with `file-guard.sh` so the 10-second timeout is a safety net, not a dependency.
 
 **Warning signs:**
-- Ruby repos report significantly fewer deps than `bundle list` would show
-- Git-sourced gems (e.g., internal shared libraries) never appear in drift findings
-- Two repos pinned to different patch versions of Rails show no drift finding
+Observable pause before each edit in a session. Hook timeout errors in Claude Code debug logs. `time bash impact.sh` taking >100 ms.
 
-**Phase to address:** Phase 1 (manifest parsers).
+**Phase to address:**
+Phase implementing the PreToolUse impact hook. Benchmark requirement: p99 <50 ms including the HTTP round-trip.
 
 ---
 
-### Pitfall 4: NuGet Central Package Management — `Directory.Packages.props` as the version source
+### Pitfall 4: Recursive Self-Firing in Arcanon's Own Repo
 
 **What goes wrong:**
-Modern .NET repos use Central Package Management: all versions are declared once in `Directory.Packages.props` using `<PackageVersion Include="Foo" Version="1.0" />`, and individual `.csproj` files use `<PackageReference Include="Foo" />` with no `Version` attribute. A parser that only reads `.csproj` `PackageReference` elements and requires a `Version` attribute will produce entirely empty dep lists for CPM-enabled repos.
-
-Additionally, `<PackageReference Update="Bar" Version="1.0" />` (using `Update=` instead of `Include=`) overrides a transitively-pulled dep and must not be confused with a first-class dep declaration.
+When developing Arcanon itself, editing `worker/db/migrations/001_init.sql` fires the PreToolUse impact hook. The hook queries the local worker, which may have Arcanon's own repo indexed. This produces a warning: "Migration files in arcanon/worker are impacted" — which is noise at best, a blocking deny at worst if the hook is wired to block on high-severity impact.
 
 **Why it happens:**
-CPM was introduced in NuGet 6.2 (2022) and is now the recommended pattern for large .NET solutions, but much documentation still shows the per-project `Version=` attribute style.
+The hook has no self-exclusion. `file-guard.sh` avoids this because it operates on file type patterns that don't include Arcanon's own source. The impact hook operates on path membership in the indexed service graph — which includes Arcanon itself when dogfooding.
 
 **How to avoid:**
-Check for `Directory.Packages.props` before parsing `.csproj` files. If found: build a `packageName -> version` map from `<PackageVersion Include=... Version=... />` entries, then use `.csproj` `<PackageReference Include=...>` entries as the dep list, resolving versions from the map. Log `CPM` as the version source. Only fall back to per-project `Version=` attribute parsing when `Directory.Packages.props` is absent. Explicitly skip `Update=` attributes (they are overrides, not new deps).
+Add an `ARCANON_DISABLE_IMPACT=1` env var (parallel to the existing `ARCANON_DISABLE_GUARD=1` pattern in `file-guard.sh`). Also: when the impact hook detects that the file being written is inside `$CLAUDE_PLUGIN_ROOT`, skip the lookup unconditionally. Document this in the hook header alongside the disable guard pattern.
 
 **Warning signs:**
-- A .NET repo with dozens of packages shows zero deps
-- `.csproj` files have `<PackageReference>` elements with no `Version` attribute
+During Arcanon self-development sessions, seeing impact warnings about Arcanon's own worker migrations or source files.
 
-**Phase to address:** Phase 1 (manifest parsers).
+**Phase to address:**
+Phase implementing the PreToolUse impact hook — include self-exclusion test in bats suite.
 
 ---
 
-### Pitfall 5: `UNIQUE(service_id, ecosystem, package_name)` breaks when the same package appears in multiple manifests
+### Pitfall 5: `auto_upload` → `auto_sync` Silent Config Break
 
 **What goes wrong:**
-A service may have both a root `pom.xml` and a `build.gradle` (Gradle wrapper project with Maven parent), or a Python service may have both `pyproject.toml` and a `requirements.txt`. If the same package appears in two manifests at different versions, an `ON CONFLICT DO UPDATE` upsert will silently overwrite the first row with the second, losing the original version.
-
-A subtler variant: a monorepo scans multiple service roots, each with their own `package.json`, and two services both depend on `express` at different versions. If the schema key is `(package_name, ecosystem)` without `service_id`, all rows collapse into one — correct uniqueness requires all three columns minimum.
+Users with `auto_upload: true` in their `arcanon.config.json` get silent no-op behavior after upgrade — their config is no longer read, sync no longer runs automatically. No error, no warning.
 
 **Why it happens:**
-Schema design for a new table happens before the full parsing surface area is understood. It is tempting to keep the schema minimal.
+Config key is renamed but the reader only checks `auto_sync`. The old key is ignored rather than forwarded or warned about.
 
 **How to avoid:**
-The UNIQUE constraint must be `(service_id, ecosystem, package_name, manifest_file)` — four columns, where `manifest_file` is the relative path of the source manifest (e.g., `pom.xml` vs. `build.gradle`). On conflict, keep the row with the most-specific version (prefer an exact pinned version over a range or `MANAGED` sentinel). Write a test that inserts the same package from two manifests and asserts both rows exist with distinct `manifest_file` values.
+For exactly one release (v0.1.1), the config reader must check both keys with precedence: `auto_sync` wins if present, else fall back to `auto_upload`. Emit a one-time deprecation warning to stderr: `"arcanon: config key 'auto_upload' is deprecated, rename to 'auto_sync'"`. In v0.2.0 the fallback can be dropped. Add a bats test asserting that a config with only `auto_upload: true` triggers the sync path and emits the deprecation warning.
 
 **Warning signs:**
-- After adding a second manifest type for Java, dep counts drop instead of increasing
-- `ON CONFLICT` fires unexpectedly during scan
+Users reporting hub sync stopped working after upgrade. CI pipelines that rely on auto-sync going silent.
 
-**Phase to address:** Phase 2 (DB schema migration for library deps) — schema correctness must be established before any insert logic is written.
+**Phase to address:**
+Phase implementing the command merge — config migration logic must ship in the same commit as the key rename.
 
 ---
 
-### Pitfall 6: Transient deps mixed with direct deps under the same `scan_version_id`
+## High-Severity Pitfalls
+
+### Pitfall 6: Root-Path Prefix Matching Fires Spuriously
 
 **What goes wrong:**
-If the `library_deps` table uses a single `scan_version_id` FK column to tie both direct and transient rows to the same scan bracket, then `endScan()` stale-row cleanup (`DELETE ... WHERE scan_version_id != ?`) will delete both categories equally — which is correct on the success path. But if the dep-parsing step only emits direct deps (because transient parsing is complex and deferred), `endScan` will delete any pre-existing transient rows from the prior scan, even though no new transient rows were written. The result is a DB that only ever contains direct deps, silently, even after transient parsing is added in a later phase.
+The impact hook checks whether the edited file falls within a service's `root_path`. If matching is done as a simple string prefix (`[[ "$FILE" == "$root_path"* ]]`), then a service rooted at `/services/auth` will spuriously match edits to `/services/auth-legacy/README.md` because the prefix `auth` is a substring of `auth-legacy`.
 
 **Why it happens:**
-The existing scan bracket pattern (used for services/connections) was designed for a single category of row. Extending it to two categories (direct vs. transient) without a discriminant column creates a cleanup ambiguity.
+Shell prefix matching does not normalize path separators. The safe check requires a trailing `/`: `[[ "$FILE" == "${root_path%/}/"* ]]`.
 
 **How to avoid:**
-Add a `dep_kind TEXT NOT NULL CHECK(dep_kind IN ('direct', 'transient'))` column to the `library_deps` table. Make `endScan` (or a new `endDepScan`) delete only `dep_kind = 'direct'` rows when only direct parsing ran — leave transient rows from the prior scan intact until transient parsing is implemented. Document this explicitly in the migration comment so the partial-cleanup behaviour is intentional, not accidental.
+Always normalize `root_path` to have a trailing slash before prefix-matching. Add a bats test with a repo that has both `services/auth/` and `services/auth-legacy/` — editing a file in `auth-legacy` must not fire an `auth` service warning.
 
 **Warning signs:**
-- After adding transient dep parsing, rows from the previous scan disappear even though the new scan succeeded
-- `SELECT COUNT(*) FROM library_deps WHERE dep_kind = 'transient'` returns 0 after a scan that should have produced transient rows
+Impact warnings for services that share a name prefix with the file being edited. High false-positive rate causing users to disable the hook entirely.
 
-**Phase to address:** Phase 2 (DB schema migration). The `dep_kind` discriminant must be in the initial migration, not retrofitted.
+**Phase to address:**
+Phase implementing the PreToolUse impact hook.
 
 ---
 
-### Pitfall 7: `drift-versions.sh` direct-invocation compatibility breaks when `source drift-common.sh` moves into a dispatcher
+### Pitfall 7: Stale Impact-Map Gives Wrong Warnings
 
 **What goes wrong:**
-`drift-versions.sh` currently sources `drift-common.sh` at the top (line 13). If the new unified dispatcher (`drift.sh`) also sources `drift-common.sh` and then calls `drift-versions.sh` as a subcommand, `drift-common.sh` will be sourced twice in the same shell. This is safe in the current code (the file uses `export` but no state-modifying side effects beyond setting `LINKED_REPOS`). The real risk is different: `drift-common.sh` currently calls `list_linked_repos` and exits via `return 0` when no linked repos are found. In a subshell invoked by the dispatcher, `return 0` has no effect — only `exit` would stop the subshell. If someone refactors `drift-common.sh` to `exit` instead of `return` to "fix" the subshell case, then direct-invocation (sourcing from a test or legacy call) breaks.
+The impact hook warns based on the last scan's data. If the last scan ran 3 weeks ago and the service topology changed (service removed, path relocated), the hook produces wrong warnings — either false positives for deleted services or missing warnings for newly added ones.
+
+**Why it happens:**
+The hook consults a snapshot, not a live analysis. There is no staleness signal surfaced to the user.
 
 **How to avoid:**
-Leave `drift-common.sh`'s `return 0` guard exactly as-is. The double-source is harmless because all assignments are idempotent. The dispatcher should call subcommand scripts via `bash "${SCRIPT_DIR}/drift-versions.sh" "$@"` (explicit subshell), not `source`. Add a comment in `drift.sh`: "subcommands are called as subshells — each sources drift-common.sh independently, which is intentional." Write a test that calls `drift-versions.sh` both directly and via the dispatcher and asserts identical output.
+The worker should record `last_scan_timestamp` in its DB. The impact hook response from the daemon should include `{"stale": true, "age_hours": 504}` when the map is older than a configurable threshold (default: 48 h). The hook should prepend the warning with `[stale map — last scanned 21d ago]` so users know to run `/arcanon:map`. The `/arcanon:update` flow should also prompt a rescan after update.
 
 **Warning signs:**
-- `drift-common.sh` is edited to `exit` instead of `return`
-- The dispatcher uses `source` rather than `bash` for subcommand dispatch
+No `last_scan_timestamp` field in worker health endpoint. Hook warnings that don't match current repo state.
 
-**Phase to address:** Phase 4 (shell cleanup / unified dispatcher).
+**Phase to address:**
+Phase implementing the PreToolUse impact hook — staleness metadata must be part of the daemon API contract from day one.
 
 ---
 
-### Pitfall 8: Worker restart race condition on concurrent `UserPromptSubmit` fires
+### Pitfall 8: SessionStart Enrichment in Every Directory Produces Noise
 
 **What goes wrong:**
-`session-start.sh` fires on both `SessionStart` and `UserPromptSubmit`. The version mismatch check (lines 44–67) calls `worker-stop.sh` and then `worker_start_background` when a version mismatch is detected. If two `UserPromptSubmit` events fire in rapid succession, both may detect the mismatch and both attempt `worker-stop + worker_start_background`. The second invocation of `worker-start.sh` reads the PID file, finds a still-running PID from the first restart, and exits early. This is currently safe. The risk emerges if new initialization logic (e.g., for dependency scanning DB setup) is added to `worker-start.sh` BEFORE the PID-alive check — that new logic could execute twice concurrently with non-idempotent effects.
+`session-start.sh` is wired as a SessionStart hook for all projects (hooks.json has no matcher). If a user opens Claude Code in a directory that has no Arcanon impact-map (e.g. a personal scripts folder), the enrichment fires and either outputs an error or empty context — both are noise.
 
 **Why it happens:**
-Shell scripts do not have mutex primitives. The existing code relies on the PID-file check as an implicit lock, which only works if new logic is added AFTER the check.
+The existing `session-start.sh` is a stub (1 line). When enrichment logic is added, it will be tempting to always emit context. The hook fires unconditionally per `hooks.json`.
 
 **How to avoid:**
-Enforce the rule: all new logic in `worker-start.sh` must be added after the `kill -0 "$PID"` guard (line 30). The PID-file acts as the mutex. If new dispatcher initialization (e.g., `library_deps` DB table creation) is needed at worker start, add it as a worker-side HTTP endpoint initialization, not in the shell script. Mark the constraint explicitly with a comment: `# MUTEX BOUNDARY: all new logic below this point runs only when no worker is active`.
+`session-start.sh` must check for the existence of the impact-map DB (`$DATA_DIR/impact.db` or equivalent) and the worker PID file before injecting any content. If neither exists, exit 0 with no output. Only emit enrichment when there is a valid, non-empty impact-map for the current working directory.
 
 **Warning signs:**
-- New code added to `worker-start.sh` above the PID-file existence check
-- Worker startup logic that is not idempotent (e.g., `CREATE TABLE` without `IF NOT EXISTS`)
+Error messages in sessions unrelated to Arcanon. `sessionMessage` output appearing in projects with no `arcanon.config.json`.
 
-**Phase to address:** Phase 4 (shell cleanup). The dispatcher refactor is when new shell logic is most likely to be inserted at the wrong location.
+**Phase to address:**
+Phase implementing SessionStart enrichment.
 
 ---
 
-### Pitfall 9: Bash 3.2 floor on macOS — `declare -A` associative arrays fail silently
+### Pitfall 9: Large Impact-Map (200+ Services) Produces Wall of Text
 
 **What goes wrong:**
-`drift-types.sh` (lines 129, 148) uses `declare -A lang_repos` and `declare -A type_repos` — Bash 4+ associative arrays. On macOS, `/bin/bash` is version 3.2 (Apple has not shipped Bash 4+ due to GPLv3). The script uses `#!/usr/bin/env bash`, which picks up Homebrew-installed Bash 5 if present — but many devs have never run `brew install bash`. On Bash 3.2, `declare -A` silently creates a regular variable, not an associative array; subsequent indexed access either produces empty strings or causes cryptic parse errors. The new parsers for Java/C#/Ruby will likely want `declare -A` for their own field-map lookups.
+SessionStart injects a summary of all cross-repo impacts for the current session's working directory. A repo with 200+ indexed services produces a multi-kilobyte context injection that: (a) consumes significant context budget every session, (b) pushes other system context off the context window, (c) reads as noise rather than signal.
 
 **Why it happens:**
-CI runs on GitHub Actions (Bash 5) and passes. Local macOS developers with only the system Bash silently get wrong results or no output.
+Injecting the full impact list seems complete and helpful during development on a small test repo. At production scale the volume is unusable.
 
 **How to avoid:**
-Add a Bash version check at the top of any script using `declare -A`:
-```bash
-if (( BASH_VERSINFO[0] < 4 )); then
-  echo "arcanon drift requires Bash 4+. Install with: brew install bash" >&2
-  exit 1
-fi
-```
-Alternatively, replace `declare -A` with the tmpdir-based key-value store pattern that `drift-versions.sh` already uses (`$WORK_DIR/<pkg_safe>` files) — this is Bash 3.2 safe and already established in the codebase. Prefer the tmpdir pattern for new parsers to stay consistent.
+Limit SessionStart injection to: (a) top-N most impacted services (default: 10, configurable via `arcanon.config.json: session_top_n`), (b) only services with impact severity >= threshold (default: "high"). Append a summary line: "...and 43 more services. Run /arcanon:map for full report." Keep total injected text under 500 tokens.
 
 **Warning signs:**
-- New parser script adds `declare -A` for type-body maps
-- Script passes CI but produces empty output on a fresh macOS dev machine
+`systemMessage` output from SessionStart exceeding 2000 characters in testing. User feedback about slow session starts or "noisy" context.
 
-**Phase to address:** Phase 1 (manifest parsers) and Phase 3 (Java/C#/Ruby regex extractors) — before any new `declare -A` usage is added.
+**Phase to address:**
+Phase implementing SessionStart enrichment — must include a truncation test with a synthetic 200-service fixture.
 
 ---
 
-### Pitfall 10: Spring Security 6+ deprecates `@EnableWebSecurity` — regex misses the new pattern
+### Pitfall 10: Marketplace Refresh Failure Blocks `/arcanon:update`
 
 **What goes wrong:**
-Spring Security 5.x uses `@EnableWebSecurity` as the canonical auth marker. Spring Security 6.0 (Spring Boot 3.0, released Nov 2022) deprecated `@EnableWebSecurity` and the `WebSecurityConfigurerAdapter` extends pattern. The new pattern is a `@Bean`-annotated `SecurityFilterChain` method — no class-level annotation. A regex that only matches `@EnableWebSecurity` will miss all Spring Boot 3+ services and report them as having no auth mechanism, a false negative that is worse than a false positive since it suggests a service is unprotected.
+`/arcanon:update` fetches the latest version from a registry/marketplace endpoint. If the user is offline or the endpoint is rate-limited, the command hangs or exits with a cryptic error rather than telling the user they're already on the current known version.
 
 **Why it happens:**
-The existing `auth-db-extractor.js` was written against Spring Boot 2.x patterns. Spring Boot 3 reached wide adoption in 2023–2024 and many new services are Boot 3 only.
+Network calls in CLI tools are often written optimistically without timeout or offline fallback.
 
 **How to avoid:**
-Match both patterns: (1) `@EnableWebSecurity` (Boot 2.x), and (2) `SecurityFilterChain` as a `@Bean` return type (Boot 3.x). Also look for `http.authorizeHttpRequests` and `http.authorizeRequests` (the latter is the deprecated Boot 2.x variant). Record `spring_security` as the `auth_mechanism` value for both; add an optional sub-field for version if the distinction is needed. Write a test fixture with a Boot 3 `SecurityFilterChain` bean and assert `auth_mechanism = 'spring_security'` is emitted.
+Set an explicit `curl --max-time 5` on the version fetch. On failure, print: "arcanon: could not reach update server (offline or rate-limited). Your current version is X.Y.Z." and exit 0 (not an error). Cache the last known latest version with a TTL (e.g. in `$DATA_DIR/last-known-version`) so repeat invocations within the TTL skip the network call.
 
 **Warning signs:**
-- All Spring Boot 3 repos in the linked-repo set have `auth_mechanism = null` after enrichment
-- `@EnableWebSecurity` is the only Spring auth pattern in the extractor
+`/arcanon:update` hanging indefinitely in CI with no network access. No timeout in the update fetch code path.
 
-**Phase to address:** Phase 3 (auth/DB extractor expansion).
+**Phase to address:**
+Phase implementing `/arcanon:update`.
 
 ---
 
-### Pitfall 11: EF Core minimal API DbContext — `builder.Services.AddDbContext<T>()` not detected
+### Pitfall 11: Post-Update Worker Fails to Start — No Recovery Path
 
 **What goes wrong:**
-Classic EF Core registers the DbContext via a class that inherits `DbContext`. Extractors match this via class-body inheritance patterns. Minimal API style (ASP.NET Core 6+) registers via `builder.Services.AddDbContext<MyContext>()` in `Program.cs` — there may be no class visibly inheriting `DbContext` in the scanned file if the context class is in a separate assembly or if the DI registration is all that exists in the entry point. The extractor emits no `db_backend` finding for these services.
+After update, the new worker version has a bug (bad migration, missing dep, port conflict) and fails to start. The update command exits 0 (install succeeded), but the user has a broken plugin with no impact-map and no scan capability.
 
 **Why it happens:**
-The class-inheritance pattern is simpler to grep. The DI registration pattern requires scanning a different file type (`Program.cs` / top-level statements) with different syntax.
+Install success is conflated with runtime success. The update script runs `npm install` and exits without verifying the new worker actually starts.
 
 **How to avoid:**
-Add a secondary extraction pass on `Program.cs` and `Startup.cs` that matches `AddDbContext<(\w+)>`. Use the generic type argument to infer the backend from the connection string context if resolvable. As a fallback, emit `db_backend = 'ef_core'` without a specific backend when the provider cannot be inferred. Write a test fixture using the minimal API pattern.
+After install, run `worker-start.sh` and poll the health endpoint for up to 10 seconds. If the worker does not come up, print the worker log tail and offer rollback: "Update failed health check — restore previous version? [y/N]". Keep the previous version's tarball in `$DATA_DIR/rollback/` for one version. Rollback restores the tarball and restarts.
 
 **Warning signs:**
-- ASP.NET 6+ services with EF Core show `db_backend = null`
-- `Program.cs` is present but not scanned by the auth/DB extractor
+Update script exits 0 but `worker.pid` is absent or health endpoint returns 500. No post-update health check in the update script.
 
-**Phase to address:** Phase 3 (auth/DB extractor expansion).
+**Phase to address:**
+Phase implementing `/arcanon:update` — health check and rollback are non-optional for a shipped update command.
 
 ---
 
-### Pitfall 12: Ruby open classes and `class_eval` — same type name across files is not drift
+### Pitfall 12: Claude Code CLI Syntax Change Breaks `/arcanon:update`
 
 **What goes wrong:**
-Ruby allows a class to be reopened in any file: `class Order; def new_method; end; end` in `order_extensions.rb` is the same class as `class Order` in `order.rb`. The type extractor collects class names across files and then looks for the same name in multiple repos — it assumes "same name in two repos = potentially drifted type." For Ruby, the same name in two files within the same repo (due to open classes) looks identical to the extractor and triggers a false-positive CRITICAL drift finding.
-
-Monkey-patching (`String.class_eval { ... }`) adds methods to built-in classes — the class name `String` would appear as a "type" and trivially match `String` in any other Ruby repo, generating noise.
+If `claude plugin install` or `claude plugin update` command syntax changes in a future Claude Code release, the `/arcanon:update` command breaks silently or with a confusing error.
 
 **Why it happens:**
-The existing extractor treats "same name in N repos" as the signal. For languages with closed classes (Go, Rust, TypeScript), this heuristic works. For Ruby, it breaks.
+The plugin install/update mechanism is an external CLI contract that Arcanon doesn't own. Tight coupling to a specific syntax without a version guard means any Claude Code release can silently break the feature.
 
 **How to avoid:**
-For Ruby, scope class extraction to `class [A-Z]` definitions only at the top level of their file (indentation = 0, not inside a module block). Skip names that match Ruby stdlib classes: `String`, `Array`, `Hash`, `Integer`, `Symbol`, `Numeric`, `Object`, `BasicObject`. Document that Ruby open-class drift detection is best-effort and will produce false positives on heavily monkey-patched codebases. Consider adding a `--skip-ruby-classes` flag to suppress Ruby from type drift if noise is high.
+At update time, check the Claude Code CLI version with `claude --version` and validate it is within a known-compatible range. If unknown version: warn and show the manual update command instead of attempting programmatic install. Abstract the install call behind a function (`arcanon_install_plugin`) so the calling syntax is a single-point-of-change. Log the exact command being run so users can debug.
 
 **Warning signs:**
-- Ruby repos generate CRITICAL findings for `String`, `Array`, `Integer`
-- Same class name appears 3+ times within a single Ruby repo's grep output (sign of reopening)
+`/arcanon:update` working in dev but breaking after a Claude Code upgrade. No version guard around the `claude plugin install` call.
 
-**Phase to address:** Phase 3 (Java/C#/Ruby regex extractor additions).
+**Phase to address:**
+Phase implementing `/arcanon:update`.
 
 ---
 
-### Pitfall 13: C# `partial class` — type body lives across multiple files, body comparison always diverges
+## Moderate Pitfalls
+
+### Pitfall 13: `/arcanon:upload` Stub Breaks CI Silently
 
 **What goes wrong:**
-C# allows a class to be split across multiple files: `partial class Customer { public string Name; }` in `Customer.cs` and `partial class Customer { public void Validate(); }` in `Customer.Validation.cs`. The existing type-body extractor finds the first file containing the type name and extracts its body only. For a partial class, this gives a fragment — two repos with the same `Customer` partial class will differ if each extractor happened to pick a different fragment file. The body comparison fires a false-positive CRITICAL drift finding.
+CI pipelines or team runbooks invoking `/arcanon:upload` after the merge get a "command not found" error (exit non-zero) which fails CI. Because the merge is a renaming, not a deprecation, there is no forwarding stub.
 
 **Why it happens:**
-`partial class` is a C#-specific construct with no equivalent in other supported languages. The extractor was not designed with it in mind.
+Command renames in plugin ecosystems often assume only interactive users. CI scripts and runbooks are not updated atomically with the plugin release.
 
 **How to avoid:**
-For C# files (`*.cs`): find all files containing `partial class TypeName` (not just the first), concatenate their field declarations, sort, and compare the combined body. Write a test fixture with a two-file partial class and assert no CRITICAL is emitted when both repos have the same combined body. Also note: the ticket says "match only public" but `internal` APIs drift too — add a `--include-internal` flag defaulting to off so the behaviour is opt-in rather than always-on noise.
+Keep a `/arcanon:upload` stub command that prints a deprecation warning and then invokes the `sync` logic identically. The stub must exit 0 so existing CI does not break. Add a `# DEPRECATED: remove in v0.2.0` comment. Document the rename in CHANGELOG.
 
-**Warning signs:**
-- C# repos with EF Core or ASP.NET models (which commonly use partial classes for generated scaffolding) generate spurious CRITICAL type-drift findings
-- Type body comparison always shows a diff even when developers believe the types match
-
-**Phase to address:** Phase 3 (C# extractor addition).
+**Phase to address:**
+Phase implementing the command merge.
 
 ---
 
-### Pitfall 14: THE-1019 vs THE-1020 ordering gap — `/arcanon:map` emits partial deps silently
+### Pitfall 14: `upload` vs `sync` Behavioral Mismatch
 
 **What goes wrong:**
-If THE-1020 (shell-side manifest parsers for Maven/NuGet/Bundler in `drift-versions.sh`) lands before THE-1019 (`worker/scan/dependencies.js` with the same coverage), then the state is:
-
-- `drift-versions.sh` reports drift for all 7 ecosystems (TS/Py/Go/Rust/Java/C#/Ruby)
-- `worker/scan/dependencies.js` (invoked by `/arcanon:map`) only persists deps for TS/Py/Go/Rust
-
-The operator runs `/arcanon:map` and the resulting payload reflects only 4 ecosystems. Java/C#/Ruby services show 0 deps in the hub — visually indistinguishable from "not yet scanned." There is no warning in the scan output.
+`/arcanon:upload` was a single-repo push. `/arcanon:sync` is a queue drain (all pending repos). If the merged command defaults to queue-drain behavior, users who invoked `upload` expecting single-repo behavior will push stale data for unrelated repos.
 
 **Why it happens:**
-THE-1019 and THE-1020 are parallel tracks. Shell-side parsing is easier to prototype independently of the Node.js worker.
+Merging two commands with different scopes without making the scope explicit. "sync" implies broader scope than "upload."
 
 **How to avoid:**
-Emit a WARN from `worker/scan/dependencies.js` when it encounters a manifest file it cannot parse: `slog('WARN', 'dep-scan: unsupported manifest skipped', { file: 'pom.xml', ecosystem: 'maven' })`. This surfaces the coverage gap in scan logs. Add an `ecosystems_scanned` array to the dep scan result so the hub payload can report `["ts", "go"]` vs. the full set — the hub can flag partial coverage when THE-1018 lands. Do not add `library_deps` to the hub payload until THE-1018 is ready (see Pitfall 15), but add the `ecosystems_scanned` field to the local result immediately so it is visible in logs.
+Make the default behavior of `/arcanon:sync` match the safer (narrower) scope: sync only the current repo unless `--all` is passed. Document this explicitly. The stub `/arcanon:upload` should call `/arcanon:sync` without `--all` to preserve prior behavior.
 
-**Warning signs:**
-- `drift-versions.sh` finds Maven drift but `/arcanon:map` shows no Java deps in the hub or local DB
-- Scan logs have no WARN for `pom.xml` or `Gemfile.lock` files encountered during scan
-
-**Phase to address:** Phase 1 (define the `ecosystems_scanned` contract) and Phase 2 (implement the WARN emission in the worker scanner). Both tickets should reference this contract explicitly.
+**Phase to address:**
+Phase implementing the command merge.
 
 ---
 
-### Pitfall 15: Hub payload v1.1 shipped before hub THE-1018 — upload silently succeeds but deps are dropped
+### Pitfall 15: Context Injection Format Collision With Other Hooks
 
 **What goes wrong:**
-If the plugin emits a v1.1 payload (with `library_deps` array) to a hub instance that only understands v1.0, two failure modes are possible: (a) the hub returns HTTP 200 but silently ignores unknown fields — `library_deps` is dropped, the operator never knows; (b) the hub returns HTTP 422 due to strict schema validation — the upload fails and `slog('WARN', 'hub upload failed', ...)` fires, but the error message only says "validation error" without specifying which field.
+Both the SessionStart hook and a third-party plugin emit `systemMessage` JSON. Claude Code merges them or only uses the last one — exact merge behavior is undocumented. The impact enrichment may be silently dropped if another hook's output overwrites it.
 
 **Why it happens:**
-Hub-side THE-1018 is explicitly out of scope for this milestone. The temptation is to add `library_deps` to the payload immediately since the data is available locally.
+Multiple hooks registered for SessionStart/UserPromptSubmit interact in ways that depend on undocumented Claude Code internals.
 
 **How to avoid:**
-Gate the `library_deps` field behind a config flag: only include it in the payload when `hub.beta_features.library_deps = true` is set in `arcanon.config.json`. Default to omitting the field (v1.0 behaviour). Add an integration test that asserts a default-config upload does not contain `library_deps`. Document the upgrade path: "Set `hub.beta_features.library_deps = true` once the hub deploys THE-1018."
+Verify via a test Claude Code session that multiple `systemMessage` outputs from the same hook event are concatenated (not last-wins). If last-wins, register the impact enrichment as a separate hook entry with higher priority. Keep the enrichment output clearly prefixed (`"Arcanon impact context: ..."`) so it survives any merging.
 
 **Warning signs:**
-- `library_deps` is added to the payload unconditionally in `hub-sync/index.js`
-- The hub's upload endpoint returns 200 but dep data is absent from the hub UI
+SessionStart enrichment not appearing in Claude context despite the hook firing successfully (visible in debug logs).
 
-**Phase to address:** Phase 5 (payload v1.1 / hub sync) — explicitly after hub THE-1018 deploys or behind the feature flag.
+**Phase to address:**
+Phase implementing SessionStart enrichment.
+
+---
+
+### Pitfall 16: PreToolUse Hook Invisible in Transcripts — Debugging Blind Spot
+
+**What goes wrong:**
+When the impact hook fires but does not warn (correct behavior for a clean edit), there is no trace in the Claude Code transcript. When it should warn but doesn't (bug), developers have no visibility into whether the hook ran, what file path it received, or what the worker returned.
+
+**Why it happens:**
+PreToolUse hooks that exit 0 with no stdout leave no transcript footprint. The hook is a black box from the user's perspective.
+
+**How to avoid:**
+Add an `ARCANON_IMPACT_DEBUG=1` env var that causes the hook to write a one-line JSON trace to `$DATA_DIR/logs/impact-hook.jsonl` on every invocation (file_path, worker_response, exit_code, duration_ms). The debug log is off by default (no performance overhead). For test verification, assert on this log file in bats rather than relying on stdout capture.
+
+**Phase to address:**
+Phase implementing the PreToolUse impact hook — debug logging must be part of the initial implementation, not retrofitted.
+
+---
+
+### Pitfall 17: Cache Dir Pruning Race During Update
+
+**What goes wrong:**
+`/arcanon:update` deletes an old version's cached files while another process (a concurrent scan or MCP wrapper) holds file descriptors open in that directory. On Linux, the directory entry is unlinked but the FDs remain valid until closed — the other process continues reading stale data. On macOS, behavior is the same. The real risk is if the update moves a SQLite DB file while the worker has it open: SQLite WAL mode requires the WAL and SHM files to be co-located — moving just the main DB file corrupts the WAL chain.
+
+**How to avoid:**
+Never move or delete the active DB files during an update. The update sequence must be: stop worker → install new version → start worker (which migrates in place). Do not maintain multiple version dirs for the DB; only plugin source code should be versioned. The DB lives in `$DATA_DIR` (user data dir), not inside the plugin source tree.
+
+**Phase to address:**
+Phase implementing `/arcanon:update`.
 
 ---
 
@@ -315,99 +324,99 @@ Gate the `library_deps` field behind a config flag: only include it in the paylo
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Skip `<parent>` resolution in Maven parser, emit `MANAGED` as version | Ships Phase 1 faster | Drift report shows false "version unknown" for all parent-managed deps | Never — the parent POM is always co-located with the child |
-| Parse only `build.gradle` (Groovy), skip Kotlin DSL | Halves parser complexity | All Kotlin-first projects (Android, modern Spring) show zero deps | Only if no Kotlin repos exist in linked set — verify first |
-| Use `dep_kind = 'direct'` only, never model transients | Avoids transient parsing complexity | Drift report misses the most common version divergence vector (indirect dep upgrades) | Acceptable for v1 if clearly labeled "direct deps only" in UI |
-| Use `declare -A` in new scripts, document Bash 4 requirement | Simpler code | Silent failures on macOS system Bash 3.2 | Never — the tmpdir pattern already exists in `drift-versions.sh` and is safer |
-| Emit `library_deps` in v1.0 payload unconditionally | One payload version to maintain | Hub drops data silently; operator has no visibility | Never — use the feature flag gate |
+| Shell string comparison for semver | No dep needed | Wrong results on minor/major bumps | Never |
+| Calling Node in PreToolUse hot path | Simple code | 300 ms per edit, unusable at scale | Never |
+| No deprecation stub for `/arcanon:upload` | Less code | CI breaks across user installs silently | Never |
+| Injecting full impact-map in SessionStart | Complete info | Context budget exhaustion at scale | Never in production |
+| Skip post-update health check | Simpler update script | Silent broken installs | Never for shipped feature |
+| No `ARCANON_IMPACT_DEBUG` logging | Less code | Hook impossible to debug in production | Never |
+
+---
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| `endScan` stale-row cleanup | Adding `library_deps` cleanup to `endScan` without checking `dep_kind` | Only delete `dep_kind = 'direct'` rows when the direct pass ran; leave transient rows intact until transient parsing is implemented |
-| Hub sync `syncFindings` | Passing `library_deps` to `syncFindings` before hub supports v1.1 | Gate behind `hub.beta_features.library_deps` config flag |
-| Drift dispatcher calling subcommands | Using `source` to call `drift-versions.sh` from dispatcher | Always use `bash "${SCRIPT_DIR}/drift-versions.sh" "$@"` — subshell, not source |
-| `session-start.sh` version check | Adding dep-scan initialization logic before the PID-file mutex in `worker-start.sh` | All new initialization logic goes after the `kill -0 "$PID"` guard |
-| `drift-common.sh` `return 0` guard | Changing `return` to `exit` to make it work in subshells | Leave as `return` — the dispatcher calls scripts as subshells, not sources them |
+| Claude Code PreToolUse hook | Spawning Node process per invocation | Query running worker daemon over local HTTP |
+| Claude Code SessionStart hook | Assuming single hook output wins | Verify multi-hook merge behavior; prefix all output |
+| Claude Code `claude plugin install` CLI | Hardcoding syntax without version guard | Abstract behind a function; check CLI version first |
+| Worker SQLite DB | Moving DB files during update | Stop worker first; DB stays in `$DATA_DIR`, never in plugin src |
+| Config key migration | Only reading new key name | Read both keys for one release with explicit deprecation warning |
+
+---
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Parsing `build.gradle` with full-file regex on monorepos with many submodules | `drift-versions.sh` hangs 30–60s on large Java monorepos | Cap module traversal depth at 3; skip `.gradle/` cache directories | Repos with 20+ Gradle submodules |
-| Ruby `Gemfile.lock` grep across all files in repo | Finds multiple lock files (gemspec + engine lock files); produces duplicate deps | Only scan root `Gemfile.lock` and `*/Gemfile.lock` at depth 1 | Gems-as-submodules patterns |
-| Type-body comparison for C# with large Entity Framework models | `extract_type_body` on a 500-field EF model entity runs a slow awk loop | Cap field extraction at 100 lines, same as the existing `head -50` cap on type names in `drift-types.sh` | Any EF Core repo with auto-generated model classes |
+| Node cold-start in PreToolUse | >300 ms per edit, 10s timeout hit | Pure-bash hook + HTTP to daemon | Immediately on first file edit |
+| Full impact-map in SessionStart | >2000 char systemMessage, context budget consumed | Top-N + severity filter + truncation | Repos with >50 indexed services |
+| No HTTP timeout in impact hook | Hook hangs if worker is unresponsive | `curl --max-time 0.5`, fail-open on timeout | Any session where worker crashes |
+| No staleness guard on impact-map | Wrong warnings after topology changes | Include `age_hours` in daemon response, surface in warning | Repos where services are added/removed frequently |
 
-## Security Mistakes
-
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| Storing manifest paths in DB with unsanitized repo-path prefix | Path traversal if a linked repo path contains `..` | Use the existing path-traversal guards from the shipped scan pipeline; apply same guards to manifest path construction in `extract_versions` |
-| Logging Maven `<parent>` POM content verbatim in WARN messages | POM files can contain internal dependency coordinates or private artifact server URLs | Log only package name and version, never raw POM content |
-| Hub payload including `library_deps` before operator opts in | Leaks dep inventory to hub before operator explicitly enables it | The feature-flag gate (Pitfall 15) also serves as the security gate |
+---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Maven parser:** Passes test with child-only `pom.xml` (version present inline) — verify it also handles child POM where version is absent and inherited from `<parent>`
-- [ ] **Gradle parser:** Tests cover both `build.gradle` and `build.gradle.kts` fixtures — verify Kotlin DSL double-quote syntax is exercised
-- [ ] **Gemfile.lock parser:** Test fixture includes a `GIT` section gem — verify it appears in output, not just `GEM > specs:` gems
-- [ ] **NuGet parser:** Test fixture uses `Directory.Packages.props` with no `Version=` in `.csproj` — verify deps still appear
-- [ ] **Library dep schema:** Migration has `dep_kind` column — verify `endScan` cleanup does not delete transient rows when only direct pass ran
-- [ ] **Drift dispatcher:** Direct invocation of `drift-versions.sh` still works after dispatcher is added — run the existing test suite against both paths
-- [ ] **Spring Security 6:** Test fixture uses `SecurityFilterChain` bean pattern — verify `auth_mechanism = 'spring_security'` is emitted
-- [ ] **C# partial class:** Test fixture splits a class across two files — verify no false CRITICAL is emitted
-- [ ] **THE-1019 vs THE-1020 gap:** Scan log contains WARN for unsupported manifest types when worker encounters `pom.xml` or `Gemfile.lock`
-- [ ] **Payload v1.1:** A default-config upload does not contain `library_deps` field — assert in hub-sync test
+- [ ] **`/arcanon:update` version compare:** Tested with `0.9.x` vs `0.10.x` — not just patch-level bumps
+- [ ] **`/arcanon:update` post-install:** Worker health check passes before reporting success
+- [ ] **PreToolUse impact hook:** Benchmarked at p99 <50 ms with worker running
+- [ ] **PreToolUse self-exclusion:** Editing Arcanon's own source does not fire impact warning
+- [ ] **Prefix matching:** `services/auth-legacy/` does not match `services/auth/` root_path
+- [ ] **SessionStart silence:** No output when no impact-map exists for current directory
+- [ ] **`auto_upload` fallback:** Config with only `auto_upload: true` still triggers sync in v0.1.1
+- [ ] **`/arcanon:upload` stub:** Deprecated command exits 0 and forwards to sync logic
+- [ ] **Rollback tarball:** Previous version preserved in `$DATA_DIR/rollback/` after update
+
+---
 
 ## Recovery Strategies
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Maven parent-inheritance missed in initial parse | MEDIUM | Add parent POM resolution; re-run `drift-versions.sh` for all linked repos; no DB migration needed (shell-side only) |
-| Wrong UNIQUE constraint on `library_deps` | HIGH | Write migration to DROP and re-add constraint with 4-column key; existing rows may have conflicts requiring manual resolution |
-| `dep_kind` column missing from initial migration | HIGH | Add migration 011 with `ALTER TABLE library_deps ADD COLUMN dep_kind TEXT`; backfill all existing rows as `'direct'`; update `endScan` cleanup query |
-| Worker restart race condition caused data corruption | LOW | The PID-file mutex already prevents double-start; if corruption occurs, `rm ~/.arcanon/worker.pid` and restart |
-| Hub silently drops v1.1 payload fields | LOW | Toggle `hub.beta_features.library_deps = false` in config; no data loss (local DB is source of truth) |
-| Bash 3.2 `declare -A` silently wrong output | LOW | Replace with tmpdir pattern; no data migration needed |
+| Corrupt DB after mid-scan SIGKILL | MEDIUM | `PRAGMA integrity_check`; if corrupt, delete DB and rescan |
+| New worker fails to start post-update | MEDIUM | Restore rollback tarball, restart old worker, report error |
+| Stale impact-map producing wrong warnings | LOW | Run `/arcanon:map` to rescan; map is regenerated non-destructively |
+| `auto_upload` config silently ignored | LOW | Rename key in config; one-line fix |
+| PreToolUse hook hitting 10s timeout | LOW | Set `ARCANON_DISABLE_IMPACT=1` while debugging; check worker health |
+
+---
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Maven `<parent>` inheritance (P1) | Phase 1 — manifest parsers | Test fixture: child POM with no inline version; assert dep appears with resolved version |
-| Gradle DSL dialect split (P2) | Phase 1 — manifest parsers | Test fixture: both `build.gradle` and `build.gradle.kts`; assert identical dep list |
-| Gemfile.lock section parsing (P3) | Phase 1 — manifest parsers | Test fixture: lock file with GEM + GIT + PATH sections; assert all 3 appear |
-| NuGet CPM `Directory.Packages.props` (P4) | Phase 1 — manifest parsers | Test fixture: `.csproj` with no Version + `Directory.Packages.props`; assert deps appear |
-| UNIQUE constraint 3 vs 4 columns (P5) | Phase 2 — DB schema migration | Migration test: same package from two manifest files inserts 2 rows, not 1 |
-| Transient dep `dep_kind` discriminant (P6) | Phase 2 — DB schema migration | `endScan` unit test asserts transient rows survive a direct-only scan |
-| Dispatcher double-source / `return` vs `exit` (P7) | Phase 4 — shell cleanup | Integration test: `drift-versions.sh` run directly and via dispatcher produces identical output |
-| Worker restart race condition (P8) | Phase 4 — shell cleanup | Code review gate: all new `worker-start.sh` logic must be after PID-file mutex |
-| Bash 3.2 `declare -A` (P9) | Phase 1 + Phase 3 | Version check added to any script using `declare -A`; or tmpdir pattern used instead |
-| Spring Security 6 pattern (P10) | Phase 3 — auth/DB extractor | Test fixture: Boot 3 `SecurityFilterChain` bean; assert `auth_mechanism` emitted |
-| EF Core minimal API DbContext (P11) | Phase 3 — auth/DB extractor | Test fixture: `Program.cs` with `AddDbContext<T>()`; assert `db_backend` emitted |
-| Ruby open-class false positives (P12) | Phase 3 — Ruby extractor | Test fixture: class reopened in 2 files within same repo; assert no cross-repo CRITICAL |
-| C# partial class false positives (P13) | Phase 3 — C# extractor | Test fixture: partial class split across 2 files; assert no CRITICAL with combined body |
-| THE-1019 vs THE-1020 partial dep coverage gap (P14) | Phase 1 (contract) + Phase 2 (WARN emission) | Scan log test: worker encounters `pom.xml`; asserts WARN logged; `ecosystems_scanned` excludes `maven` |
-| Hub v1.1 before THE-1018 (P15) | Phase 5 — hub sync | Unit test: default config produces v1.0 payload with no `library_deps` field |
+| Semver string compare | `/arcanon:update` implementation | Bats matrix: 0.9.0 vs 0.10.0 |
+| Worker killed mid-scan | `/arcanon:update` implementation | Bats: scan.lock present → update waits |
+| PreToolUse Node cold-start | Impact hook implementation | Benchmark: p99 <50 ms |
+| Recursive self-firing | Impact hook implementation | Bats: edit in PLUGIN_ROOT → no warning |
+| Root-path prefix false positive | Impact hook implementation | Bats: auth vs auth-legacy fixture |
+| Stale map wrong warnings | Impact hook implementation | Daemon API includes age_hours |
+| `auto_upload` silent break | Command merge | Bats: legacy config triggers sync + deprecation warning |
+| `/arcanon:upload` CI break | Command merge | Bats: stub exits 0 and calls sync |
+| Upload vs sync scope mismatch | Command merge | Manual test: sync without --all only touches current repo |
+| SessionStart noise in non-Arcanon dirs | SessionStart enrichment | Bats: no impact.db → empty output |
+| Large map wall of text | SessionStart enrichment | Bats: 200-service fixture → output <500 tokens |
+| Context injection collision | SessionStart enrichment | Live test: two hooks both emit systemMessage |
+| Marketplace refresh failure | `/arcanon:update` implementation | Test: update with no network → graceful message + exit 0 |
+| Post-update worker failure | `/arcanon:update` implementation | Bats: bad worker binary → rollback offered |
+| CLI syntax change | `/arcanon:update` implementation | Version guard + manual install fallback |
+| Cache dir pruning race | `/arcanon:update` implementation | DB stays in DATA_DIR; never in plugin src |
+| Hook invisible in transcripts | Impact hook implementation | ARCANON_IMPACT_DEBUG=1 log written on every invocation |
+
+---
 
 ## Sources
 
-- Direct code inspection: `plugins/arcanon/scripts/drift-versions.sh` (lines 1–200) — existing extract_versions pattern, pkg_safe tmpdir approach, Bash 3.2 `declare -A` usage absent here
-- Direct code inspection: `plugins/arcanon/scripts/drift-types.sh` (lines 1–200) — `declare -A` usage on lines 129/148; Bash 4 dependency confirmed
-- Direct code inspection: `plugins/arcanon/scripts/drift-common.sh` — `return 0` guard confirmed; `export` pattern confirmed idempotent
-- Direct code inspection: `plugins/arcanon/scripts/session-start.sh` — version-check + restart logic confirmed on lines 44–67
-- Direct code inspection: `plugins/arcanon/scripts/worker-start.sh` — PID-file mutex confirmed on line 30; double-start protection confirmed
-- Direct code inspection: `plugins/arcanon/worker/db/query-engine.js` — `endScan` stale-row cleanup pattern (lines 784–838); `dep_kind` discriminant gap confirmed absent
-- Direct code inspection: `plugins/arcanon/worker/db/migrations/001–009` — `library_deps` table confirmed absent; existing UNIQUE patterns on `services` confirmed
-- Direct code inspection: `plugins/arcanon/worker/scan/manager.js` — scan bracket, PID lock, `slog` WARN pattern confirmed
-- Maven: Apache Maven POM reference — Dependency Management (official docs, HIGH confidence)
-- Gradle: Gradle version catalog docs, Kotlin DSL primer (official docs, HIGH confidence)
-- NuGet: Central Package Management — Microsoft Docs (official docs, HIGH confidence)
-- Bundler: Bundler Gemfile.lock format man page (official docs, HIGH confidence)
-- Spring Security 6: Spring Security 6 migration guide (official docs, HIGH confidence)
-- EF Core minimal APIs: ASP.NET Core 6+ minimal API with EF Core (official docs, HIGH confidence)
+- Codebase: `plugins/arcanon/hooks/hooks.json` — existing hook wiring, timeout values, event matchers
+- Codebase: `plugins/arcanon/scripts/file-guard.sh` — PreToolUse pattern, exit-code contract, disable-guard env var pattern
+- Codebase: `plugins/arcanon/scripts/worker-stop.sh` — SIGTERM/SIGKILL graceful stop, 5s poll pattern
+- Codebase: `plugins/arcanon/scripts/hub.sh` — Node invocation pattern, thin wrapper approach
+- Codebase: `plugins/arcanon/scripts/session-start.sh` — stub (1 line), wired to both SessionStart and UserPromptSubmit
+- Domain knowledge: SQLite WAL mode behavior during concurrent file operations
+- Domain knowledge: Node.js cold-start latency (~300 ms on typical hardware)
+- Domain knowledge: Shell glob prefix matching without trailing-slash normalization
 
 ---
-*Pitfalls research for: Library Drift & Language Parity milestone (arcanon plugin)*
-*Researched: 2026-04-19*
+*Pitfalls research for: Arcanon plugin v0.1.1 milestone*
+*Researched: 2026-04-21*

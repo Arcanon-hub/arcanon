@@ -1,373 +1,358 @@
-# Architecture Research
+# Architecture Research — v0.1.1 Integration Points
 
-**Domain:** Claude Code plugin — Library Drift & Language Parity milestone
-**Researched:** 2026-04-19
-**Confidence:** HIGH (all findings derived from direct file inspection)
+**Domain:** Claude Code plugin — command cleanup, self-update, ambient hooks
+**Researched:** 2026-04-21
+**Confidence:** HIGH (all findings from direct file inspection, no inference)
 
 ---
 
-## Integration Analysis by Ticket
-
-### THE-1019: Library Dependency Persistence
-
-#### 1. Where `collectDependencies()` slots in `manager.js`
-
-The scan pipeline has two sequential phases inside `scanRepos()`:
-
-- **Phase A** (`manager.js` line 733): parallel `Promise.allSettled` fan-out — agent calls per repo.
-- **Phase B** (`manager.js` line 756): sequential DB writes and enrichment.
-
-`collectDependencies(repoPath, svc.id, svc.root_path)` must run **inside Phase B, after `persistFindings()` and `endScan()`, within the existing enrichment loop** (`manager.js` lines 771–782). The exact slot:
+## System Overview
 
 ```
-queryEngine.persistFindings(...)        ← line 765
-queryEngine.endScan(...)                ← line 766
-// enrichment loop starts (line 771)
-const services = queryEngine._db
-  .prepare('SELECT id, root_path, language, boundary_entry FROM services WHERE repo_id = ?')
-  .all(r.repoId);                       ← line 773 — root_path already fetched here
-for (const service of services) {
-  await runEnrichmentPass(...)          ← line 776 — existing enricher dispatch
-  await collectDependencies(...)        ← NEW: insert after runEnrichmentPass, same loop body
+┌──────────────────────────────────────────────────────────────────────┐
+│  hooks/hooks.json  (hook registrations — single source of truth)     │
+├──────────────────────────────────────────────────────────────────────┤
+│  SessionStart + UserPromptSubmit                                      │
+│    install-deps.sh (120s)  →  session-start.sh (10s)                 │
+│                                                                       │
+│  PreToolUse: Write|Edit|MultiEdit                                     │
+│    file-guard.sh (10s)  [NEW: impact-hook.sh here]                   │
+│                                                                       │
+│  PostToolUse: Write|Edit|MultiEdit                                    │
+│    format.sh (10s)  →  lint.sh (10s)                                 │
+├──────────────────────────────────────────────────────────────────────┤
+│  commands/                   scripts/          lib/                   │
+│    map.md                      hub.sh            worker-client.sh    │
+│    impact.md                   drift.sh          worker-restart.sh   │
+│    drift.md                    session-start.sh  data-dir.sh         │
+│    sync.md  [absorbs upload]   worker-start.sh   detect.sh           │
+│    export.md                   file-guard.sh     linked-repos.sh     │
+│    login.md                    format.sh                             │
+│    status.md                   lint.sh                               │
+│    [NEW: update.md]            [NEW: update.sh]                      │
+│    [REMOVE: cross-impact.md]   [NEW: impact-hook.sh]                 │
+│    [REMOVE: upload.md]                                               │
+├──────────────────────────────────────────────────────────────────────┤
+│  worker/ (Node.js daemon — port 37888, ~/.arcanon/)                  │
+│    server/  scan/  mcp/  ui/  hub-sync/  db/  cli/                   │
+│      cli/hub.js  ←  scripts/hub.sh (thin exec wrapper)               │
+│      db/query-engine.js  ←  services, connections, exposed_endpoints │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Workstream 1: Command Cleanup
+
+### 1a. Remove `commands/cross-impact.md`
+
+**Files that reference "cross-impact" — confirmed by grep:**
+
+| File | Line | Action |
+|------|------|--------|
+| `plugins/arcanon/commands/cross-impact.md` | entire file | DELETE |
+| `plugins/arcanon/scripts/session-start.sh` | line 114 | EDIT — remove `/arcanon:cross-impact` from the commands list string |
+| `plugins/arcanon/worker/scan/agent-prompt-infra.md` | line 5 | READ-ONLY mention, no user-facing reference; leave as-is |
+| `plugins/arcanon/README.md` | TBD | EDIT — remove cross-impact from documented commands |
+
+No JS worker code references "cross-impact" as a route or tool name. The command is markdown-only.
+
+### 1b. Merge `commands/upload.md` → `commands/sync.md`
+
+**Current state:**
+
+- `commands/sync.md` — drains offline queue via `hub.sh sync $ARGUMENTS`. Narrow scope: retry queued payloads.
+- `commands/upload.md` — manual push of latest scan via `hub.sh upload $ARGUMENTS`. Preflight: check scan exists, check credentials.
+
+**Merge decision:** `sync.md` becomes the unified command. `upload.md` is deleted.
+
+Rationale: "sync" is the superset concept (upload + drain + retry). The preflight logic from `upload.md` folds into the merged `sync.md` as a new `--upload` flag flow, or as the default behaviour when no subcommand is given.
+
+**Implementation locus:**
+
+- All implementation is in `worker/cli/hub.js` — the `upload` and `sync` subcommands already exist there as separate code paths. No shell logic to merge.
+- `scripts/hub.sh` is a pass-through exec wrapper (lines 1–15); it needs no changes.
+- The merged `commands/sync.md` will call `bash ${CLAUDE_PLUGIN_ROOT}/scripts/hub.sh upload $ARGUMENTS` for upload flows and `bash ${CLAUDE_PLUGIN_ROOT}/scripts/hub.sh sync $ARGUMENTS` for queue-drain flows — the CLI subcommands remain distinct, only the command surface merges.
+
+**Files to change:**
+
+| File | Action |
+|------|--------|
+| `commands/upload.md` | DELETE |
+| `commands/sync.md` | EDIT — absorb upload preflight + run steps; add `--dry-run`, `--repo`, `--force`, `--drain` flag docs |
+| `scripts/session-start.sh` line 114 | EDIT — replace `/arcanon:upload` with nothing (or document `/arcanon:sync` handles it) |
+| `README.md` | EDIT — command table |
+
+### 1c. Config rename `auto_upload` → `auto_sync` with legacy grace period
+
+**Where the config key is read — confirmed by grep:**
+
+| File | Location | Key read |
+|------|----------|----------|
+| `worker/cli/hub.js` | line 114 | `cfg?.hub?.["auto-upload"]` |
+| `worker/scan/manager.js` | line 55 | `cfg?.hub?.["auto-upload"]` |
+
+The config is read from `arcanon.config.json` via `resolveConfigPath` in `worker/lib/config-path.js`. The key is `hub["auto-upload"]` (hyphen in JSON, not underscore — `plugin.json` uses `auto_upload` as the `userConfig` key name but the arcanon.config.json path uses `hub["auto-upload"]`).
+
+**Also:** `plugin.json` line 34 declares `"auto_upload"` in `userConfig`. This is the Claude plugin config schema entry. It must be renamed to `"auto_sync"`.
+
+**Legacy grace pattern — two-read approach:**
+
+```javascript
+// In worker/cli/hub.js line 114 and worker/scan/manager.js line 55:
+// Replace:
+const hubAutoUpload = Boolean(cfg?.hub?.["auto-upload"]);
+// With:
+const hubAutoSync = Boolean(cfg?.hub?.["auto-sync"] ?? cfg?.hub?.["auto-upload"]);
+```
+
+This reads the new key first, falls back to old key, costs zero overhead. Remove the `??` fallback in v0.2.0.
+
+**Files to change:**
+
+| File | Line | Change |
+|------|------|--------|
+| `worker/cli/hub.js` | 114, 131, 144 | Rename variable + add fallback read |
+| `worker/scan/manager.js` | 55, 859, 863, 867 | Same two-read pattern |
+| `.claude-plugin/plugin.json` | 34–40 | Rename `auto_upload` → `auto_sync`; update title/description |
+| `commands/status.md` | line 21, 26 | Update config key references |
+| `commands/login.md` | lines 42–46 | Update config key references |
+
+---
+
+## Workstream 2: `/arcanon:update` Command
+
+### Orchestration split: markdown vs shell
+
+**Decision:** `commands/update.md` owns the user-facing orchestration (confirmation prompts, output formatting, verification report). `scripts/update.sh` owns the deterministic shell steps (version probing, kill, cache prune, verify). This matches the existing pattern: `commands/map.md` orchestrates, `scripts/worker-start.sh` does the mechanical work.
+
+```
+commands/update.md
+  → Step 1: version state query (calls scripts/update.sh --check, reads JSON)
+  → Step 2: confirm with user
+  → Step 3: reinstall (calls `claude plugin install` or equivalent)
+  → Step 4: kill stale worker (calls scripts/update.sh --kill)
+  → Step 5: cache prune (calls scripts/update.sh --prune-cache)
+  → Step 6: verify (calls scripts/update.sh --verify)
+  → formats and reports result
+```
+
+### State queries
+
+**Installed version** — `plugin.json` at `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`, key `.version`. Already used by `worker-restart.sh` lines 57–59 via `jq -r '.version'` on `package.json`. For update.sh, read from `plugin.json` (user-facing version) not `package.json`.
+
+**Running worker version** — `GET http://127.0.0.1:${PORT}/api/version`. Port is in `$(resolve_arcanon_data_dir)/worker.port`. Pattern already in `worker-restart.sh` lines 61–65.
+
+**Plugin cache path** — Claude Code stores marketplace plugins at `~/.claude/plugins/cache/<marketplace>/<plugin>/`. The stable API for this is unverified from official docs — treat as LOW confidence. Use `ls -d ~/.claude/plugins/cache/*/arcanon/ 2>/dev/null` for discovery. Do not hardcode the marketplace segment.
+
+**Remote latest** — After `claude plugin marketplace update`, the refreshed manifest is inspected. If Claude Code does not expose a CLI flag to print the latest version without installing, `update.md` should instruct Claude to run `claude plugin marketplace update` and then read the version from the refreshed cache. This is the weakest link — flag for validation during phase research.
+
+### Worker kill semantics
+
+`restart_worker_if_stale` in `lib/worker-restart.sh` handles three cases: `no_pid_file`, `stale_pid`, `version_mismatch`. It uses graceful kill → 1s wait → SIGKILL.
+
+`/arcanon:update` needs a stronger "kill regardless of version" semantic because the update is intentional, not a mismatch detection. `scripts/update.sh --kill` should:
+
+1. Read `${DATA_DIR}/worker.pid`
+2. If PID exists and live: `kill $PID`, sleep 1, `kill -9 $PID` if still up
+3. Remove `worker.pid` and `worker.port`
+
+This is a superset of what `restart_worker_if_stale` does on `version_mismatch`. **Do not reuse `restart_worker_if_stale` for the update path** — calling it would re-start the old worker immediately (line 121: `worker_start_background`). The update flow needs kill-only, then reinstall, then start.
+
+### Cache pruning
+
+Safe prune pattern: list `~/.claude/plugins/cache/*/arcanon/` subdirectories, exclude the version matching `plugin.json`, remove the rest. A directory is safe to remove if no process has it as cwd or open file descriptor. Check via `lsof +D <dir> 2>/dev/null | wc -l` — if 0, safe. This is a best-effort check; the worker is already killed at this point so any open handles are stale.
+
+### New files
+
+| File | Type | Purpose |
+|------|------|---------|
+| `commands/update.md` | NEW | User-facing orchestration: version check → confirm → reinstall → kill → prune → verify |
+| `scripts/update.sh` | NEW | Deterministic shell: `--check` (emit JSON), `--kill` (kill worker), `--prune-cache` (remove old cache dirs), `--verify` (confirm new version running) |
+
+---
+
+## Workstream 3: PreToolUse Impact Hook
+
+### Hook registration
+
+Claude Code reads hook registrations from `hooks/hooks.json` — confirmed by the existing file at `plugins/arcanon/hooks/hooks.json`. The `plugin.json` manifest does not contain hook config. All hook additions go into `hooks.json`.
+
+The new hook entry:
+
+```json
+{
+  "PreToolUse": [
+    {
+      "matcher": "Write|Edit|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "${CLAUDE_PLUGIN_ROOT}/scripts/file-guard.sh",
+          "timeout": 10
+        },
+        {
+          "type": "command",
+          "command": "${CLAUDE_PLUGIN_ROOT}/scripts/impact-hook.sh",
+          "timeout": 5
+        }
+      ]
+    }
+  ]
 }
 ```
 
-Rationale: `collectDependencies` needs `service.id` (the DB row FK), which only exists after `persistFindings`. It must run after `endScan` so its writes are not removed by stale-row cleanup — the `service_dependencies` table uses `ON DELETE CASCADE` from `services(id)`, not `scan_version_id` stamping, so the cleanup in `endScan` does not affect it. Running inside the existing loop keeps sequential DB access intact (better-sqlite3 is not concurrent-safe). The `services` query at line 773 already selects `root_path`, so no second query is needed.
+**File to change:** `hooks/hooks.json` — add the impact-hook entry to the existing `PreToolUse` array. The `file-guard.sh` hook runs first; `impact-hook.sh` runs after (Claude Code fires hooks in array order within an event).
 
-#### 2. `service_dependencies` — new table vs. JSON column on `services`
+### Hook output convention
 
-**New table is correct.** Reasons:
+From `file-guard.sh` lines 56–58 (block) and 62–65 (warn):
 
-- `services` uses `ON CONFLICT(repo_id, name) DO UPDATE` upserts. Adding a JSON column means re-serializing the full array on every scan update, awkward with the existing prepared statement in `query-engine.js` lines 355–364.
-- A child table with `ON DELETE CASCADE` from `services(id)` gives stale-row cleanup for free — when `endScan()` deletes stale services via `_stmtDeleteStaleServices` (line 816), dependency rows follow automatically. No new cleanup statements needed.
-- Querying by package name, version, or ecosystem across repos requires a normalized table. A JSON column forces `json_each()` or application-side parsing.
-- The `node_metadata` table (migration 008) is the established precedent for side-car data keyed to `service_id`. `service_dependencies` follows the same pattern.
+- **Context injection (soft, allow):** `printf '{"systemMessage": "..."}\n'` + exit 0
+- **Hard block (deny):** `printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}\n'` + exit 2
 
-Schema for migration 010:
+The impact hook wants injection (not blocking), so it outputs `{"systemMessage": "..."}` with impact context and exits 0. This matches the `warn_file()` pattern in `file-guard.sh` line 62.
+
+For richer session-level injection (like `session-start.sh`), the pattern is `{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"..."}}`. Both formats are supported; `systemMessage` is simpler and appropriate for per-edit inline warnings.
+
+### Service-file detection
+
+The question "is this file service-load-bearing?" requires two data sources:
+
+1. **`connections.source_file`** — files that contain outbound service calls (tracked per connection in the `connections` table, migration 001 line 46).
+2. **`services.root_path`** — service root directory (tracked per service, migration 001 line 35); any file under a service root is loosely "service-bearing", but too broad for precise injection.
+3. **`exposed_endpoints` table** — does NOT have a `source_file` column (migration 003 confirmed). Only has `service_id, method, path, handler`.
+
+The most precise signal: match the edited file path against `connections.source_file` (exact or prefix). A file is "service-load-bearing" if it appears in `connections.source_file` for any connection, or if it matches known service contract file patterns (`.proto`, `openapi.yaml`, `openapi.json`, `swagger.yaml`).
+
+### SQLite query runtime: shell (sqlite3 CLI) vs Node
+
+**Use sqlite3 CLI, not Node.** The hook fires on every Edit/Write — Node.js startup cost is 80–200ms per invocation, which makes the hook perceptibly slow for large files. `sqlite3` binary executes a prepared query in under 5ms on a local file.
+
+The query:
 
 ```sql
-CREATE TABLE IF NOT EXISTS service_dependencies (
-  id           INTEGER PRIMARY KEY,
-  service_id   INTEGER NOT NULL REFERENCES services(id) ON DELETE CASCADE,
-  ecosystem    TEXT NOT NULL,   -- 'npm' | 'pip' | 'cargo' | 'maven' | 'gem'
-  name         TEXT NOT NULL,
-  version      TEXT,
-  dev          INTEGER NOT NULL DEFAULT 0,  -- 0=prod, 1=dev/test dep
-  UNIQUE(service_id, ecosystem, name)
-);
-CREATE INDEX IF NOT EXISTS idx_service_deps_service ON service_dependencies(service_id);
-CREATE INDEX IF NOT EXISTS idx_service_deps_name    ON service_dependencies(ecosystem, name);
+-- Is this file (or a proto/OpenAPI file) referenced in any connection?
+SELECT COUNT(*) FROM connections WHERE source_file = ?;
 ```
 
-Stale cleanup: `ON DELETE CASCADE` means no change to `endScan()`. This is simpler than the schemas/fields pattern (which requires explicit child-first deletes before connection deletion, because schemas FK connections, not services). `service_dependencies` → `services` is single-level cascade, making it self-managing.
-
-#### 3. `buildFindingsBlock()` — version bump to 1.1 only when deps present
-
-`buildScanPayload()` hard-codes `version: "1.0"` at `payload.js` line 201. The cleanest approach is to have `buildFindingsBlock()` derive and return a `schemaVersion` field, then let `buildScanPayload()` use it:
-
-In `buildFindingsBlock()` (`payload.js` line 93):
-
-```javascript
-const deps = Array.isArray(findings?.dependencies) ? findings.dependencies : [];
-
-return {
-  services: ...,
-  connections: ...,
-  schemas,
-  actors: ...,
-  dependencies: deps,
-  schemaVersion: deps.length > 0 ? "1.1" : "1.0",  // NEW
-  warnings,
-};
-```
-
-In `buildScanPayload()` (`payload.js` line 201), replace the literal:
-
-```javascript
-version: findingsBlock.schemaVersion,  // "1.0" or "1.1"
-```
-
-And conditionally include `dependencies` in the payload `findings` block:
-
-```javascript
-findings: {
-  services: findingsBlock.services,
-  connections: findingsBlock.connections,
-  schemas: findingsBlock.schemas,
-  actors: findingsBlock.actors,
-  ...(findingsBlock.dependencies.length > 0
-    ? { dependencies: findingsBlock.dependencies }
-    : {}),
-},
-```
-
-This preserves the v1.0 payload shape for all existing scans and only emits the new field when deps were collected — zero breakage for hub consumers not yet on 1.1.
-
-#### 4. `endScan()` stale-row extension for `service_dependencies`
-
-No change to `endScan()` required. The `ON DELETE CASCADE` on `service_dependencies.service_id` means stale service rows deleted by `_stmtDeleteStaleServices` (line 816) automatically cascade to their dependency rows. This contrasts with the `schemas`/`fields` cleanup (lines 799–812) which requires explicit child-first deletes because schemas FK connections (not services), and connections are deleted before services. `service_dependencies` is a direct child of `services`, making cascade safe and sufficient.
-
----
-
-### THE-1020: Three New Language Ecosystems
-
-#### 1. `detect.sh` priority order — significance
-
-`detect_project_type()` (`detect.sh` lines 29–42) uses priority order `python > rust > node > go`. This function is consumed **only** by `session-start.sh` line 114 for the "Detected: X" banner message. It does not gate agent-prompt selection. The JS `detectRepoType()` in `manager.js` line 155 is entirely independent of `detect.sh` and drives actual scan behavior. Conclusion: priority order in `detect.sh` affects only the session-start banner, not scan routing.
-
-Changes needed in `detect.sh` for new ecosystems:
-
-- `detect_project_type()` lines 29–42: add `build.gradle` / `build.gradle.kts` → `java` and `Gemfile` → `ruby` cases. Rust (`Cargo.toml`) is already handled at line 34.
-- `detect_all_project_types()` lines 48–56: same additions.
-- `detect_language()` lines 10–23: add `java` case (currently falls to `unknown`); add `rb` → `ruby`.
-
-These changes are cosmetic (banner only) and safe to land at any time without blocking other work.
-
-#### 2. `discovery.js` MANIFESTS list — agent-prompt impact
-
-`discovery.js` lines 23–29:
-
-```javascript
-const MANIFESTS = [
-  "package.json",
-  "pyproject.toml",
-  "go.mod",
-  "Cargo.toml",
-  "pom.xml",
-];
-```
-
-Adding `"build.gradle"`, `"build.gradle.kts"`, and `"Gemfile"` affects **only** the `discoverNew()` function — it controls whether sibling directories are surfaced as "new repos" to link in the `/arcanon:map` flow. It does not affect agent prompt selection or scan logic. The `discoveryContext` JSON blob is assembled by the agent reading the repo directly; the MANIFESTS list just gates the repo link-suggestion UI.
-
-No agent-prompt changes are required. The additions are additive with zero downstream risk.
-
-#### 3. `auth-db-extractor.js` — file-discovery scoping per new language
-
-File-discovery is already scoped by `language` via the `LANG_EXTENSIONS` map (`auth-db-extractor.js` lines 193–200). Adding Java and Ruby requires only two additions to that map:
-
-```javascript
-java: ['.java'],
-ruby: ['.rb'],
-```
-
-`collectSourceFiles()` (line 208) handles the rest automatically — it walks the tree filtering by extension. No structural changes to the extractor.
-
-The auth/DB signal dispatch uses plain object lookups (`AUTH_SIGNALS[lang]`, `DB_SOURCE_SIGNALS[lang]`) at lines 267–270. Adding new language keys to those objects is sufficient. The `language` value comes from `services.language` (set by the agent scan, fetched in the Phase B loop query at `manager.js` line 773) — no changes to that query.
-
-New entries to add:
-
-```javascript
-// AUTH_SIGNALS
-AUTH_SIGNALS.java = [
-  { mechanism: 'jwt',     regex: /(jjwt|java-jwt|nimbus-jose)/i },
-  { mechanism: 'oauth2',  regex: /(spring-security-oauth2|OAuthClientDetails|KeycloakSecurityContext)/i },
-  { mechanism: 'session', regex: /(HttpSession|SessionCreationPolicy)/i },
-];
-AUTH_SIGNALS.ruby = [
-  { mechanism: 'jwt',     regex: /(jwt\.decode|jwt\.encode|ruby-jwt)/i },
-  { mechanism: 'oauth2',  regex: /(OmniAuth|doorkeeper|rack-oauth2)/i },
-  { mechanism: 'session', regex: /(session\[:user|Devise|has_secure_password)/i },
-  { mechanism: 'api-key', regex: /(authenticate_with_http_token|API_KEY)/i },
-];
-// DB_SOURCE_SIGNALS
-DB_SOURCE_SIGNALS.java = [
-  { backend: 'postgresql', regex: /(postgresql|PGSimpleDataSource|pgjdbc)/i },
-  { backend: 'mysql',      regex: /(mysql-connector|MysqlDataSource)/i },
-  { backend: 'mongodb',    regex: /(MongoClient|spring-data-mongodb)/i },
-  { backend: 'redis',      regex: /(Jedis|Lettuce|RedisConnectionFactory)/i },
-];
-DB_SOURCE_SIGNALS.ruby = [
-  { backend: 'postgresql', regex: /(pg\b|ActiveRecord.*postgresql)/i },
-  { backend: 'mysql',      regex: /(mysql2|ActiveRecord.*mysql)/i },
-  { backend: 'mongodb',    regex: /(Mongoid|Mongo::Client)/i },
-  { backend: 'redis',      regex: /(Redis\.new|redis-rb)/i },
-];
-```
-
-Note: `manager.js` `detectRepoType()` already handles `build.gradle` at lines 226–238 for Java library/service classification. No changes to that function are needed for THE-1020.
-
----
-
-### THE-1021: Unified Drift Dispatcher
-
-#### 1. `lib/worker-restart.sh` — minimum API surface
-
-`worker-restart.sh` does not yet exist. It is a new file in `plugins/arcanon/lib/`. The duplicate logic it replaces lives in:
-
-- `session-start.sh` lines 43–68: version check + `worker_start_background` call.
-- `worker-start.sh` lines 28–61: stale-PID detection + version comparison + graceful/forceful kill.
-
-Minimum API surface:
+Shell call:
 
 ```bash
-# lib/worker-restart.sh
-# Source this file; do not execute directly.
-# Requires worker-client.sh (for resolve_arcanon_data_dir) to be sourced first.
-
-# should_restart_worker
-# Sets _should_restart=true and _restart_reason=<string> if restart is warranted.
-# Returns 0 always. Reads PID_FILE and PORT_FILE from DATA_DIR.
-should_restart_worker() { ... }
-
-# restart_worker_if_stale
-# Calls should_restart_worker; kills and restarts if needed.
-# Sets _worker_restarted=true if restart occurred.
-# Returns 0 always (restart errors are non-fatal).
-restart_worker_if_stale() { ... }
+COUNT=$(sqlite3 "$DB_PATH" \
+  "SELECT COUNT(*) FROM connections WHERE source_file = '$ESCAPED_FILE';")
 ```
 
-`worker-restart.sh` should source `data-dir.sh` directly (or rely on it being sourced already via `worker-client.sh`) — do not duplicate `resolve_arcanon_data_dir`. The `wait_for_worker` bc fork issue in `worker-client.sh` line 44 (`sleep "$(echo "scale=3; $interval_ms/1000" | bc)"`) is a pre-existing problem in the client, not the restart lib — do not fix it in this ticket.
+Use parameter quoting carefully; prefer passing via `-cmd` with proper escaping or use printf to build the query.
 
-Callers after refactor:
+### DB path resolution
 
-- `session-start.sh`: remove lines 43–68, add `source "$WORKER_CLIENT_LIB"` (already present) then `source worker-restart.sh` and call `restart_worker_if_stale`.
-- `worker-start.sh`: remove lines 28–61, source `worker-restart.sh` and call `restart_worker_if_stale` early in the script body.
+The DB path is per-project: `~/.arcanon/projects/<hash>/impact-map.db`. The hash is derived from the project root path. The existing `worker/lib/config-path.js` and `worker/lib/data-dir.js` handle this in Node, but the hook needs a shell equivalent.
 
-#### 2. `scripts/drift.sh` dispatcher — argv ownership
+The `lib/data-dir.sh` already resolves `~/.arcanon` (or legacy `~/.ligamen`). A new `lib/db-path.sh` helper should resolve the per-project DB path from CWD. Pattern: use the same hash algorithm as `data-dir.js` (inspect that file to confirm the hash function before implementing).
 
-The dispatcher passes `"$@"` through to each subcommand. Each subcommand continues to source `drift-common.sh` and call `parse_drift_args "$@"` itself. The dispatcher does not own flag parsing internally — it is a thin router:
+### Cache for hot path
+
+A flat-file index of "known service source files" addresses the cold-start cost: on every scan completion, the worker writes `~/.arcanon/service-files.txt` (one absolute path per line). The hook does a fast `grep -qxF "$FILE" "$SERVICE_FILES_INDEX"` check before opening SQLite. This is a 0.5ms `grep` vs a 5ms SQLite query for the common case (file not in index).
+
+Cache invalidation: compare `stat -f %m "$SERVICE_FILES_INDEX"` vs `stat -f %m "$DB_PATH"`. If DB is newer, skip the cache and hit SQLite directly (also triggers an async index rebuild — write to a temp file, mv atomically).
+
+**This is an optimization, not a hard requirement for v0.1.1.** Implement the SQLite-direct path first; add the flat-file cache if hook latency is observed to be perceptible (>100ms) in practice.
+
+### New files
+
+| File | Type | Purpose |
+|------|------|---------|
+| `scripts/impact-hook.sh` | NEW | PreToolUse hook: reads file path from stdin JSON, checks service-file index, queries SQLite for consumers, emits systemMessage context |
+| `lib/db-path.sh` | NEW | Shell helper: resolves per-project DB path from CWD using data-dir.sh + project hash |
+| `hooks/hooks.json` | EDIT | Add impact-hook.sh to PreToolUse array (after file-guard.sh) |
+
+---
+
+## Workstream 4: SessionStart Enrichment
+
+### Existing hook config
+
+`session-start.sh` is registered in two places in `hooks/hooks.json`:
+
+- `SessionStart` array, index 1 (after `install-deps.sh`), timeout 10s
+- `UserPromptSubmit` array, index 0, timeout 10s (fallback for upstream bug #10373)
+
+The script emits `{"hookSpecificOutput":{"hookEventName":"<EVENT>","additionalContext":"<STRING>"}}` at line 120–122.
+
+### Enrichment injection point
+
+The banner string is assembled at lines 110–115 of `session-start.sh`. The current output is:
+
+```
+Arcanon active. Detected: <types>. Commands: /arcanon:map, ...
+```
+
+Enriched output target:
+
+```
+Arcanon active. Detected: <types>. Services: <N> across <M> repos. Last scan: <date>. Hub: <status>. Commands: ...
+```
+
+### Where to add the query
+
+After the `WORKER_STATUS` block (line 83), before the `CONTEXT` assembly (line 110). Add a new block that:
+
+1. Checks if the DB exists: `ls ~/.arcanon/projects/*/impact-map.db 2>/dev/null | head -1`
+2. If found, queries via `sqlite3`:
 
 ```bash
-#!/usr/bin/env bash
-# scripts/drift.sh — Unified drift dispatcher
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-SUBCOMMAND="${1:-all}"
-shift || true
-
-case "$SUBCOMMAND" in
-  versions) exec bash "${SCRIPT_DIR}/drift-versions.sh" "$@" ;;
-  types)    exec bash "${SCRIPT_DIR}/drift-types.sh"    "$@" ;;
-  openapi)  exec bash "${SCRIPT_DIR}/drift-openapi.sh"  "$@" ;;
-  all)
-    bash "${SCRIPT_DIR}/drift-versions.sh" "$@"
-    bash "${SCRIPT_DIR}/drift-types.sh"    "$@"
-    bash "${SCRIPT_DIR}/drift-openapi.sh"  "$@"
-    ;;
-  *) echo "Unknown subcommand: $SUBCOMMAND" >&2; exit 1 ;;
-esac
+sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM services;" 2>/dev/null
+sqlite3 "$DB_PATH" "SELECT COUNT(*) FROM repos;" 2>/dev/null
+sqlite3 "$DB_PATH" "SELECT MAX(scanned_at) FROM repos;" 2>/dev/null
 ```
 
-`exec` is used for single-subcommand dispatch (replaces the dispatcher process with the subcommand process — saves one fork). The `all` case uses plain `bash` so all three run sequentially and failures in one do not abort the others (matches the spirit of `set -euo pipefail` being per-script).
+3. Hub sync status: `bash ${CLAUDE_PLUGIN_ROOT}/scripts/hub.sh status --json 2>/dev/null | jq -r '.hub_status // "unknown"'`
 
-#### 3. Migration path — dual-invocability during transition
+**Fast-path concern:** session-start.sh has a 10s timeout. Three `sqlite3` calls add ~15ms total. The `hub.sh status` call adds ~50–100ms (Node startup + one HTTP call). Total overhead is well under 1s. No caching needed.
 
-The critical invariant: each subcommand sources `drift-common.sh` at its own top level. This means direct invocation (`bash drift-versions.sh --all`) is always self-contained and works identically before and after the dispatcher lands.
+**Output shape:** plain text string injected into `additionalContext`. Not JSON — Claude Code processes this as a natural language hint, not structured data.
 
-Why this is safe:
-- The dispatcher calls subcommands as subprocesses (`bash subcommand.sh "$@"`), never via `source`. No variable leakage.
-- `DRIFT_TEST_LINKED_REPOS` is `export`ed by `drift-common.sh` line 63 and is inherited by subprocesses.
-- No subcommand changes are required for the dispatcher to work.
-- Existing callers that hardcode `bash drift-versions.sh` continue to work without modification.
+### File to change
 
-The only coordination required: update the `/arcanon:drift` slash command (in `commands/`) to call `drift.sh` instead of individual subcommand scripts. That is additive.
+| File | Line range | Change |
+|------|-----------|--------|
+| `scripts/session-start.sh` | after line 83, before line 109 | Add stats query block; update CONTEXT assembly at line 114 |
+| `scripts/session-start.sh` | line 114 | Remove `/arcanon:cross-impact` and `/arcanon:upload`; add `/arcanon:update` |
 
 ---
 
-## New Files vs. Modified Files
-
-| Action | File | Ticket |
-|--------|------|--------|
-| NEW | `plugins/arcanon/worker/db/migrations/010_service_dependencies.js` | THE-1019 |
-| NEW | `plugins/arcanon/worker/scan/enrichment/dep-collector.js` | THE-1019 |
-| NEW | `plugins/arcanon/lib/worker-restart.sh` | THE-1021 |
-| NEW | `plugins/arcanon/scripts/drift.sh` | THE-1021 |
-| EDIT | `plugins/arcanon/worker/db/query-engine.js` — add `upsertDependency()` method + prepared statement in constructor | THE-1019 |
-| EDIT | `plugins/arcanon/worker/hub-sync/payload.js` — `buildFindingsBlock` deps + `schemaVersion`; `buildScanPayload` version field | THE-1019 |
-| EDIT | `plugins/arcanon/worker/scan/manager.js` — Phase B enrichment loop (~line 776): call `collectDependencies` after `runEnrichmentPass` | THE-1019 |
-| EDIT | `plugins/arcanon/worker/scan/discovery.js` — MANIFESTS lines 23–29: add `build.gradle`, `build.gradle.kts`, `Gemfile` | THE-1020 |
-| EDIT | `plugins/arcanon/worker/scan/enrichment/auth-db-extractor.js` — LANG_EXTENSIONS lines 193–200 + AUTH_SIGNALS + DB_SOURCE_SIGNALS | THE-1020 |
-| EDIT | `plugins/arcanon/lib/detect.sh` — `detect_project_type` lines 29–42, `detect_all_project_types` lines 48–56, `detect_language` lines 10–23 | THE-1020 |
-| EDIT | `plugins/arcanon/scripts/session-start.sh` — lines 43–68: replace inline restart logic with `source worker-restart.sh` + `restart_worker_if_stale` | THE-1021 |
-| EDIT | `plugins/arcanon/scripts/worker-start.sh` — lines 28–61: replace inline restart logic with `source worker-restart.sh` + `restart_worker_if_stale` | THE-1021 |
-
----
-
-## Data Flow Changes
-
-### Scan Pipeline with THE-1019 insertion
+## Build Order
 
 ```
-Phase A (parallel agent invocations)
-    ↓
-Phase B (sequential, per-repo):
-  persistFindings()         ← unchanged
-  endScan()                 ← unchanged; CASCADE handles dep cleanup automatically
-  enrichment loop:
-    runEnrichmentPass()     ← existing: auth-db enricher + codeowners enricher
-    collectDependencies()   ← NEW: reads manifest files, writes service_dependencies rows
-  ↓
-hub-sync (optional, fire-and-log):
-  buildFindingsBlock()      ← reads deps from findings, emits schemaVersion
-  buildScanPayload()        ← uses schemaVersion for version field ("1.0" or "1.1")
+Phase 1 — Command cleanup (standalone, zero dependencies)
+  1a. Delete commands/cross-impact.md
+  1b. Delete commands/upload.md; rewrite commands/sync.md
+  1c. Rename auto_upload → auto_sync in plugin.json + two JS files
+  1d. Edit session-start.sh line 114: update command list string
+
+Phase 2 — /arcanon:update (depends on nothing milestone-specific)
+  2a. Create scripts/update.sh with --check / --kill / --prune-cache / --verify subcommands
+  2b. Create commands/update.md
+  (Worker restart lib is already in place; update.sh uses the kill-only subset)
+
+Phase 3 — SessionStart enrichment (builds on Phase 1 session-start.sh edits)
+  3a. Add stats query block to session-start.sh
+  3b. Update CONTEXT string assembly
+
+Phase 4 — PreToolUse impact hook (highest risk; needs stable infra)
+  4a. Create lib/db-path.sh
+  4b. Create scripts/impact-hook.sh (SQLite-direct, no cache)
+  4c. Edit hooks/hooks.json: add impact-hook.sh entry
+  4d. (Optional, if latency observed) Add flat-file service-files index + cache
 ```
 
-### Drift Dispatch with THE-1021
+**Why this order:**
 
-```
-/arcanon:drift [subcommand] [flags]
-    ↓
-scripts/drift.sh
-    ↓ (subprocess, passes "$@")
-  versions → drift-versions.sh (self-contained, sources drift-common.sh)
-  types    → drift-types.sh    (self-contained, sources drift-common.sh)
-  openapi  → drift-openapi.sh  (self-contained, sources drift-common.sh)
-  all      → all three sequentially
-```
-
-### Worker Restart with THE-1021
-
-```
-session-start.sh                  worker-start.sh
-  source worker-client.sh    ←→     source data-dir.sh
-  source worker-restart.sh         source worker-restart.sh
-  restart_worker_if_stale()        restart_worker_if_stale()
-       ↓ (shared logic)                  ↓ (shared logic)
-  check PID liveness
-  compare /api/version vs package.json version
-  kill + respawn if mismatch
-```
-
----
-
-## Build Order and Parallelism
-
-**Batch 1 — fully parallel, no cross-dependencies:**
-- THE-1020: `discovery.js` MANIFESTS addition (2-line edit, zero risk)
-- THE-1020: `detect.sh` language additions (additive, no callers break)
-- THE-1021: `lib/worker-restart.sh` creation (new file, no callers yet)
-- THE-1021: `scripts/drift.sh` creation (new file, additive)
-
-**Batch 2 — depends on Batch 1 being merged:**
-- THE-1020: `auth-db-extractor.js` Java/Ruby signal tables (safe once language decisions are confirmed)
-- THE-1021: `session-start.sh` + `worker-start.sh` refactor (requires `worker-restart.sh` to exist)
-
-**Batch 3 — THE-1019 in internal dependency order (serialized):**
-1. `010_service_dependencies.js` migration (must land first — table must exist before writes)
-2. `query-engine.js` `upsertDependency()` (requires migration table shape to be known)
-3. `dep-collector.js` (new module — can be written once QE interface is defined)
-4. `manager.js` Phase B loop edit (calls `dep-collector.js` — requires it to exist)
-5. `payload.js` `buildFindingsBlock` + `buildScanPayload` changes (hub shape — land last to avoid partial state)
-
-**THE-1019 is fully independent of THE-1020 and THE-1021.** The `discovery.js` MANIFESTS list (THE-1020) is for the repo link-suggestion UI and does not block dep collection — `dep-collector.js` reads manifests from disk directly. THE-1021 is entirely orthogonal to both.
-
----
-
-## Test Strategy
-
-| New/changed module | Test file | Framework | Key assertions |
-|---|---|---|---|
-| `010_service_dependencies.js` | `worker/db/migration-010.test.js` (NEW) | node:test | `up()` idempotent, `UNIQUE(service_id, ecosystem, name)` constraint, `ON DELETE CASCADE` removes rows when service deleted |
-| `dep-collector.js` | `worker/scan/enrichment/dep-collector.test.js` (NEW) | node:test | npm/pip/cargo/maven/gem extraction from fixture manifest files in temp dirs; null-safe on missing manifests; `dev` flag set correctly |
-| `query-engine.js` `upsertDependency` | `worker/db/query-engine-deps.test.js` (NEW) | node:test | insert, upsert-update (same name+ecosystem → version updated), cascade-on-service-delete |
-| `payload.js` version bump | `worker/hub-sync/payload.test.js` (EXISTING — extend) | node:test | `schemaVersion="1.0"` when no deps; `schemaVersion="1.1"` when deps present; `dependencies` key absent from payload when empty |
-| `auth-db-extractor.js` Java/Ruby | `worker/scan/enrichment/auth-db-extractor.test.js` (EXISTING — extend) | node:test | Java JWT fixture (`jjwt`), Ruby Devise fixture (`has_secure_password`), Java postgresql fixture (`pgjdbc`) |
-| `lib/worker-restart.sh` | `lib/worker-restart.bats` (NEW) | bats | `should_restart_worker` returns no-restart when versions match; returns restart when mismatch; `restart_worker_if_stale` sets `_worker_restarted=true` |
-| `scripts/drift.sh` | `scripts/drift.bats` (NEW) | bats | `versions` subcommand delegates to `drift-versions.sh`; `all` runs all three; unknown subcommand exits 1; `--all` flag passed through |
-| `discovery.js` MANIFESTS | `worker/scan/discovery.test.js` (EXISTING — extend) | node:test | `discoverNew()` returns dirs containing `build.gradle`; returns dirs containing `Gemfile` |
-
-Fixture strategy for `dep-collector.test.js`: create minimal temp-dir manifests — `package.json` with 2 deps, `Cargo.toml` with 1 dep, `pyproject.toml` with 1 PEP 621 dep, `pom.xml` with 1 dependency element, `Gemfile` with 1 `gem` line. No live repos required.
+- Phase 1 is pure subtraction + rename — no new failure modes.
+- Phase 2 is additive-only (new command, new script) — can't break existing behaviour.
+- Phase 3 edits session-start.sh which Phase 1 also touches; sequencing avoids merge conflicts.
+- Phase 4 last because: (a) it fires on every edit — latency regressions surface immediately in daily use; (b) it depends on `lib/db-path.sh` which doesn't exist yet; (c) hooks.json changes are the most disruptive (a syntax error silently breaks all PreToolUse hooks).
 
 ---
 
@@ -375,53 +360,164 @@ Fixture strategy for `dep-collector.test.js`: create minimal temp-dir manifests 
 
 | Component | Responsibility | Communicates With |
 |-----------|---------------|-------------------|
-| `dep-collector.js` | Read manifest files from disk, return normalized `{ecosystem, name, version, dev}` array; write to DB via `queryEngine.upsertDependency` | Called by `manager.js` Phase B loop; writes via `QueryEngine` |
-| `010_service_dependencies.js` | Create `service_dependencies` table with `ON DELETE CASCADE` FK | Loaded by `database.js` migration runner at worker start |
-| `QueryEngine.upsertDependency()` | Prepared `INSERT OR REPLACE INTO service_dependencies` | Called by `dep-collector.js` |
-| `payload.js buildFindingsBlock` | Collect deps from findings, set `schemaVersion` | Called by `hub-sync/index.js` |
-| `worker-restart.sh` | Encapsulate stale-PID + version-mismatch restart logic | Sourced by `session-start.sh` and `worker-start.sh` |
-| `drift.sh` | Subcommand dispatcher — thin router, no own logic | Spawns `drift-versions.sh`, `drift-types.sh`, `drift-openapi.sh` as subprocesses |
+| `hooks/hooks.json` | Single source of truth for hook registrations | Claude Code runtime |
+| `scripts/session-start.sh` | Session context injection + worker version check + stats | `lib/worker-restart.sh`, `lib/detect.sh`, sqlite3 CLI, `scripts/hub.sh` |
+| `scripts/file-guard.sh` | Hard-block / soft-warn on sensitive file writes | Claude Code via stdout JSON |
+| `scripts/impact-hook.sh` (NEW) | Service-file detection + consumer context injection | `lib/db-path.sh`, sqlite3 CLI |
+| `scripts/update.sh` (NEW) | Deterministic version-check / kill / prune / verify shell | `lib/worker-restart.sh` patterns, `worker.pid`, `worker.port` |
+| `commands/update.md` (NEW) | Orchestration layer for self-update UX | `scripts/update.sh`, user confirmation |
+| `commands/sync.md` (EDIT) | Unified upload + queue-drain command | `scripts/hub.sh` → `worker/cli/hub.js` |
+| `worker/cli/hub.js` | Node CLI for all hub operations | `worker/hub-sync/index.js` |
+| `worker/scan/manager.js` | Reads hub config including auto_sync flag | `worker/lib/config-path.js` |
+| `lib/worker-restart.sh` | Stale worker detection and graceful restart | `lib/worker-client.sh`, `lib/data-dir.sh` |
+
+---
+
+## Data Flow
+
+### Impact Hook (PreToolUse)
+
+```
+Claude Edit/Write tool call
+    ↓
+hooks.json dispatches to file-guard.sh (exit 0/2)
+    ↓ (if exit 0)
+hooks.json dispatches to impact-hook.sh
+    ↓
+Read tool_input.file_path from stdin JSON
+    ↓
+lib/db-path.sh resolves ~/.arcanon/projects/<hash>/impact-map.db
+    ↓
+(Optional: grep service-files.txt fast-path miss → SQLite)
+sqlite3 query: SELECT ... FROM connections WHERE source_file = ?
+    ↓
+No consumers → exit 0, no output (silent pass)
+Consumers found → printf '{"systemMessage": "Arcanon: <N> services depend on <file>: ..."}' → exit 0
+```
+
+### Update Command
+
+```
+/arcanon:update
+    ↓
+commands/update.md: scripts/update.sh --check → JSON {installed, running, latest}
+    ↓
+Claude prompts user: "Update from X to Y?"
+    ↓
+scripts/update.sh --kill → graceful kill worker, rm pid/port
+    ↓
+claude plugin install (or equivalent reinstall command)
+    ↓
+scripts/update.sh --prune-cache → rm old cache dirs (lsof check)
+    ↓
+scripts/worker-start.sh (start new worker)
+    ↓
+scripts/update.sh --verify → GET /api/version, compare to plugin.json
+    ↓
+commands/update.md: report result to user
+```
+
+### Config Rename (auto_upload → auto_sync)
+
+```
+arcanon.config.json: hub["auto-sync"] (new) | hub["auto-upload"] (legacy)
+    ↓
+worker/scan/manager.js _readHubConfig():
+    hubAutoSync = cfg?.hub?.["auto-sync"] ?? cfg?.hub?.["auto-upload"]
+    ↓
+worker/cli/hub.js status subcommand: same two-read pattern
+    ↓
+plugin.json userConfig: "auto_sync" key (Claude settings UI)
+```
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Opening a scan bracket inside `dep-collector.js`
+### Anti-Pattern 1: Starting Node for the impact hook
 
-`dep-collector.js` MUST NOT call `beginScan`/`endScan`. It runs after `endScan()` has already closed the bracket. A second `beginScan` would leave `scan_versions.completed_at = NULL` permanently, preserving stale rows forever. The rule is stated at `manager.js` line 769: "Enrichment MUST NOT call beginScan/endScan — never opens a new bracket." `dep-collector` is a post-scan writer, same category.
+**What:** Spawning `node scripts/impact-check.js` from the bash hook to run SQLite queries.
+**Why wrong:** Node startup is 80–200ms. The hook fires on every Edit/Write. In a session with 50 edits, this adds 4–10 seconds of latency.
+**Do this instead:** Use `sqlite3` CLI binary for the impact query. It executes in <5ms. Reserve Node for operations that run once per session (like hub.sh status in session-start.sh where the overhead is amortized).
 
-### Anti-Pattern 2: Using `source` to invoke drift subcommands from the dispatcher
+### Anti-Pattern 2: Calling `restart_worker_if_stale` from `update.sh`
 
-The dispatcher must use `bash subcommand.sh "$@"` (subprocess), never `source`. Sourcing merges `set -euo pipefail` and all variable state. In the `all` case, a failure in `drift-versions.sh` would abort the dispatcher before `drift-types.sh` and `drift-openapi.sh` run.
+**What:** Reusing `lib/worker-restart.sh`'s `restart_worker_if_stale` for the update kill step.
+**Why wrong:** `restart_worker_if_stale` unconditionally calls `worker_start_background` after killing. The update flow needs to kill the worker, run the reinstall, THEN start the new worker. Calling `restart_worker_if_stale` would start the old binary before the new one is installed.
+**Do this instead:** Inline the kill sequence in `scripts/update.sh --kill`: read PID file, send SIGTERM, wait 1s, send SIGKILL if still alive, remove pid/port files. Do not call `worker_start_background`.
 
-### Anti-Pattern 3: Adding a `scan_version_id` column to `service_dependencies`
+### Anti-Pattern 3: Putting hook registrations in `plugin.json`
 
-Because `service_dependencies` uses `ON DELETE CASCADE` from `services(id)`, a `scan_version_id` column is unnecessary. Adding one creates a two-path cleanup (cascade AND explicit stale-delete) that can diverge, potentially leaving orphans. The cascade is the single source of truth.
+**What:** Adding hook entries to `.claude-plugin/plugin.json` instead of `hooks/hooks.json`.
+**Why wrong:** Claude Code reads hooks exclusively from `hooks/hooks.json`. The `plugin.json` manifest has no `hooks` key — confirmed by inspection of the current file.
+**Do this instead:** All hook additions go in `hooks/hooks.json` under the appropriate event key.
 
-### Anti-Pattern 4: Confusing `discovery.js` MANIFESTS with `manager.js` `detectRepoType`
+### Anti-Pattern 4: Hardcoding the marketplace cache path
 
-`discovery.js` MANIFESTS controls repo link-suggestion UI discovery. `manager.js` `detectRepoType()` controls scan-prompt routing. They are independent. Adding `build.gradle` to MANIFESTS (THE-1020) does not require any change to `detectRepoType()` — that function already handles `build.gradle` / `build.gradle.kts` at lines 226–238 for Java library/service classification.
+**What:** Using `~/.claude/plugins/cache/github.com/Arcanon-hub/arcanon/` in `update.sh`.
+**Why wrong:** The marketplace segment (`github.com/Arcanon-hub`) is not confirmed stable API. The path structure may change.
+**Do this instead:** Use glob discovery: `ls -d ~/.claude/plugins/cache/*/arcanon/ 2>/dev/null`. If zero or multiple results, ask the user for the path before pruning.
+
+### Anti-Pattern 5: Emitting `additionalContext` from the impact hook
+
+**What:** Using `{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"..."}}` in `impact-hook.sh`.
+**Why wrong:** `additionalContext` is the session-level injection format used by `SessionStart`. For PreToolUse, the correct soft-message format is `{"systemMessage": "..."}` — this is what `file-guard.sh`'s `warn_file()` uses (line 62). Using `additionalContext` in PreToolUse is untested and may not inject into the right context window position.
+**Do this instead:** Use `{"systemMessage": "Arcanon: <consumers>"}` + exit 0 for the impact hook.
 
 ---
 
-## Sources
+## Integration Points Summary
 
-All findings derived from direct inspection of:
-- `plugins/arcanon/worker/scan/manager.js` (full — 854 lines)
-- `plugins/arcanon/worker/scan/discovery.js` (full)
-- `plugins/arcanon/worker/db/query-engine.js` (full — 1505 lines)
-- `plugins/arcanon/worker/hub-sync/payload.js` (full — 248 lines)
-- `plugins/arcanon/worker/scan/enrichment/auth-db-extractor.js` (lines 1–350)
-- `plugins/arcanon/worker/db/migrations/009_confidence_enrichment.js` (full — canonical migration pattern)
-- `plugins/arcanon/lib/detect.sh` (full)
-- `plugins/arcanon/lib/worker-client.sh` (full)
-- `plugins/arcanon/scripts/drift-common.sh` (full)
-- `plugins/arcanon/scripts/drift-versions.sh` (lines 1–200)
-- `plugins/arcanon/scripts/session-start.sh` (full)
-- `plugins/arcanon/scripts/worker-start.sh` (full)
-- Migration inventory: 001–009 confirmed via glob
-- Drift scripts inventory: `drift-common.sh`, `drift-openapi.sh`, `drift-types.sh`, `drift-versions.sh` confirmed via glob
-- `lib/worker-restart.sh` and `scripts/drift.sh` confirmed absent (glob returned empty)
+| Point | File | Line(s) | New vs Edit |
+|-------|------|---------|-------------|
+| Remove cross-impact from session banner | `scripts/session-start.sh` | 114 | EDIT |
+| Remove upload from session banner | `scripts/session-start.sh` | 114 | EDIT |
+| Add update to session banner | `scripts/session-start.sh` | 114 | EDIT |
+| Add stats query block | `scripts/session-start.sh` | after 83 | EDIT |
+| Merge upload into sync command | `commands/sync.md` | entire file | REWRITE |
+| Delete upload command | `commands/upload.md` | entire file | DELETE |
+| Delete cross-impact command | `commands/cross-impact.md` | entire file | DELETE |
+| New update command | `commands/update.md` | — | NEW |
+| New update shell | `scripts/update.sh` | — | NEW |
+| New impact hook shell | `scripts/impact-hook.sh` | — | NEW |
+| New DB path resolver | `lib/db-path.sh` | — | NEW |
+| Register impact hook | `hooks/hooks.json` | PreToolUse array | EDIT |
+| Rename auto_upload key | `.claude-plugin/plugin.json` | 34–40 | EDIT |
+| Rename auto_upload in hub CLI | `worker/cli/hub.js` | 114, 131, 144 | EDIT |
+| Rename auto_upload in manager | `worker/scan/manager.js` | 55, 859, 863, 867 | EDIT |
 
-*Architecture research for: Library Drift & Language Parity milestone (THE-1019, THE-1020, THE-1021)*
-*Researched: 2026-04-19*
+---
+
+## Test Strategy
+
+| Workstream | Framework | File(s) | What to cover |
+|------------|-----------|---------|---------------|
+| Command cleanup | — | — | Manual smoke test: removed commands 404 cleanly; sync.md handles upload flow |
+| auto_sync rename | node:test | `worker/cli/hub.test.js` (new or existing) | Legacy `auto-upload` key still activates sync; new `auto-sync` key works; neither key → disabled |
+| `auto_sync` rename | node:test | `worker/scan/manager.test.js` (existing) | Same two-key fallback logic |
+| `/arcanon:update` check | bats | `tests/update.bats` (new) | `--check` emits valid JSON; `--kill` removes pid/port; `--verify` detects version match/mismatch |
+| SessionStart enrichment | bats | `tests/session-start.bats` (existing) | Stats injected when DB present; graceful no-op when DB absent; output remains valid JSON |
+| Impact hook — no DB | bats | `tests/impact-hook.bats` (new) | Exits 0 silently when DB not found |
+| Impact hook — non-service file | bats | `tests/impact-hook.bats` | Exits 0, no systemMessage output |
+| Impact hook — service file with consumers | bats | `tests/impact-hook.bats` | Exits 0, systemMessage contains consumer names; use fixture impact-map.db with known rows |
+| Impact hook — service file, no consumers | bats | `tests/impact-hook.bats` | Exits 0, no systemMessage |
+| hooks.json syntax | bats | `tests/hooks-json.bats` (new or inline) | Valid JSON, all command paths exist |
+
+**Fixture requirement:** `tests/fixtures/impact-map.db` — a minimal SQLite DB with schema through migration 010, two services, and one connection where `source_file` is set to a known test path. Create this with a setup script that runs the migration chain, not a checked-in binary.
+
+---
+
+## Open Questions (Require Phase-Specific Research)
+
+1. **Claude plugin cache path stability** — Is `~/.claude/plugins/cache/<marketplace>/<plugin>/` a documented stable API? If not, `update.sh --prune-cache` needs a user-confirmation gate before deleting anything.
+
+2. **`claude plugin install` CLI flag** — What is the exact command to reinstall the current plugin from the marketplace without prompting? This is the missing link in the update flow. If no such flag exists, `commands/update.md` may need to instruct the user to run the command manually rather than automating it.
+
+3. **PreToolUse `additionalContext` vs `systemMessage`** — The Claude Code hook docs distinguish these, but the exact rendering difference (system prompt injection vs inline message) is not confirmed. Test empirically in Phase 4 before committing to one format.
+
+4. **db-path.sh hash algorithm** — `worker/lib/data-dir.js` likely uses a hash of the project root path to derive the per-project DB directory name. The exact hash function must be read from that file before implementing `lib/db-path.sh`. (Not read during this research pass — add to Phase 4 pre-work.)
+
+---
+
+*Architecture research for: Arcanon plugin v0.1.1 (Command Cleanup + Update + Ambient Hooks)*
+*Researched: 2026-04-21*
