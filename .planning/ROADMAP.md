@@ -713,7 +713,12 @@ Plans:
   5. Hook p99 latency is < 50ms (bats benchmark passes); no Node subprocess is spawned in the hot path
   6. All 6 bats fixtures pass: Tier 1 match, Tier 2 match, false-positive guard, self-exclusion, worker-down fallback, latency benchmark
   7. `ARCANON_DISABLE_HOOK=1` short-circuits the hook silently; `ARCANON_IMPACT_DEBUG=1` writes a one-line JSONL trace to `$DATA_DIR/logs/impact-hook.jsonl`
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 100-01-PLAN.md — Pre-flight validations (systemMessage vs additionalContext, /impact signature, root_path convention) + lib/db-path.sh bash port of worker/db/pool.js hash with bats parity tests (HOK-12)
+- [ ] 100-02-PLAN.md — scripts/impact-hook.sh skeleton: stdin parse, Tier 1 bash pattern match (.proto/openapi/swagger), self-exclusion, debug JSONL, disable guard, error swallowing + hooks.json registration AFTER file-guard.sh (HOK-01, HOK-02 Tier 1, HOK-07, HOK-09, HOK-10, HOK-11)
+- [ ] 100-03-PLAN.md — Tier 2 SQLite root_path prefix match with trailing-slash normalization + consumer query (worker HTTP primary, direct SQLite fallback) + staleness prefix + jq-escaped warning emit (HOK-02 Tier 2, HOK-03, HOK-04, HOK-05, HOK-08)
+- [ ] 100-04-PLAN.md — tests/impact-hook.bats 6 fixtures + p99 latency benchmark + deterministic fixture factory (HOK-06, HOK-13)
 **Note**: Four empirical pre-flight validations required before writing code — see SUMMARY.md Phase 4 Research Flags: (1) `additionalContext` vs `systemMessage` output key for PreToolUse; (2) `db-path.sh` hash algorithm from `worker/lib/data-dir.js`; (3) `root_path` absolute vs relative convention in production DB; (4) `/impact` HTTP endpoint parameter signature from `worker/server/http.js`.
 
 ## Progress
