@@ -22,7 +22,8 @@ Hard-remove all `LIGAMEN_*` env var reads. Worker, MCP server, scripts, and libs
 - [ ] **ENV-07**: `scripts/worker-start.sh`, `worker-stop.sh`, `session-start.sh`, `install-deps.sh` contain zero `LIGAMEN_` references
 - [ ] **ENV-08**: `worker/lib/data-dir.js` reads `ARCANON_DATA_DIR` only; `LIGAMEN_DATA_DIR` branch removed
 - [ ] **ENV-09**: `worker/lib/config-path.js` reads `arcanon.config.json` only; `ligamen.config.json` fallback removed
-- [ ] **ENV-10**: `worker/server/chroma.js` `COLLECTION_NAME` renamed from `"ligamen-impact"` to `"arcanon-impact"`. Existing users' legacy ChromaDB collections become orphaned on upgrade — acceptable per zero-tolerance policy; users rebuild via `/arcanon:map`.
+- [x] **ENV-10
+**: `worker/server/chroma.js` `COLLECTION_NAME` renamed from `"ligamen-impact"` to `"arcanon-impact"`. Existing users' legacy ChromaDB collections become orphaned on upgrade — acceptable per zero-tolerance policy; users rebuild via `/arcanon:map`.
 
 ### Legacy Data & Config Path Removal (PATH)
 
@@ -34,15 +35,21 @@ Remove `$HOME/.ligamen` and `ligamen.config.json` fallback code paths.
 - [ ] **PATH-04**: `worker/lib/config-path.js` does NOT check `ligamen.config.json`; only `arcanon.config.json`
 - [ ] **PATH-05**: `lib/linked-repos.sh` has zero `ligamen` references
 - [ ] **PATH-06**: `lib/db-path.sh` has zero `ligamen` references (comment cleanup)
-- [ ] **PATH-07**: `worker/db/pool.js` line 131 — remove `"ligamen.config.json"` from the config-file iteration array; only `"arcanon.config.json"` probed
-- [ ] **PATH-08**: `worker/db/database.js` — remove `ligamen.config.json` fallback in boundary-map build
-- [ ] **PATH-09**: `worker/hub-sync/auth.js` line 47 — remove `$HOME/.ligamen/config.json` legacy fallback
+- [x] **PATH-07
+**: `worker/db/pool.js` line 131 — remove `"ligamen.config.json"` from the config-file iteration array; only `"arcanon.config.json"` probed
+- [x] **PATH-08
+**: `worker/db/database.js` — remove `ligamen.config.json` fallback in boundary-map build
+- [x] **PATH-09
+**: `worker/hub-sync/auth.js` line 47 — remove `$HOME/.ligamen/config.json` legacy fallback
 
 ### Package Identity (PKG)
 
-- [ ] **PKG-01**: `plugins/arcanon/runtime-deps.json` `"name"` field changed from `"@ligamen/runtime-deps"` to `"@arcanon/runtime-deps"`
-- [ ] **PKG-02**: No `package-lock.json` / `node_modules` references to `@ligamen/runtime-deps` remain after reinstall
-- [ ] **PKG-03**: `scripts/install-deps.sh` references to package name updated (if any)
+- [x] **PKG-01
+**: `plugins/arcanon/runtime-deps.json` `"name"` field changed from `"@ligamen/runtime-deps"` to `"@arcanon/runtime-deps"`
+- [x] **PKG-02
+**: No `package-lock.json` / `node_modules` references to `@ligamen/runtime-deps` remain after reinstall
+- [x] **PKG-03
+**: `scripts/install-deps.sh` references to package name updated (if any)
 
 ### Source Code Cosmetic (SRC)
 

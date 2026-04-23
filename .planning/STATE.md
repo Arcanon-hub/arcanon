@@ -2,16 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.1.2
 milestone_name: Ligamen Residue Purge
-status: roadmap_complete
-stopped_at: Roadmap created — 5 phases (101-105), 42 REQs mapped
-last_updated: "2026-04-23T00:00:00.000Z"
-last_activity: 2026-04-23
+status: completed
+stopped_at: Completed 101-04-PLAN.md
+last_updated: "2026-04-23T17:48:00.144Z"
+last_activity: 2026-04-23 — Roadmap created by gsd-roadmapper
 progress:
-  total_phases: 5
+  total_phases: 32
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
-  percent: 0
 ---
 
 # Project State
@@ -45,6 +44,11 @@ Last activity: 2026-04-23 — Roadmap created by gsd-roadmapper
 - **v0.1.2 policy:** Zero ligamen references. No back-compat, no two-read fallbacks, no stderr deprecation warnings for legacy env vars. Breaking change for v5.x users is acceptable.
 - **v0.1.2 scope discipline:** Refactor only — zero behavior changes outside the rename.
 - **v0.1.2 phase structure:** 5 phases chosen over 4 (keeps VER isolated as release gate) and 6+ (avoids splitting SRC-01..08 finely; cosmetic rename is a single sweep). Phases 101 + 102 + 104 can execute in parallel; 103 depends on 101+102; 105 depends on all.
+- Phase 101-03: Renamed npm package @ligamen/runtime-deps to @arcanon/runtime-deps without version bump — sentinel diff-based idempotency handles the rename in one re-install.
+- Parallel-execution caveat: concurrent executors in the same worktree can cause commit-scope leak on git add/commit. Future milestones should sandbox parallel executors in worktrees or serialize commits.
+- Phase 101-04: COLLECTION_NAME rename is a hard break; existing ligamen-impact collections orphaned on upgrade (rebuild via /arcanon:map).
+- Phase 101-04: readHomeConfig() legacy ~/.ligamen fallback removed without deprecation warning per zero-tolerance policy.
+- Phase 101-04: Runtime-describing JSDoc lines aligned with code; pure historical prose deferred to Phase 102.
 
 ### Pending Todos
 
@@ -62,6 +66,6 @@ Last activity: 2026-04-23 — Roadmap created by gsd-roadmapper
 
 ## Session Continuity
 
-Last session: 2026-04-23T00:00:00.000Z
-Stopped at: Roadmap created — 5 phases (101-105), 42 REQs mapped, ready for plan-phase 101
-Resume file: .planning/ROADMAP.md (v0.1.2 section)
+Last session: 2026-04-23T17:48:00.136Z
+Stopped at: Completed 101-04-PLAN.md
+Resume file: None
