@@ -3,8 +3,8 @@ set -euo pipefail
 
 # ── Header guards ──────────────────────────────────────────────────────────────
 
-# 1. Bail immediately if lint is disabled (ARCANON_DISABLE_LINT, legacy LIGAMEN_DISABLE_LINT)
-[[ -n "${ARCANON_DISABLE_LINT:-${LIGAMEN_DISABLE_LINT:-}}" ]] && exit 0
+# 1. Bail immediately if lint is disabled (ARCANON_DISABLE_LINT)
+[[ -n "${ARCANON_DISABLE_LINT:-}" ]] && exit 0
 
 # 2. Read stdin JSON and extract file path / tool name (PLGN-07 pattern)
 INPUT=$(cat)
@@ -77,7 +77,7 @@ case "$LANG" in
     # Throttle key: cksum is POSIX-available (unlike md5sum on macOS)
     THROTTLE_KEY=$(printf '%s' "$CARGO_ROOT" | cksum | cut -d' ' -f1)
     THROTTLE_FILE="/tmp/arcanon_clippy_${THROTTLE_KEY}"
-    THROTTLE_SECS="${ARCANON_LINT_THROTTLE:-${LIGAMEN_LINT_THROTTLE:-30}}"
+    THROTTLE_SECS="${ARCANON_LINT_THROTTLE:-30}"
 
     NOW=$(date +%s)
     LAST=0

@@ -3,8 +3,8 @@
 # Event: PostToolUse (Write|Edit|MultiEdit)
 # Non-blocking: always exits 0 (FMTH-10)
 
-# Disable toggle — ARCANON_DISABLE_FORMAT=1; legacy alias LIGAMEN_DISABLE_FORMAT
-[[ "${ARCANON_DISABLE_FORMAT:-${LIGAMEN_DISABLE_FORMAT:-}}" == "1" ]] && exit 0
+# Disable toggle — ARCANON_DISABLE_FORMAT=1
+[[ "${ARCANON_DISABLE_FORMAT:-}" == "1" ]] && exit 0
 
 # Read stdin once (it's a stream — can only be read once)
 INPUT=$(cat)

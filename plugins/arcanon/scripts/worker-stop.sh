@@ -8,7 +8,7 @@ set -euo pipefail
 # Non-blocking trap: unexpected errors exit 0 silently
 trap 'exit 0' ERR
 
-# Determine data directory via shared resolver (~/.arcanon, legacy ~/.ligamen supported)
+# Determine data directory via shared resolver (~/.arcanon)
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 # shellcheck source=../lib/data-dir.sh
 source "${PLUGIN_ROOT}/lib/data-dir.sh"

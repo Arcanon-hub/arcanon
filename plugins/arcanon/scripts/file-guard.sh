@@ -7,15 +7,14 @@
 #   2 = hard block (deny tool call); block message goes to stderr
 #
 # Environment:
-#   ARCANON_DISABLE_GUARD=1   -- bypass guard entirely (CONF-02). Legacy alias: LIGAMEN_DISABLE_GUARD.
+#   ARCANON_DISABLE_GUARD=1   -- bypass guard entirely (CONF-02).
 #   ARCANON_EXTRA_BLOCKED     -- colon-separated glob patterns to add to hard-block list (CONF-04).
-#                                Legacy alias: LIGAMEN_EXTRA_BLOCKED.
 #
 # NOTE: No `set -e` -- realpath can fail on files that don't exist yet;
 #       all exit codes must be explicit.
 
 # --- Disable guard entirely (CONF-02) ---
-if [[ "${ARCANON_DISABLE_GUARD:-${LIGAMEN_DISABLE_GUARD:-0}}" == "1" ]]; then
+if [[ "${ARCANON_DISABLE_GUARD:-0}" == "1" ]]; then
   exit 0
 fi
 
@@ -66,11 +65,11 @@ warn_file() {
 }
 
 # ---------------------------------------------------------------------------
-# ARCANON_EXTRA_BLOCKED (legacy: LIGAMEN_EXTRA_BLOCKED) — user-defined
+# ARCANON_EXTRA_BLOCKED — user-defined
 # colon-separated patterns (CONF-04). Checked first so user overrides take
 # precedence over soft-warn rules below.
 # ---------------------------------------------------------------------------
-_EXTRA_BLOCKED="${ARCANON_EXTRA_BLOCKED:-${LIGAMEN_EXTRA_BLOCKED:-}}"
+_EXTRA_BLOCKED="${ARCANON_EXTRA_BLOCKED:-}"
 if [[ -n "$_EXTRA_BLOCKED" ]]; then
   IFS=':' read -ra _extra_patterns <<< "$_EXTRA_BLOCKED"
   for _pat in "${_extra_patterns[@]}"; do
