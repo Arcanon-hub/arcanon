@@ -1,5 +1,34 @@
 # Milestones
 
+## v0.1.2 Ligamen Residue Purge (Shipped: 2026-04-23)
+
+**Phases completed:** 5 phases (101-105), 9 plans
+**Requirements:** 46/46 complete (ENV-01..10, PATH-01..09, PKG-01..03, SRC-01..08, TST-01..07, DOC-01..03, README-01..03, VER-01..03)
+**Timeline:** 2026-04-23 (single-day refactor milestone)
+
+**Key accomplishments:**
+
+- **Hard-removed all `LIGAMEN_*` env var reads** across worker, MCP server, libs, and scripts — no back-compat layer, no two-read fallback, no stderr deprecation warning
+- **Removed `$HOME/.ligamen` data-dir fallback and `ligamen.config.json` reader** — only `$HOME/.arcanon` and `arcanon.config.json` honored
+- **Renamed ChromaDB `COLLECTION_NAME`** from `"ligamen-impact"` to `"arcanon-impact"` — existing collections orphaned; users rebuild via `/arcanon:map`
+- **Renamed `runtime-deps.json` package identity** from `@ligamen/runtime-deps` to `@arcanon/runtime-deps`
+- **Source cosmetic sweep across 18 files** — comments, docstrings, log messages, Zod schema descriptions, agent prompts renamed or deleted where meaning became stale
+- **Test suite rewrite across 17 files** — 110 renames; 1 obsolete test deleted (the `resolveCredentials ~/.ligamen/config.json` test whose functionality was removed in Phase 101)
+- **README cleanup** — deleted "legacy honored for now" paragraphs, removed the entire `## Related repos` section (4 speculative outbound links)
+- **CHANGELOG `### BREAKING` section** added with comprehensive migration instructions
+
+**Breaking changes for v5.x upgraders:**
+- Rename `ligamen.config.json` → `arcanon.config.json`
+- Rename `$HOME/.ligamen/` → `$HOME/.arcanon/`
+- Rename shell `LIGAMEN_*` env vars → `ARCANON_*`
+- Rebuild ChromaDB collection via `/arcanon:map` (if using semantic search)
+
+**Known non-regressions (documented):**
+- bats 309/310 (1 macOS-only HOK-06 p99 latency caveat, pre-existing since v0.1.1, CI passes with `IMPACT_HOOK_LATENCY_THRESHOLD=100`)
+- node 524/526 (2 pre-existing test failures unrelated to the rename, confirmed via git diff against pre-Phase-101 base)
+
+---
+
 ## v0.1.1 Command Cleanup + Update + Ambient Hooks (Shipped: 2026-04-21)
 
 **Phases completed:** 4 phases (97-100), 12 plans

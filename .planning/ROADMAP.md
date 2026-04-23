@@ -21,7 +21,7 @@
 - ✅ **v5.7.0 Scan Accuracy** — Phases 89-91 (shipped 2026-03-23)
 - ✅ **v5.8.0 Library Drift & Language Parity** — Phases 92-96 (shipped 2026-04-19)
 - ✅ **v0.1.1 Command Cleanup + Update + Ambient Hooks** — Phases 97-100 (shipped 2026-04-21)
-- 🚧 **v0.1.2 Ligamen Residue Purge** — Phases 101-105 (in progress, started 2026-04-23)
+- ✅ **v0.1.2 Ligamen Residue Purge** — Phases 101-105 (shipped 2026-04-23)
 
 ## Phases
 
@@ -196,13 +196,14 @@ Full details: `.planning/milestones/v0.1.1-ROADMAP.md`
 
 </details>
 
-### v0.1.2 Ligamen Residue Purge (Phases 101-105) — IN PROGRESS
+<details>
+<summary>✅ v0.1.2 Ligamen Residue Purge (Phases 101-105) — SHIPPED 2026-04-23</summary>
 
-- [ ] **Phase 101: Runtime Purge** — Hard-remove LIGAMEN_* env var reads, $HOME/.ligamen data-dir fallback, ligamen.config.json reader, and rename runtime-deps.json package
-- [ ] **Phase 102: Source Cosmetic Rename** — Zero ligamen/Ligamen/LIGAMEN mentions in all worker/scripts/lib source code (comments, docstrings, log messages, agent prompts)
-- [ ] **Phase 103: Test Suite Rewrite** — All bats and node tests exercise ARCANON_* env vars and arcanon.config.json paths; full suite green
-- [ ] **Phase 104: Docs & README Purge** — Command docs, skill docs, CHANGELOG BREAKING section, README legacy paragraphs removed, Related repos section removed
-- [ ] **Phase 105: Verification Gate** — Final grep returns zero ligamen references; tests green; fresh install references zero legacy paths
+- [x] Phase 101-105: 5 phases, 9 plans — hard-removed all `LIGAMEN_*` env var reads, `$HOME/.ligamen` fallback, `ligamen.config.json` reader; renamed ChromaDB collection `ligamen-impact` → `arcanon-impact`; renamed runtime-deps package `@ligamen` → `@arcanon`; rewrote 17 test files to exercise `ARCANON_*`; CHANGELOG BREAKING section added; README legacy paragraphs + Related repos section deleted
+
+Full details: `.planning/milestones/v0.1.2-ROADMAP.md`
+
+</details>
 
 ## Phase Details
 
@@ -670,62 +671,7 @@ Plans:
 
 <!-- v0.1.1 phase details archived to .planning/milestones/v0.1.1-ROADMAP.md -->
 
-### v0.1.2 Ligamen Residue Purge (Phases 101-105)
-
-### Phase 101: Runtime Purge
-**Goal**: The plugin's runtime reads only `ARCANON_*` env vars, `~/.arcanon` data directory, and `arcanon.config.json` — every `LIGAMEN_*` env var read, `$HOME/.ligamen` fallback, and `ligamen.config.json` reader branch is deleted outright with no two-read fallback and no stderr deprecation warning
-**Depends on**: Phase 100 (v0.1.1 complete)
-**Requirements**: ENV-01, ENV-02, ENV-03, ENV-04, ENV-05, ENV-06, ENV-07, ENV-08, ENV-09, PATH-01, PATH-02, PATH-03, PATH-04, PATH-05, PATH-06, PKG-01, PKG-02, PKG-03
-**Success Criteria** (what must be TRUE):
-  1. `grep -rn "LIGAMEN_" plugins/arcanon/worker plugins/arcanon/lib plugins/arcanon/scripts` returns zero lines — no env var read, assignment, or re-export references any `LIGAMEN_*` identifier
-  2. `grep -rn "\.ligamen\|ligamen\.config\.json" plugins/arcanon/worker plugins/arcanon/lib plugins/arcanon/scripts` returns zero lines — no data-dir or config-path branch checks legacy locations
-  3. Setting only `ARCANON_DATA_DIR`, `ARCANON_LOG_LEVEL`, `ARCANON_WORKER_PORT`, `ARCANON_DB_PATH`, `ARCANON_PROJECT_ROOT`, and `ARCANON_CHROMA_*` vars (with all `LIGAMEN_*` unset) starts the worker and MCP server successfully with identical behavior to v0.1.1
-  4. `plugins/arcanon/runtime-deps.json` has `"name": "@arcanon/runtime-deps"` and a fresh `npm install` produces no references to `@ligamen/runtime-deps` in `package-lock.json` or `node_modules`
-  5. A fresh installation that creates `~/.arcanon/` on first run never reads, probes, or falls back to `~/.ligamen/` regardless of whether the legacy directory exists on the filesystem
-**Plans**: TBD
-
-### Phase 102: Source Cosmetic Rename
-**Goal**: Every `ligamen` / `Ligamen` / `LIGAMEN` mention in source code comments, docstrings, log messages, agent prompts, and string literals (excluding env var reads already purged in Phase 101) is renamed to the arcanon equivalent
-**Depends on**: Phase 100 (runs in parallel with Phase 101 — different file concerns: 101 touches env var reads, 102 touches cosmetic text)
-**Requirements**: SRC-01, SRC-02, SRC-03, SRC-04, SRC-05, SRC-06, SRC-07, SRC-08
-**Success Criteria** (what must be TRUE):
-  1. `grep -rni "ligamen" plugins/arcanon/worker --include="*.js" --exclude="*.test.js"` returns zero lines across db/, server/, scan/, mcp/, hub-sync/, ui/, and top-level worker files
-  2. `grep -rni "ligamen" plugins/arcanon/worker/scan/agent-prompt-*.md plugins/arcanon/worker/scan/agent-schema.json` returns zero lines in all five prompt files (discovery, common, service, library, infra) and the schema
-  3. `grep -rni "ligamen" plugins/arcanon/scripts plugins/arcanon/lib` returns zero lines across all shell scripts and bash libraries
-  4. Running `/arcanon:map` after rename produces agent scan output and log messages that reference "arcanon" (or no product name at all) — no log line emitted by the worker contains the string "ligamen" in any casing
-**Plans**: TBD
-
-### Phase 103: Test Suite Rewrite
-**Goal**: Every bats and node test file that pins legacy names is rewritten to assert on `ARCANON_*` env vars, `arcanon.config.json` paths, and `~/.arcanon/` data directories; both full test suites pass after the rewrite
-**Depends on**: Phase 101, Phase 102 (tests assert on post-rename runtime behavior — rewiring code first lets tests be updated once, not twice)
-**Requirements**: TST-01, TST-02, TST-03, TST-04, TST-05, TST-06, TST-07
-**Success Criteria** (what must be TRUE):
-  1. `grep -rni "ligamen\|LIGAMEN_" plugins/arcanon/tests` returns zero lines across all `.bats` files and `tests/fixtures/` mocks
-  2. `grep -rni "ligamen\|LIGAMEN_" plugins/arcanon/worker --include="*.test.js"` returns zero lines across all 13+ worker node test files
-  3. Running `make test` (full bats suite) completes green with all 310+ tests passing — no legacy-name assertion failures and no skipped tests
-  4. Running `node --test plugins/arcanon/worker/**/*.test.js` completes green across every worker module test file with zero failures
-**Plans**: TBD
-
-### Phase 104: Docs & README Purge
-**Goal**: Command docs, skill docs, CHANGELOG, and README have zero ligamen references in user-facing surfaces; CHANGELOG carries a dedicated BREAKING section explaining the rename removal; README retracts the v0.1.1 "legacy honored" paragraphs and removes the Related repos section entirely
-**Depends on**: Phase 100 (runs in parallel with Phases 101/102 — documentation is independent of code mechanics)
-**Requirements**: DOC-01, DOC-02, DOC-03, README-01, README-02, README-03
-**Success Criteria** (what must be TRUE):
-  1. `grep -ni "ligamen" plugins/arcanon/commands/drift.md plugins/arcanon/commands/status.md plugins/arcanon/skills/impact/SKILL.md` returns zero lines, and the skill file references `ARCANON_CHROMA_*` env vars (fixing the user-reported inconsistency)
-  2. `plugins/arcanon/CHANGELOG.md` `[Unreleased]` section contains a `### BREAKING` subsection that explicitly documents removal of `LIGAMEN_*` env var reads, `$HOME/.ligamen` fallback, and `ligamen.config.json` reader, instructing upgraders to migrate config file, data directory, and env vars to `arcanon` / `ARCANON_` / `~/.arcanon/` equivalents
-  3. `README.md` contains no "Legacy `ligamen.config.json` is still honored" paragraph, no "Arcanon was formerly known as Ligamen..." paragraph, and no `## Related repos` section — replaced by a single line: "Arcanon `0.1.0` was the first release under the current name."
-  4. `grep -ni "ligamen" README.md plugins/arcanon/CHANGELOG.md` returns zero lines outside historical `[0.1.0] Pre-release fixes` or earlier CHANGELOG entries (which are explicitly preserved as historical record)
-**Plans**: TBD
-
-### Phase 105: Verification Gate
-**Goal**: The final repo-wide grep returns zero ligamen references (excluding acceptable historical CHANGELOG entries); full test suites green; a fresh `claude plugin marketplace add` + install cycle completes with no `LIGAMEN_*` or `ligamen.config.json` paths referenced in the installed runtime
-**Depends on**: Phase 101, Phase 102, Phase 103, Phase 104 (runs last — this is the milestone release gate)
-**Requirements**: VER-01, VER-02, VER-03
-**Success Criteria** (what must be TRUE):
-  1. `grep -rli "ligamen" plugins/ tests/ .claude-plugin/ README.md CHANGELOG.md` returns zero lines (excluding historical CHANGELOG entries under `[0.1.0] Pre-release fixes` or earlier that are explicitly preserved as historical record)
-  2. Both `make test` (bats) and `node --test` (worker) full suites complete green with zero failures, zero skips attributable to the rename, and zero new test debt created
-  3. A fresh install via `claude plugin marketplace add` + `claude plugin install` against `main` branch completes successfully and `lsof` / process inspection confirms the running worker references zero `LIGAMEN_*` env vars or `ligamen.config.json` paths at runtime
-**Plans**: TBD
+<!-- v0.1.2 phase details archived to .planning/milestones/v0.1.2-ROADMAP.md -->
 
 ---
 
@@ -752,7 +698,7 @@ Plans:
 | 89-91 | v5.7.0 | 3/3 | Complete | 2026-03-23 |
 | 92-96 | v5.8.0 | 16/16 | Complete | 2026-04-19 |
 | 97-100 | v0.1.1 | 12/12 | Complete | 2026-04-21 |
-| 101 | v0.1.2 | 0/TBD | Not started | - |
+| 101-105 | v0.1.2 | 9/9 | Complete | 2026-04-23 |
 | 102 | v0.1.2 | 0/TBD | Not started | - |
 | 103 | v0.1.2 | 0/TBD | Not started | - |
 | 104 | v0.1.2 | 0/TBD | Not started | - |

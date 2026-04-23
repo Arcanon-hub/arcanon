@@ -424,13 +424,57 @@
 
 ---
 
+## Milestone: v0.1.2 — Ligamen Residue Purge
+
+**Shipped:** 2026-04-23
+**Phases:** 5 | **Plans:** 9
+
+### What Was Built
+- Hard-removed all `LIGAMEN_*` env var reads across 16 worker/lib/script files — no back-compat layer, no two-read fallback, no stderr deprecation warning
+- Deleted `$HOME/.ligamen` data-dir fallback and `ligamen.config.json` config reader
+- Renamed ChromaDB `COLLECTION_NAME` from `"ligamen-impact"` to `"arcanon-impact"` (breaking change — users rebuild collection via `/arcanon:map`)
+- Renamed `runtime-deps.json` package from `@ligamen/runtime-deps` to `@arcanon/runtime-deps`
+- Cosmetic rename sweep across 18 source files (comments, docstrings, log messages, Zod schema descriptions, agent prompts)
+- Test suite rewrite across 17 files — 110 renames + 1 obsolete test deleted (the `~/.ligamen/config.json` fallback test whose functionality was removed in Phase 101)
+- README cleanup: deleted "legacy honored for now" paragraphs + removed entire `## Related repos` section (4 speculative outbound links)
+- CHANGELOG `### BREAKING` section added with comprehensive migration instructions
+
+### What Worked
+- **Zero-tolerance policy simplified every decision** — "Is this a ligamen reference?" was the only question. No judgment calls about grace periods, two-read patterns, or deprecation warnings.
+- **Wave-based parallel execution with non-overlapping file sets** — Phases 101, 102, 104 ran in parallel (different file concerns); 103 depended on 101+102; 105 was the final gate. Saved ~60% wall time versus sequential execution.
+- **Combined plan+execute for phases 102–105** — After Phase 101's planner-with-scope-risk-escalation proved the requirements were specific enough, subsequent phases skipped the separate planner spawn. Planner-executor-in-one-agent worked well for mechanical refactor work.
+- **Planner-as-scope-verifier** — Phase 101 planner found 3 unplanned runtime reads (pool.js, database.js, auth.js) plus the ChromaDB collection identifier that weren't in the original REQ list. Caught before execution, added as ENV-10 + PATH-07/08/09, prevented a red Phase 105 gate.
+
+### What Was Inefficient
+- **Local node test suite timeout** — Phase 105 verification couldn't re-run `npm test` in the main session (180s timeout). Had to rely on Phase 103's in-context results. Likely a lingering worker process holding a port; worth investigating for future milestones but not blocking.
+- **gsd-sdk `milestone.complete` + `phases.archive` helpers both buggy** — Same issue from v0.1.1 recurred. `phases.archive v0.1.2` reported 0 archived despite phase dirs existing. Manually moved with `mv`. Two consecutive milestones hit this; worth filing upstream.
+- **SDK `roadmap.analyze` missed Phase 101+** — Returned only 32 phases topping out at 83, despite ROADMAP.md having phases up to 105. Likely parses only uncollapsed `<details>` content. Worked around with direct `init.phase-op` calls.
+
+### Patterns Established
+- **Zero-tolerance rename** — For product renames, the correct policy is "zero references" not "gradual migration with back-compat". Back-compat stubs permanently encode the legacy name.
+- **Scope-verification pattern** — First phase's planner should audit the REQ list against the actual codebase and escalate unplanned matches before execution. Prevents red verification gates.
+- **Skip planner-only spawn for mechanical phases** — When requirements are file-path-specific and the work is mechanical (find/replace), a combined plan+execute agent beats a separate planner+executor pair.
+
+### Key Lessons
+- **"Out of scope" isn't a real reason for cleanup tasks.** When I initially argued runtime-deps.json at `5.7.0` was "pre-existing so out of scope", the user pushed back and was right. Pre-existing drift is still drift. The correct scoping lens is "is this a ligamen reference?" not "who introduced it?"
+- **Breaking-change milestones are the right time to absorb pre-existing drift.** Bumping runtime-deps.json version invalidates the install-deps.sh full-file-diff sentinel, forcing a one-time reinstall. That cost is already sunk in a breaking milestone.
+- **Scope-escalation by planners is high-value signal.** Phase 101 planner flagged 4 additional runtime reads. If those had shipped unflagged, Phase 105 would have been red.
+- **Test failures count as signal of success during refactor phases.** Phase 101's runtime purge broke tests that pinned legacy env var names — that's the signal the purge landed. Phase 103 fixed them next.
+
+### Cost Observations
+- Model mix: ~70% sonnet (executors, cosmetic sweep), ~25% opus (planner-with-scope-verification, audit), ~5% sonnet (verification gates)
+- Sessions: 1 continuous session (~2-3 hours wall clock including planning + 5 parallel executors + audit + archive)
+- Notable: Phase 103 (test suite rewrite) was the longest-running single agent at ~10 min — 17 files + test suite runs + 1 test deletion decision. Phase 102 was the second longest at ~6.5 min — 18 file cosmetic sweep.
+
+---
+
 ## Cross-Milestone Trends
 
-| Metric | v1.0 | v2.0 | v2.1 | v2.2 | v2.3 | v3.0 | v4.0 | v5.6.0 | v5.7.0 | v5.8.0 | v0.1.1 |
-|--------|------|------|------|------|------|------|------|--------|--------|--------|--------|
-| Phases | 13 | 8 | 5 | 3 | 3 | 6 | 7 | 5 | 3 | 5 | 4 |
-| Plans | 17 | 19 | 11 | 5 | 5 | 11 | 14 | 6 | 3 | 16 | 12 |
-| Requirements | 79 | 8 | 13 | 5 | 9 | 33 | 22 | 9 | 6 | — | 46 |
-| Tests | 150 | ~50 | ~20 | ~30 | ~30 | ~60 | 0 (rename only) | ~10 | 0 (prompt only) | ~60 | ~45 |
-| LOC | 4,323 | ~7,000 | ~7,500 | ~8,000 | ~9,000 | ~12,000 | ~41,600 | ~48,000 | ~48,000 | — | +1,484 / −380 |
-| Timeline | 1 day | 1 day | 1 day | 1 day | 1 day | 1 day | 2 days | 1 day | 1 day | — | 1 day |
+| Metric | v1.0 | v2.0 | v2.1 | v2.2 | v2.3 | v3.0 | v4.0 | v5.6.0 | v5.7.0 | v5.8.0 | v0.1.1 | v0.1.2 |
+|--------|------|------|------|------|------|------|------|--------|--------|--------|--------|--------|
+| Phases | 13 | 8 | 5 | 3 | 3 | 6 | 7 | 5 | 3 | 5 | 4 | 5 |
+| Plans | 17 | 19 | 11 | 5 | 5 | 11 | 14 | 6 | 3 | 16 | 12 | 9 |
+| Requirements | 79 | 8 | 13 | 5 | 9 | 33 | 22 | 9 | 6 | — | 46 | 46 |
+| Tests | 150 | ~50 | ~20 | ~30 | ~30 | ~60 | 0 (rename only) | ~10 | 0 (prompt only) | ~60 | ~45 | 0 (rename) |
+| LOC | 4,323 | ~7,000 | ~7,500 | ~8,000 | ~9,000 | ~12,000 | ~41,600 | ~48,000 | ~48,000 | — | +1,484 / −380 | ~50 files touched |
+| Timeline | 1 day | 1 day | 1 day | 1 day | 1 day | 1 day | 2 days | 1 day | 1 day | — | 1 day | 1 day |

@@ -174,23 +174,16 @@ Every edit is automatically formatted and linted, every quality check runs with 
 - ✓ SessionStart banner enrichment: service count + load-bearing files + last scan + hub status with stale prefix (SSE-01..07) — v0.1.1
 - ✓ PreToolUse impact hook: Tier 1 schema patterns + Tier 2 SQLite root_path prefix + worker HTTP fallback + self-exclusion + debug JSONL (HOK-01..13) — v0.1.1
 
+- ✓ Zero `LIGAMEN_*` env var reads across worker, lib, scripts (ENV-01..10) — v0.1.2
+- ✓ Zero `$HOME/.ligamen` / `ligamen.config.json` fallback branches (PATH-01..09) — v0.1.2
+- ✓ `runtime-deps.json` renamed to `@arcanon/runtime-deps` (PKG-01..03) — v0.1.2
+- ✓ ChromaDB `COLLECTION_NAME` renamed to `"arcanon-impact"` (ENV-10) — v0.1.2
+- ✓ Source cosmetic sweep: zero `ligamen` mentions in worker JS, agent prompts, schema, scripts, libs (SRC-01..08) — v0.1.2
+- ✓ Test suite rewrite: all bats + node tests exercise `ARCANON_*` / `arcanon.config.json` / `~/.arcanon/` (TST-01..07) — v0.1.2
+- ✓ Docs + README purge: CHANGELOG BREAKING section, README legacy paragraphs removed, Related repos section deleted (DOC-01..03, README-01..03) — v0.1.2
+- ✓ Final verification gate: zero ligamen refs in source/tests/docs (CHANGELOG BREAKING section exempt) (VER-01..03) — v0.1.2
+
 ### Active
-
-## Current Milestone: v0.1.2 Ligamen Residue Purge
-
-**Goal:** Zero `ligamen` / `LIGAMEN` / `@ligamen` / `.ligamen` references anywhere in the plugin. Retract the v0.1.1 "legacy honored for now" promise; Arcanon is the product name going forward with no back-compat layer.
-
-**Target work:**
-- Hard-remove all `LIGAMEN_*` env var reads from worker, lib, scripts (no two-read fallback — no stderr deprecation warning — just don't read them)
-- Remove `$HOME/.ligamen` data-dir fallback and `ligamen.config.json` config reader
-- Rename `runtime-deps.json` package from `@ligamen/runtime-deps` to `@arcanon/runtime-deps`
-- Update all tests that pin legacy names (`*.test.js`, `*.bats`, fixtures)
-- Rename every ligamen mention in comments, docstrings, log messages, agent prompts
-- README: drop "legacy honored" paragraphs, remove Related repos section entirely
-
-**Breaking change:** Users upgrading from any Ligamen v1.x–v5.x version must migrate their config (`ligamen.config.json` → `arcanon.config.json`), data directory (`~/.ligamen/` → `~/.arcanon/`), and any env vars they set. CHANGELOG gets a dedicated `### BREAKING` section.
-
-**Scope discipline:** Refactor only — zero behavior changes outside the rename.
 
 ## Next Milestone Goals
 
@@ -221,7 +214,7 @@ Architecture: commands/ for user-invoked features, skills/ for auto-invoked know
 Known tech debt: db/database.js has console.log in script-mode guard, getQueryEngineByHash inline migration workaround, renderLibraryConnections() unused `outgoing` parameter, node_metadata table unused (forward-looking for STRIDE/vuln views), impact-flow.bats imports stale module paths (pre-existing from v3.0 restructure), package.json bin entry references non-existent ligamen-init.js, graph-fit-to-screen.test.js has 2 stale assertions for inlined fitToScreen() (Phase 26 regression).
 
 ---
-*Last updated: 2026-04-23 — v0.1.2 started (Ligamen Residue Purge)*
+*Last updated: 2026-04-23 — v0.1.2 SHIPPED (Ligamen Residue Purge)*
 
 ## Constraints
 
@@ -290,6 +283,9 @@ Known tech debt: db/database.js has console.log in script-mode guard, getQueryEn
 | Pure-bash PreToolUse hook (no Node cold-start) — v0.1.1 | Node cold-start is 80-150ms alone; pure bash + curl + sqlite3 CLI keeps p99 <50ms on Linux | ⚠️ Revisit (macOS 130ms p99 — BSD fork overhead) |
 | SessionStart banner enrichment (not /arcanon:status) — v0.1.1 | Claude needs ambient awareness; users forget to run status; banner is the always-on context channel | ✓ Good |
 | Defer skills and agents to v0.2.0 — v0.1.1 | Ship hooks first; observe real firing behavior for a release; only then design skills that layer on top | ✓ Good |
+| Zero-tolerance on Ligamen refs — v0.1.2 | No back-compat, no two-read fallbacks, no deprecation warnings. Back-compat stubs permanently encode the legacy name; just remove. Breaking change for v5.x users accepted. | ✓ Good |
+| Rename ChromaDB `COLLECTION_NAME` — v0.1.2 | Existing collections orphaned on upgrade; users rebuild via `/arcanon:map`. Acceptable since ChromaDB is optional and rebuildable, and policy demands zero ligamen refs. | ✓ Good |
+| Combined plan+execute for phases 102–105 — v0.1.2 | Scope well-understood after Phase 101 discovery; separate planner spawns would have been ceremony. Saved ~4 agent round-trips. | ✓ Good |
 
 ---
-*Last updated: 2026-04-23 — v0.1.2 started (Ligamen Residue Purge)*
+*Last updated: 2026-04-23 — v0.1.2 SHIPPED (Ligamen Residue Purge)*
