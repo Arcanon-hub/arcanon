@@ -13,7 +13,7 @@ import fs from "fs";
 // run separate node processes below via the inline heredoc verify form.
 // This test file verifies schema structure in one pass using a fresh dir.
 
-const testRoot = path.join(os.tmpdir(), "ligamen-schema-test-" + Date.now());
+const testRoot = path.join(os.tmpdir(), "arcanon-schema-test-" + Date.now());
 fs.mkdirSync(testRoot, { recursive: true });
 
 // Import openDb (requires migration 001 to exist for meaningful assertions)

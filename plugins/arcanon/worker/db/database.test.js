@@ -16,7 +16,7 @@ import path from "path";
 // This test relies on the module being freshly loaded.
 
 // Test: openDb creates DB file
-const testRoot = path.join(os.tmpdir(), "ligamen-test-" + Date.now());
+const testRoot = path.join(os.tmpdir(), "arcanon-test-" + Date.now());
 fs.mkdirSync(testRoot, { recursive: true });
 
 const db = openDb(testRoot);
@@ -48,7 +48,7 @@ const hash = crypto
   .slice(0, 12);
 const dbPath = path.join(
   os.homedir(),
-  ".ligamen",
+  ".arcanon",
   "projects",
   hash,
   "impact-map.db",

@@ -103,7 +103,7 @@ describe("enrichImpactResult()", () => {
     seedService(db, repoId, { name: "redis-cluster", type: "infra" });
 
     // Create a temp dir to act as process.cwd() — no config file yet
-    tmpDir = mkdtempSync(join(tmpdir(), "ligamen-enrich-test-"));
+    tmpDir = mkdtempSync(join(tmpdir(), "arcanon-enrich-test-"));
   });
 
   after(() => {
@@ -167,8 +167,8 @@ describe("enrichImpactResult()", () => {
   });
 
   test("summary includes boundary name when config file is present", () => {
-    // Write a ligamen.config.json in tmpDir
-    const cfgPath = join(tmpDir, "ligamen.config.json");
+    // Write a arcanon.config.json in tmpDir
+    const cfgPath = join(tmpDir, "arcanon.config.json");
     writeFileSync(
       cfgPath,
       JSON.stringify({

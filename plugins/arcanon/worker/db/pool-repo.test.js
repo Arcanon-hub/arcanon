@@ -152,13 +152,13 @@ function projectHashDir(dataDir, projectRoot) {
 
 test("getQueryEngineByRepo: returns correct engine for repo-A", async () => {
   // Create isolated data dir
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ligamen-test-"));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "arcanon-test-"));
   const rootA = "/fake/project-alpha";
   const hashDirA = projectHashDir(dataDir, rootA);
   createProjectDb(hashDirA, "repo-alpha", rootA);
 
   // Override env so pool.js uses our temp data dir
-  process.env.LIGAMEN_DATA_DIR = dataDir;
+  process.env.ARCANON_DATA_DIR = dataDir;
 
   // Import fresh — use dynamic import to get a clean module state
   // We use a cache-bust trick via URL query param (works in Node ESM)
@@ -171,16 +171,16 @@ test("getQueryEngineByRepo: returns correct engine for repo-A", async () => {
 
   // Cleanup
   fs.rmSync(dataDir, { recursive: true, force: true });
-  delete process.env.LIGAMEN_DATA_DIR;
+  delete process.env.ARCANON_DATA_DIR;
 });
 
 test("getQueryEngineByRepo: returns null for unknown repo name", async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ligamen-test-"));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "arcanon-test-"));
   const rootA = "/fake/project-beta";
   const hashDirA = projectHashDir(dataDir, rootA);
   createProjectDb(hashDirA, "repo-beta", rootA);
 
-  process.env.LIGAMEN_DATA_DIR = dataDir;
+  process.env.ARCANON_DATA_DIR = dataDir;
 
   const { getQueryEngineByRepo } = await import(
     `./pool.js?t=${Date.now()}-2`
@@ -190,11 +190,11 @@ test("getQueryEngineByRepo: returns null for unknown repo name", async () => {
   assert.equal(qe, null, "should return null for unknown repo name");
 
   fs.rmSync(dataDir, { recursive: true, force: true });
-  delete process.env.LIGAMEN_DATA_DIR;
+  delete process.env.ARCANON_DATA_DIR;
 });
 
 test("getQueryEngineByRepo: returns correct engine when two projects exist", async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ligamen-test-"));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "arcanon-test-"));
   const rootA = "/fake/multi-project-A";
   const rootB = "/fake/multi-project-B";
   const hashDirA = projectHashDir(dataDir, rootA);
@@ -202,7 +202,7 @@ test("getQueryEngineByRepo: returns correct engine when two projects exist", asy
   createProjectDb(hashDirA, "repo-multi-A", rootA);
   createProjectDb(hashDirB, "repo-multi-B", rootB);
 
-  process.env.LIGAMEN_DATA_DIR = dataDir;
+  process.env.ARCANON_DATA_DIR = dataDir;
 
   const { getQueryEngineByRepo } = await import(
     `./pool.js?t=${Date.now()}-3`
@@ -216,16 +216,16 @@ test("getQueryEngineByRepo: returns correct engine when two projects exist", asy
   assert.notEqual(qeA, qeB, "engines for different repos should be distinct");
 
   fs.rmSync(dataDir, { recursive: true, force: true });
-  delete process.env.LIGAMEN_DATA_DIR;
+  delete process.env.ARCANON_DATA_DIR;
 });
 
 test("getQueryEngineByRepo: case-insensitive lookup finds repo", async () => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ligamen-test-"));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "arcanon-test-"));
   const rootA = "/fake/case-project";
   const hashDirA = projectHashDir(dataDir, rootA);
   createProjectDb(hashDirA, "Repo-Case", rootA);
 
-  process.env.LIGAMEN_DATA_DIR = dataDir;
+  process.env.ARCANON_DATA_DIR = dataDir;
 
   const { getQueryEngineByRepo } = await import(
     `./pool.js?t=${Date.now()}-4`
@@ -235,5 +235,5 @@ test("getQueryEngineByRepo: case-insensitive lookup finds repo", async () => {
   assert.ok(qe !== null, "case-insensitive lookup should find Repo-Case");
 
   fs.rmSync(dataDir, { recursive: true, force: true });
-  delete process.env.LIGAMEN_DATA_DIR;
+  delete process.env.ARCANON_DATA_DIR;
 });

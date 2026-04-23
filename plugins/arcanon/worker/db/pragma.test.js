@@ -27,7 +27,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe("pragma ordering -- read-write connection", () => {
   test("journal_mode=WAL is applied on new database", () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "ligamen-pragma-rw-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "arcanon-pragma-rw-"));
     try {
       const dbPath = join(tmpDir, "test.db");
       const db = new Database(dbPath);
@@ -89,7 +89,7 @@ describe("pragma ordering -- read-write connection", () => {
 
 describe("pragma ordering -- readonly connection", () => {
   test("readonly connection does not attempt to set journal_mode", () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), "ligamen-pragma-ro-"));
+    const tmpDir = mkdtempSync(join(tmpdir(), "arcanon-pragma-ro-"));
     try {
       const dbPath = join(tmpDir, "readonly-test.db");
 

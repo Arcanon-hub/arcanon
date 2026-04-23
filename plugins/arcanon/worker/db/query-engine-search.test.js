@@ -32,11 +32,11 @@ let tmpRoot;
 
 before(async () => {
   // Create a temp project root dir to derive the DB path
-  tmpRoot = mkdtempSync(join(tmpdir(), "ligamen-search-test-"));
+  tmpRoot = mkdtempSync(join(tmpdir(), "arcanon-search-test-"));
 
   // Derive the DB path the same way openDb() does
   const hash = createHash("sha256").update(tmpRoot).digest("hex").slice(0, 12);
-  const dbDir = join(homedir(), ".ligamen", "projects", hash);
+  const dbDir = join(homedir(), ".arcanon", "projects", hash);
 
   // Use better-sqlite3 directly (Phase 14-02 decision: avoid singleton isolation issues)
   db = new Database(":memory:");

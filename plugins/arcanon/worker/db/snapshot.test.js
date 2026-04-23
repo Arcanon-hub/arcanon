@@ -29,7 +29,7 @@ describe("isFirstScan()", () => {
   let importedDb;
 
   before(async () => {
-    testRoot = path.join(os.tmpdir(), "ligamen-snap-test-" + Date.now());
+    testRoot = path.join(os.tmpdir(), "arcanon-snap-test-" + Date.now());
     fs.mkdirSync(testRoot, { recursive: true });
     // Import db.js fresh — ESM caches, so we rely on isFirstScan checking map_versions
     importedDb = await import("./database.js");
@@ -61,7 +61,7 @@ describe("createSnapshot()", () => {
 
   before(async () => {
     // Use a different timestamp to get a fresh test root but same ESM module
-    testRoot2 = path.join(os.tmpdir(), "ligamen-snap-test2-" + Date.now());
+    testRoot2 = path.join(os.tmpdir(), "arcanon-snap-test2-" + Date.now());
     fs.mkdirSync(testRoot2, { recursive: true });
     // Import module (already cached from previous describe)
     importedDb2 = await import("./database.js");
@@ -130,7 +130,7 @@ describe("createSnapshot() retention cleanup", () => {
   let testRoot3;
 
   before(async () => {
-    testRoot3 = path.join(os.tmpdir(), "ligamen-retention-test-" + Date.now());
+    testRoot3 = path.join(os.tmpdir(), "arcanon-retention-test-" + Date.now());
     fs.mkdirSync(testRoot3, { recursive: true });
     importedDb3 = await import("./database.js");
   });
