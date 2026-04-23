@@ -212,7 +212,7 @@ export function writeScan(findings, queryEngine, repoId) {
     });
   }
 
-  // Build boundary map from arcanon.config.json (legacy ligamen.config.json supported).
+  // Build boundary map from arcanon.config.json.
   // Gracefully skip when config is absent or has no boundaries key
   const boundaryMap = new Map();
   try {
