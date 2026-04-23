@@ -20,13 +20,13 @@ Linked repos: !`source "${CLAUDE_PLUGIN_ROOT}/lib/linked-repos.sh" && list_linke
    Run: `node "${CLAUDE_PLUGIN_ROOT}/worker/cli/drift-local.js"`
 
 3. For `versions` (or no subcommand specified):
-   Run: `"${CLAUDE_PLUGIN_ROOT}/scripts/drift-versions.sh" $LIGAMEN_ARGS`
+   Run: `"${CLAUDE_PLUGIN_ROOT}/scripts/drift-versions.sh" $ARCANON_ARGS`
 
 3. For `types` (or no subcommand specified):
-   Run: `"${CLAUDE_PLUGIN_ROOT}/scripts/drift-types.sh" $LIGAMEN_ARGS`
+   Run: `"${CLAUDE_PLUGIN_ROOT}/scripts/drift-types.sh" $ARCANON_ARGS`
 
 4. For `openapi` (or no subcommand specified):
-   Run: `"${CLAUDE_PLUGIN_ROOT}/scripts/drift-openapi.sh" $LIGAMEN_ARGS`
+   Run: `"${CLAUDE_PLUGIN_ROOT}/scripts/drift-openapi.sh" $ARCANON_ARGS`
 
 5. Report findings grouped by severity:
    - CRITICAL first (breaking version mismatches, incompatible API changes)

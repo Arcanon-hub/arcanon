@@ -25,9 +25,9 @@ Add to ~/.arcanon/settings.json:
 
 ```json
 {
-  "LIGAMEN_CHROMA_MODE": "local",
-  "LIGAMEN_CHROMA_HOST": "localhost",
-  "LIGAMEN_CHROMA_PORT": "8000"
+  "ARCANON_CHROMA_MODE": "local",
+  "ARCANON_CHROMA_HOST": "localhost",
+  "ARCANON_CHROMA_PORT": "8000"
 }
 ```
 
