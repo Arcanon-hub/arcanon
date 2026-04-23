@@ -23,7 +23,7 @@ async function makeServer(qe = mockQE, opts = {}) {
 
 // Helper: create a temp dataDir with a logs/worker.log containing given lines
 function makeTempDataDir(lines = []) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ligamen-test-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "arcanon-test-"));
   fs.mkdirSync(path.join(tmpDir, "logs"), { recursive: true });
   if (lines.length > 0) {
     fs.writeFileSync(
@@ -40,7 +40,7 @@ function makeTempDataDir(lines = []) {
 // ---------------------------------------------------------------------------
 
 test("GET /api/logs with no log file returns 200 with empty lines array", async () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ligamen-test-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "arcanon-test-"));
   // logs dir does not exist — no log file
   const server = await makeServer(mockQE, { dataDir: tmpDir });
   const res = await server.inject({ method: "GET", url: "/api/logs" });
@@ -171,7 +171,7 @@ test("GET /api/logs with ?component= and ?since= combined applies both filters",
 });
 
 test("GET /api/logs with a corrupt/non-JSON line skips that line gracefully (no 500)", async () => {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ligamen-test-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "arcanon-test-"));
   fs.mkdirSync(path.join(tmpDir, "logs"), { recursive: true });
   // Mix valid JSON lines with a corrupt line
   const content = [
@@ -225,7 +225,7 @@ test("GET /graph returns 503 when queryEngine is null", async () => {
   const res = await server.inject({ method: "GET", url: "/graph" });
   assert.equal(res.statusCode, 503);
   const body = JSON.parse(res.payload);
-  assert.equal(body.error, "No map data yet. Pass ?project=/path/to/repo or run /ligamen:map first.");
+  assert.equal(body.error, "No map data yet. Pass ?project=/path/to/repo or run /arcanon:map first.");
   await server.close();
 });
 

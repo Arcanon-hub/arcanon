@@ -35,12 +35,12 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("initChromaSync — no config", () => {
-  test("returns false when LIGAMEN_CHROMA_MODE is empty string", async () => {
-    const result = await initChromaSync({ LIGAMEN_CHROMA_MODE: "" });
+  test("returns false when ARCANON_CHROMA_MODE is empty string", async () => {
+    const result = await initChromaSync({ ARCANON_CHROMA_MODE: "" });
     assert.equal(result, false);
   });
 
-  test("returns false when LIGAMEN_CHROMA_MODE is absent (undefined)", async () => {
+  test("returns false when ARCANON_CHROMA_MODE is absent (undefined)", async () => {
     const result = await initChromaSync({});
     assert.equal(result, false);
   });
@@ -68,9 +68,9 @@ describe("initChromaSync — no config", () => {
 describe("initChromaSync — with config (mock)", () => {
   test("returns false and sets isChromaAvailable=false when heartbeat throws", async () => {
     const settings = {
-      LIGAMEN_CHROMA_MODE: "local",
-      LIGAMEN_CHROMA_HOST: "localhost",
-      LIGAMEN_CHROMA_PORT: "8000",
+      ARCANON_CHROMA_MODE: "local",
+      ARCANON_CHROMA_HOST: "localhost",
+      ARCANON_CHROMA_PORT: "8000",
     };
 
     // Inject a mock client that always fails heartbeat
@@ -88,9 +88,9 @@ describe("initChromaSync — with config (mock)", () => {
 
   test("returns true and sets isChromaAvailable=true when heartbeat succeeds", async () => {
     const settings = {
-      LIGAMEN_CHROMA_MODE: "local",
-      LIGAMEN_CHROMA_HOST: "localhost",
-      LIGAMEN_CHROMA_PORT: "8000",
+      ARCANON_CHROMA_MODE: "local",
+      ARCANON_CHROMA_HOST: "localhost",
+      ARCANON_CHROMA_PORT: "8000",
     };
 
     const mockCollection = {
@@ -177,7 +177,7 @@ describe("syncFindings", () => {
       getOrCreateCollection: async () => mockCollection,
     };
 
-    const settings = { LIGAMEN_CHROMA_MODE: "local" };
+    const settings = { ARCANON_CHROMA_MODE: "local" };
     await initChromaSync(settings, mockClient);
 
     const findings = {
@@ -215,7 +215,7 @@ describe("syncFindings", () => {
       getOrCreateCollection: async () => mockCollection,
     };
 
-    const settings = { LIGAMEN_CHROMA_MODE: "local" };
+    const settings = { ARCANON_CHROMA_MODE: "local" };
     await initChromaSync(settings, mockClient);
 
     await assert.doesNotReject(async () => {
@@ -246,7 +246,7 @@ describe("syncFindings — enrichment context", () => {
       heartbeat: async () => ({}),
       getOrCreateCollection: async () => mockCollection,
     };
-    await initChromaSync({ LIGAMEN_CHROMA_MODE: "local" }, mockClient);
+    await initChromaSync({ ARCANON_CHROMA_MODE: "local" }, mockClient);
     return { mockCollection, get upsertCalledWith() { return upsertCalledWith; } };
   }
 
@@ -351,7 +351,7 @@ describe("chromaSearch", () => {
       getOrCreateCollection: async () => mockCollection,
     };
 
-    await initChromaSync({ LIGAMEN_CHROMA_MODE: "local" }, mockClient);
+    await initChromaSync({ ARCANON_CHROMA_MODE: "local" }, mockClient);
     const results = await chromaSearch("test", 10);
 
     assert.ok(Array.isArray(results), "must return array");
