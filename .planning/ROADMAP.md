@@ -22,7 +22,7 @@
 - ✅ **v5.8.0 Library Drift & Language Parity** — Phases 92-96 (shipped 2026-04-19)
 - ✅ **v0.1.1 Command Cleanup + Update + Ambient Hooks** — Phases 97-100 (shipped 2026-04-21)
 - ✅ **v0.1.2 Ligamen Residue Purge** — Phases 101-105 (shipped 2026-04-23)
-- ⏳ **v0.1.3 Trust & Foundations** — Phases 107-113 (gate passed 2026-04-25 → READY TO SHIP, awaiting `/gsd-complete-milestone v0.1.3`)
+- ✅ **v0.1.3 Trust & Foundations** — Phases 107-113 (shipped 2026-04-25)
 
 ## Phases
 
@@ -206,15 +206,14 @@ Full details: `.planning/milestones/v0.1.2-ROADMAP.md`
 
 </details>
 
-### v0.1.3 Trust & Foundations (Phases 107-113) — IN PROGRESS
+<details>
+<summary>✅ v0.1.3 Trust & Foundations (Phases 107-113) — SHIPPED 2026-04-25</summary>
 
-- [ ] **Phase 107: Install Architecture Cleanup** — Drop `runtime-deps.json`, rewrite `install-deps.sh` with sha256 sentinel + binding-load validation + rebuild fallback, simplify `mcp-wrapper.sh` to plain exec
-- [x] **Phase 108: Update-check Timeout Fix + Deprecated Command Removal** — Decouple `/arcanon:update --check` offline-decision from 5s refresh outcome; delete `/arcanon:upload` stub + tests + docs
-- [x] **Phase 109: Path Canonicalization + Evidence at Ingest** — Migration 013 (`connections.path_template` + `uq_connections_dedup` UNIQUE INDEX); `persistFindings` rejects prose-only evidence; template-variant collapse on upsert (TRUST-02, 03, 10, 11 all complete; 21 new tests)
-- [ ] **Phase 110: services.base_path End-to-End** — Migration 014 (`services.base_path`); agent-prompt-service emits `base_path`; connection resolution strips base_path before path matching
-- [x] **Phase 111: Quality Score + Reconciliation Audit Trail** — Migrations 015 (`scan_versions.quality_score`) + 016 (`enrichment_log`); endScan computes score; reconciliation writes audit rows; new `impact_audit_log` MCP tool (TRUST-05, 06, 13, 14 complete; 39 phase-scoped tests + 17 plan 111-03 tests; closure: 111-VERIFICATION.md)
-- [x] **Phase 112: `/arcanon:verify` Command** — New verify command re-reads cited evidence; returns ok/moved/missing/method_mismatch verdict per connection (TRUST-01, 07, 08, 09 complete; 7 bats + 13 node tests; closure: 112-VERIFICATION.md)
-- [ ] **Phase 113: Verification Gate** — bats + node green; repo-wide grep for `runtime-deps.json` and `commands/upload.md`; manifest version bumps to 0.1.3; CHANGELOG `[0.1.3]` section pinned
+- [x] Phase 107-113: 7 phases, 14 plans — install architecture cleanup (drop runtime-deps.json, sha256 sentinel + binding-load validation, simplified mcp-wrapper.sh), `/arcanon:update --check` timeout decoupled, `/arcanon:upload` deprecated stub removed, scan trust hardening (path canonicalization, evidence-at-ingest, services.base_path, scan_versions.quality_score, enrichment_log + impact_audit_log MCP tool, new `/arcanon:verify` command)
+
+Full details: `.planning/milestones/v0.1.3-ROADMAP.md`
+
+</details>
 
 ## Phase Details
 
@@ -686,110 +685,7 @@ Plans:
 
 ---
 
-### v0.1.3 Trust & Foundations (Phases 107-113) — IN PROGRESS
-
-### Phase 107: Install Architecture Cleanup
-**Goal**: Plugin install path is trustworthy — single source of truth for runtime deps (`package.json`), validated by binding-load (`require('better-sqlite3')`), with rebuild fallback on broken bindings, and a wrapper script reduced to plain `exec node`
-**Depends on**: Phase 105 (v0.1.2 complete) — bridges via Phase 106 hotfixes folded in
-**Requirements**: INST-01, INST-02, INST-03, INST-04, INST-05, INST-06, INST-07, INST-08, INST-09, INST-10, INST-11, INST-12
-**Success Criteria** (what must be TRUE):
-  1. The file `plugins/arcanon/runtime-deps.json` does not exist in the repository (verifiable by `test ! -f plugins/arcanon/runtime-deps.json`)
-  2. On a session where deps are unchanged and the better-sqlite3 binding loads, `install-deps.sh` exits in <100ms with no `npm install` or `npm rebuild` process spawned
-  3. Deleting `node_modules/better-sqlite3/build/Release/` and re-running `install-deps.sh` causes the script to detect the broken binding via `require()` and trigger `npm rebuild better-sqlite3` once before completing successfully
-  4. `scripts/mcp-wrapper.sh` body reduces to CLAUDE_PLUGIN_ROOT resolution + `exec node "${PLUGIN_ROOT}/worker/mcp/server.js"` — no self-heal block, no dep-install fallback, no file-existence checks
-  5. A fresh-install integration run (`claude plugin marketplace add` → `claude plugin install` → first session) results in a healthy worker daemon, MCP server up, and `/arcanon:map` callable without binding errors
-**Plans**: 3 plans
-Plans:
-- [x] 107-01-PLAN.md — Delete runtime-deps.json + reduce mcp-wrapper.sh to minimal exec form (INST-01, INST-06) — complete 2026-04-25 (commits f58488d, 0f1862c)
-- [ ] 107-02-PLAN.md — Rewrite install-deps.sh with sha256 sentinel + binding-load validation + single rebuild fallback (INST-02, INST-03, INST-04, INST-05)
-- [ ] 107-03-PLAN.md — bats coverage for new install architecture + integration smoke (INST-07..12)
-
-### Phase 108: Update-check Timeout Fix + Deprecated Command Removal
-**Goal**: `/arcanon:update --check` returns the correct status even when the marketplace refresh is slow, and the deprecated `/arcanon:upload` stub (with all its tests, README mentions, and skill references) is purged from the repo with a regression guard against accidental re-add
-**Depends on**: Phase 107 (install must be stable so bats fixtures around update + commands surface run against a healthy plugin)
-**Requirements**: UPD-01, UPD-02, UPD-03, UPD-04, UPD-05, UPD-06, DEP-01, DEP-02, DEP-03, DEP-04, DEP-05, DEP-06
-**Success Criteria** (what must be TRUE):
-  1. With the marketplace mirror file present and remote version ahead of installed, `/arcanon:update --check` returns `status: "newer"` even when the background `claude plugin marketplace update arcanon` takes >5s — the offline-decision is decoupled from the refresh outcome
-  2. Genuinely missing marketplace mirror dir (fresh install with no network) returns `status: "offline"` (regression preserved)
-  3. The file `plugins/arcanon/commands/upload.md` does not exist in the repository, and a bats test asserts its absence as a regression guard
-  4. `tests/commands-surface.bats` no longer contains the 5 deprecated-stub assertions; `README.md` and `plugins/arcanon/skills/impact/SKILL.md` contain zero `/arcanon:upload` references; `CHANGELOG.md` `[0.1.3] ### BREAKING` lists the removal
-**Plans**: 2 plans
-Plans:
-- [x] 108-01-PLAN.md — UPD: Decouple update.sh --check offline-gate from refresh-process timeout (UPD-01..06)
-- [x] 108-02-PLAN.md — DEP: Delete /arcanon:upload stub + scrub README/CHANGELOG/SKILL refs (DEP-01..06)
-
-### Phase 109: Path Canonicalization + Evidence at Ingest [COMPLETE]
-**Goal**: The scan ingest pipeline rejects evidence that does not literally appear in the cited source file, and connections whose only difference is a template variable name collapse to a single canonical row — strengthening data trust at the write boundary
-**Depends on**: Phase 108 (independent, but ordered after install + cleanup so the bats baseline is stable). Migration 013 (`connections.path_template`) ships in this phase since the column is required by canonicalization writes.
-**Requirements**: TRUST-02, TRUST-03, TRUST-10, TRUST-11 — **all complete**
-**Success Criteria** (what must be TRUE):
-  1. [x] When the agent emits a connection whose `evidence` is prose with no literal substring match against `source_file`, `persistFindings` skips the connection and logs a warning; the rest of the scan completes successfully _(implemented as whole-file substring check per CONTEXT D-03 since connections schema has no `line_start` column)_
-  2. [x] Two connections emitted with template variants (`/runtime/streams/{stream_id}` vs `/runtime/streams/{name}`) collapse to one row in `connections`, with both original templates preserved comma-joined in `connections.path_template` for display
-  3. [x] Migration 013 adds `connections.path_template TEXT` idempotently — running it twice does not error. _(Backfill of historic rows DEFERRED per CONTEXT D-06 — silent canonicalization could collapse legitimately-distinct rows. Documented as known behavior; new scans populate `path_template`.)_
-  4. [x] A node test exercises the persistFindings rejection path (prose evidence vs real-code source file) and asserts the connection is absent from the database while a warning is logged
-**Additional landed scope**: Migration 013 also creates `UNIQUE INDEX uq_connections_dedup` (the plan assumed this existed but it did not; required for collapse semantics to work). `upsertService` now returns the stable row id via SELECT lookup rather than relying on better-sqlite3's connection-level `lastInsertRowid` (was poisoning idempotent re-scans).
-**Plans**: 2 plans
-  - [x] 109-01-PLAN.md — Migration 013 connections.path_template column + idempotency test (TRUST-03)
-  - [x] 109-02-PLAN.md — persistFindings canonicalization + evidence-substring guard (TRUST-02, 03, 10, 11)
-
-### Phase 110: services.base_path End-to-End
-**Goal**: A new `services.base_path` column lets the scanner declare a service-level path prefix (e.g., `/api`); the agent prompt instructs services to emit it; and connection resolution strips `base_path` from frontend-to-backend matches before comparing paths — eliminating a class of false-mismatch findings
-**Depends on**: Phase 109 (Phase 109 lands migration 013 for `connections.path_template` first; this phase lands migration 014 for `services.base_path`. Both are write-side scan changes — sequencing keeps each migration test isolated.)
-**Requirements**: TRUST-04, TRUST-12
-**Success Criteria** (what must be TRUE):
-  1. Migration 014 adds `services.base_path TEXT` idempotently — `PRAGMA table_info(services)` shows the column after migration; re-running migration is a no-op
-  2. `agent-prompt-service.md` instructs the scanner to emit a `base_path` field per service with concrete examples (e.g., `"base_path": "/api"`), and `findings.js` writes the value to `services.base_path` when present
-  3. When a frontend service references `/api/users` and a backend service has `base_path: "/api"` and exposes `/users`, connection resolution strips `base_path` before comparing — the connection matches and is not flagged as a mismatch
-  4. A node test verifies migration idempotence, agent-prompt populated path, and connection resolution honors `base_path` end-to-end
-**Plans**: 1 plan
-Plans:
-- [ ] 110-01-PLAN.md — services.base_path migration 014 + agent prompt/schema/findings + connection resolution stripping
-
-### Phase 111: Quality Score + Reconciliation Audit Trail
-**Goal**: Every scan now produces a quality score visible to the user, and the post-scan reconciliation step (external → cross-service downgrades) writes an audit row per change — both surfaced via the database and a new `impact_audit_log` MCP tool
-**Depends on**: Phase 110 (sequenced after migrations 013/014 land; this phase lands migrations 015 + 016 together — quality_score column + enrichment_log table)
-**Requirements**: TRUST-05, TRUST-06, TRUST-13, TRUST-14
-**Success Criteria** (what must be TRUE):
-  1. Migrations 015 (`scan_versions.quality_score REAL`) and 016 (`enrichment_log` table with scan_version_id, enricher, target_kind, target_id, field, from_value, to_value, reason, created_at) run idempotently and create the expected schema
-  2. `endScan()` computes quality score = `(high_confidence_count + 0.5 * low_confidence_count) / total_connections` and persists it to `scan_versions.quality_score`; readable via `getQualityScore(scan_version_id)`
-  3. Quality score is surfaced at the end of `/arcanon:map` output and in `/arcanon:status` (when worker has graph data) in the format `"Scan quality: 87% high-confidence, 3 prose-evidence warnings"`
-  4. Post-scan reconciliation that downgrades an external crossing to cross-service writes one row to `enrichment_log` per change (enricher = "reconciliation", field = "crossing", from_value = "external", to_value = "cross-service")
-  5. New MCP tool `impact_audit_log(scan_version_id)` returns the rows for that scan version, callable from any project context
-**Plans**: 3 plans
-Plans:
-- [x] 111-01-PLAN.md — Migrations 015 (scan_versions.quality_score) + 016 (enrichment_log) — schema only _(complete 2026-04-25)_
-- [x] 111-02-PLAN.md — endScan computes quality_score; QueryEngine getters; /api/scan-quality endpoint; /arcanon:map and /arcanon:status output _(complete 2026-04-25 — TRUST-05, TRUST-13)_
-- [x] 111-03-PLAN.md — QueryEngine logEnrichment/getEnrichmentLog; impact_audit_log MCP tool; reconciliation audit-log writes in /arcanon:map _(complete 2026-04-25 — TRUST-06, TRUST-14)_
-
-### Phase 112: `/arcanon:verify` Command
-**Goal**: A new read-only `/arcanon:verify` command lets users (and Claude) re-check that cited evidence still exists at the recorded location — returning a per-connection verdict (`ok` / `moved` / `missing` / `method_mismatch`) so stale scan data can be detected without re-running a full `/arcanon:map`
-**Depends on**: Phase 111 (verify reads scan data + connections.path_template + persisted evidence; depends on data shape stabilizing before the read command is built)
-**Requirements**: TRUST-01, TRUST-07, TRUST-08, TRUST-09
-**Success Criteria** (what must be TRUE):
-  1. Running `/arcanon:verify` with a connection ID re-reads the cited `source_file`, checks the `evidence` snippet still exists at ±3 lines of `line_start`, and returns `ok` with a concrete evidence pointer when the snippet is found unchanged
-  2. When the cited `source_file` no longer exists at the recorded path (file was moved or deleted), `/arcanon:verify` returns `moved` with the recorded path included for diagnostic context
-  3. When the file exists but the cited evidence snippet is gone (code was edited), `/arcanon:verify` returns `missing` and points to the line range that no longer matches
-  4. `/arcanon:verify` accepts either a connection ID or a source-file path argument and produces a verdict per affected connection in either case
-**Plans**: 2 plans
-Plans:
-- [x] 112-01-PLAN.md — verify command + handler (TRUST-01) _(complete 2026-04-25 — d29a45a, 42e5417, fb7d6d0)_
-- [x] 112-02-PLAN.md — bats + node test fixtures (TRUST-07, TRUST-08, TRUST-09) _(complete 2026-04-25 — 02ffe9d, 880939b)_
-
-### Phase 113: Verification Gate
-**Goal**: The release is verifiably trustworthy — bats and node test suites are green, the runtime-deps.json + commands/upload.md grep guards pass, fresh-install smoke runs cleanly on Node 25, and the four manifest files plus CHANGELOG are pinned to v0.1.3
-**Depends on**: Phase 112 (must be last — release gate)
-**Requirements**: VER-01, VER-02, VER-03, VER-04, VER-05, VER-06, VER-07
-**Success Criteria** (what must be TRUE):
-  1. Full bats suite runs green with ≥310 tests passing (the 1 macOS HOK-06 latency caveat at threshold=200 is the only acceptable miss)
-  2. Node test suite runs green for all affected modules: `migrations`, `query-engine`, `scan`, `hub-sync`, `server`
-  3. Repo-wide grep returns zero matches for `runtime-deps.json` (the file is gone) and zero matches for `commands/upload.md`; no `--help` references appear in command files (verifying v0.1.4 scope did not creep in)
-  4. Fresh-install integration smoke test on Node 25: clone v0.1.3 tag → `claude plugin install` → start session → `/arcanon:map` (or `/arcanon:status`) succeeds with no binding errors
-  5. The four manifest files (`plugins/arcanon/.claude-plugin/plugin.json`, `plugins/arcanon/.claude-plugin/marketplace.json`, root `.claude-plugin/marketplace.json`, `plugins/arcanon/package.json`) all read `"version": "0.1.3"`; CHANGELOG `[0.1.3] - 2026-04-XX` section pinned with `### BREAKING`, `### Added`, `### Changed`, `### Fixed`, `### Removed` subsections complete
-**Plans**: 1 plan
-Plans:
-- [ ] 113-01-PLAN.md — verification gate: greps + bats + node + manifest bump + CHANGELOG pin + 113-VERIFICATION.md report
-
----
+<!-- v0.1.3 phase details archived to .planning/milestones/v0.1.3-ROADMAP.md -->
 
 ## Progress
 

@@ -1,5 +1,44 @@
 # Milestones
 
+## v0.1.3 Trust & Foundations (Shipped: 2026-04-25)
+
+**Phases completed:** 7 phases (107-113), 14 plans
+**Requirements:** 45/45 complete (INST-01..12, UPD-01..06, TRUST-01..14, DEP-01..06, VER-01..07)
+**Linear:** THE-1022 (High), THE-1027, THE-1028 (High) — all closed
+**Timeline:** 2026-04-25 (single-day milestone)
+
+**Key accomplishments:**
+
+- **Install architecture rebuilt (THE-1028):** Deleted `runtime-deps.json` — single source of truth = `package.json`. Rewrote `install-deps.sh` with sha256-of-deps sentinel + `require("better-sqlite3")` binding-load validation + npm rebuild fallback. Trimmed `mcp-wrapper.sh` from 30 lines to 12 (`exec node` only). Fixes Node 25 binding bug class permanently.
+- **Update-check timeout decoupled (THE-1027):** `/arcanon:update --check` now reads marketplace mirror file regardless of whether `claude plugin marketplace update` finishes within 5s. File-existence is the offline source of truth.
+- **`/arcanon:upload` removed (DEP):** Deprecated stub gone (originally promised v0.2.0; brought forward to v0.1.3 since v0.1.2 already shipped a breaking change). README + skills scrubbed; CHANGELOG `### BREAKING` entry.
+- **New `/arcanon:verify` command (TRUST-01):** Reads cited evidence from source files; returns `ok` / `moved` / `missing` / `method_mismatch` per connection. Read-only contract enforced. 1000-connection cap on unscoped runs.
+- **Evidence-at-ingest enforcement (TRUST-02):** `persistFindings` rejects connections whose `evidence` has no literal substring match against `source_file`. Skipped, not failing the scan. Catches scanner-agent hallucinations directly.
+- **Path canonicalization (TRUST-03):** Template variants like `/streams/{stream_id}` and `/streams/{name}` collapse to `/streams/{_}`. Original templates preserved in new `connections.path_template` column.
+- **`services.base_path` migration (TRUST-04):** New column. Agent prompts emit it. Connection resolution strips `base_path` before path matching, eliminating false mismatches when reverse-proxies prefix-strip.
+- **Per-scan quality score (TRUST-05):** New `scan_versions.quality_score` column. `endScan` computes `(high + 0.5*low)/total`. Surfaced in `/arcanon:map` end-of-output and `/arcanon:status`.
+- **Reconciliation audit trail (TRUST-06):** New `enrichment_log` table + `impact_audit_log` MCP tool. `external` → `cross-service` reclassifications now write audit rows (no more silent reconciliation).
+- **9th MCP tool added:** `impact_audit_log` (was 8). bats fixtures updated.
+
+**Issues caught and fixed beyond REQs:**
+- Migration 013 numbering collision (Phase 109 + Phase 110 both claimed 013) — caught at planning review, renumbered before execution
+- `UNIQUE INDEX uq_connections_dedup` missing on connections table — added during 109-02 to make `INSERT OR REPLACE` actually collapse rows
+- `upsertService` `lastInsertRowid` poisoning — fixed via explicit `SELECT id` post-upsert
+- MCP test stdio transport hang — gated behind `NODE_TEST_CONTEXT` env var
+- v0.1.2's documented `worker/mcp/server-search.test.js queryScan` pre-existing failure now resolved by Phase 107-112 work
+
+**Stats:**
+- bats: 315/315 green (HOK-06 macOS latency caveat unchanged from v0.1.1; not triggered at threshold=200)
+- node: 630/631 green (1 pre-existing v0.1.2 mock failure carried forward; net 1 fewer failure than v0.1.2 baseline)
+- 4 manifests + package-lock.json all at 0.1.3
+- ~30 new tests across worker modules
+
+**Breaking changes for v0.1.2 → v0.1.3 upgraders:**
+- `runtime-deps.json` deleted — install-deps.sh sentinel mismatch on first session post-upgrade triggers a one-time reinstall
+- `/arcanon:upload` removed — CI scripts hardcoded to it must update to `/arcanon:sync`
+
+---
+
 ## v0.1.2 Ligamen Residue Purge (Shipped: 2026-04-23)
 
 **Phases completed:** 5 phases (101-105), 9 plans
