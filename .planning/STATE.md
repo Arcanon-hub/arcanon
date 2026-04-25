@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.1.4
 milestone_name: Operator Surface
-status: defining_requirements
-stopped_at: Milestone v0.1.4 started
-last_updated: "2026-04-25T16:00:00.000Z"
+status: executing
+stopped_at: "Completed 114-02-PLAN.md (/arcanon:view)"
+last_updated: "2026-04-25T22:04:36.328Z"
 last_activity: 2026-04-25
 progress:
-  total_phases: 0
+  total_phases: 9
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 3
+  completed_plans: 2
+  percent: 67
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-25)
 
 **Core value:** Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
-**Current focus:** v0.1.4 Operator Surface — read-only commands, scan-ops commands, UX polish, integration improvements
+**Current focus:** Phase 114 — Read-Only Navigability Commands
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-04-25 — Milestone v0.1.4 started
+Phase: 114 (Read-Only Navigability Commands) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-04-25
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Last activity: 2026-04-25 — Milestone v0.1.4 started
 - **`/arcanon:status` extension narrows THE-1025 Item 1 to active scope.** v0.1.1 SessionStart enrichment already shows scan age passively; this milestone adds parity in `/arcanon:status` output + git-commits-since-scan signal.
 - **`hub.evidence_mode` defaults to `"full"` for back-compat.** `"hash-only"` is opt-in; existing CI flows keep working.
 - **Shadow-scan namespace at `$ARCANON_DATA_DIR/projects/<hash>/impact-map-shadow.db`** (sibling of `impact-map.db`). Atomic promote = backup + swap.
+- NAV-02 ships /arcanon:view as a pure markdown command (no Node handler) per RESEARCH §2 dispatch-precedence finding. Negative regression test in commands-surface.bats guards against future contributors adding view: cmdView to hub.js HANDLERS.
 
 ### Pending Todos
 
@@ -58,6 +59,6 @@ None. Awaiting requirements definition + roadmap.
 
 ## Session Continuity
 
-Last session: 2026-04-25T16:00:00.000Z
-Stopped at: v0.1.4 Operator Surface milestone started
+Last session: 2026-04-25T22:04:36.320Z
+Stopped at: Completed 114-02-PLAN.md (/arcanon:view)
 Resume file: None

@@ -26,7 +26,8 @@ Four new read-only commands that make the existing data navigable.
 
   Pure read-only via worker HTTP. Silent in non-Arcanon directories (no map.db).
 
-- [ ] **NAV-02**: `/arcanon:view` — top-level alias for the graph UI. Routes to the same implementation as `/arcanon:map view`. Discoverable without knowing about hidden subcommand.
+- [x] **NAV-02
+**: `/arcanon:view` — top-level alias for the graph UI. Routes to the same implementation as `/arcanon:map view`. Discoverable without knowing about hidden subcommand.
 
 - [ ] **NAV-03**: `/arcanon:doctor` — 7 smoke-test diagnostics:
   1. Worker HTTP reachable (`/api/readiness`)

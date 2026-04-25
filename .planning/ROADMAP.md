@@ -245,7 +245,7 @@ Three new read-only slash commands: `/arcanon:list` reads the impact-map via wor
 **Plans:** 3 plans
 Plans:
 - [ ] 114-01-PLAN.md — `/arcanon:list` (NAV-01): cmdList in hub.js + worker-client.sh `_arcanon_is_project_dir()` helper + bats E2E
-- [ ] 114-02-PLAN.md — `/arcanon:view` (NAV-02): pure markdown alias cloning map.md:22-32; no Node handler; commands-surface regression
+- [x] 114-02-PLAN.md — `/arcanon:view` (NAV-02): pure markdown alias cloning map.md:22-32; no Node handler; commands-surface regression
 - [ ] 114-03-PLAN.md — `/arcanon:doctor` (NAV-03): cmdDoctor with 8 checks (filesystem-glob migration head + process-spawn MCP smoke + hub round-trip); exit-code matrix + --json
 
 ### Phase 115: Scan-Version Diff Command (`/diff`)
