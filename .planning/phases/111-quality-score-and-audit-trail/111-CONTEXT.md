@@ -13,8 +13,8 @@ Every scan now produces a quality score visible to the user, and the post-scan r
 
 ## Requirements Covered
 
-- **TRUST-05** — Migration 014 (`scan_versions.quality_score REAL`); `endScan()` computes score; surface in `/arcanon:status` AND end of `/arcanon:map` output
-- **TRUST-06** — Migration 015 (`enrichment_log` table); reconciliation writes rows; new `impact_audit_log` MCP tool
+- **TRUST-05** — Migration 015 (`scan_versions.quality_score REAL`); `endScan()` computes score; surface in `/arcanon:status` AND end of `/arcanon:map` output
+- **TRUST-06** — Migration 016 (`enrichment_log` table); reconciliation writes rows; new `impact_audit_log` MCP tool
 - **TRUST-13** — Node test: quality_score populated by `endScan()`, readable via `getQualityScore(scan_version_id)`
 - **TRUST-14** — Node test: `enrichment_log` table created by migration; reconciliation writes one row per crossing-value change
 
@@ -25,7 +25,7 @@ Sequential migration numbering is enforced. Current state at start of Phase 111:
 - Migrations 001–011: applied (latest in repo = `011_services_boundary_entry.js`)
 - Phase 109 (preceding): introduces **migration 012** (`connections.path_template`)
 - Phase 110 (preceding): introduces **migration 013** (`services.base_path`)
-- **Phase 111 (this phase): introduces migrations 014 (`scan_versions.quality_score`) AND 015 (`enrichment_log`)**
+- **Phase 111 (this phase): introduces migrations 015 (`scan_versions.quality_score`) AND 015 (`enrichment_log`)**
 
 Note: ROADMAP.md success-criterion text mentions migrations "014 (`scan_versions.quality_score REAL`) and 015 (`enrichment_log` table)" — this is the authoritative numbering and matches the orchestrator's directive. Both migrations land in this phase, in numeric order. 014 must apply before 015 because 015 has a foreign key to `scan_versions(id)` (no schema dependency on 014's new column, but they ship together as the Phase 111 schema bundle).
 

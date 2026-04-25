@@ -211,8 +211,8 @@ Full details: `.planning/milestones/v0.1.2-ROADMAP.md`
 - [ ] **Phase 107: Install Architecture Cleanup** — Drop `runtime-deps.json`, rewrite `install-deps.sh` with sha256 sentinel + binding-load validation + rebuild fallback, simplify `mcp-wrapper.sh` to plain exec
 - [ ] **Phase 108: Update-check Timeout Fix + Deprecated Command Removal** — Decouple `/arcanon:update --check` offline-decision from 5s refresh outcome; delete `/arcanon:upload` stub + tests + docs
 - [ ] **Phase 109: Path Canonicalization + Evidence at Ingest** — Migration 013 (`connections.path_template`); `persistFindings` rejects prose-only evidence; template-variant collapse on upsert
-- [ ] **Phase 110: services.base_path End-to-End** — Migration 012 (`services.base_path`); agent-prompt-service emits `base_path`; connection resolution strips base_path before path matching
-- [ ] **Phase 111: Quality Score + Reconciliation Audit Trail** — Migrations 014 (`scan_versions.quality_score`) + 015 (`enrichment_log`); endScan computes score; reconciliation writes audit rows; new `impact_audit_log` MCP tool
+- [ ] **Phase 110: services.base_path End-to-End** — Migration 014 (`services.base_path`); agent-prompt-service emits `base_path`; connection resolution strips base_path before path matching
+- [ ] **Phase 111: Quality Score + Reconciliation Audit Trail** — Migrations 015 (`scan_versions.quality_score`) + 016 (`enrichment_log`); endScan computes score; reconciliation writes audit rows; new `impact_audit_log` MCP tool
 - [ ] **Phase 112: `/arcanon:verify` Command** — New verify command re-reads cited evidence; returns ok/moved/missing/method_mismatch verdict per connection
 - [ ] **Phase 113: Verification Gate** — bats + node green; repo-wide grep for `runtime-deps.json` and `commands/upload.md`; manifest version bumps to 0.1.3; CHANGELOG `[0.1.3]` section pinned
 
@@ -731,30 +731,30 @@ Plans:
 
 ### Phase 110: services.base_path End-to-End
 **Goal**: A new `services.base_path` column lets the scanner declare a service-level path prefix (e.g., `/api`); the agent prompt instructs services to emit it; and connection resolution strips `base_path` from frontend-to-backend matches before comparing paths — eliminating a class of false-mismatch findings
-**Depends on**: Phase 109 (Phase 109 lands migration 012 for `connections.path_template` first; this phase lands migration 013 for `services.base_path`. Both are write-side scan changes — sequencing keeps each migration test isolated.)
+**Depends on**: Phase 109 (Phase 109 lands migration 013 for `connections.path_template` first; this phase lands migration 014 for `services.base_path`. Both are write-side scan changes — sequencing keeps each migration test isolated.)
 **Requirements**: TRUST-04, TRUST-12
 **Success Criteria** (what must be TRUE):
-  1. Migration 013 adds `services.base_path TEXT` idempotently — `PRAGMA table_info(services)` shows the column after migration; re-running migration is a no-op
+  1. Migration 014 adds `services.base_path TEXT` idempotently — `PRAGMA table_info(services)` shows the column after migration; re-running migration is a no-op
   2. `agent-prompt-service.md` instructs the scanner to emit a `base_path` field per service with concrete examples (e.g., `"base_path": "/api"`), and `findings.js` writes the value to `services.base_path` when present
   3. When a frontend service references `/api/users` and a backend service has `base_path: "/api"` and exposes `/users`, connection resolution strips `base_path` before comparing — the connection matches and is not flagged as a mismatch
   4. A node test verifies migration idempotence, agent-prompt populated path, and connection resolution honors `base_path` end-to-end
 **Plans**: 1 plan
 Plans:
-- [ ] 110-01-PLAN.md — services.base_path migration 013 + agent prompt/schema/findings + connection resolution stripping
+- [ ] 110-01-PLAN.md — services.base_path migration 014 + agent prompt/schema/findings + connection resolution stripping
 
 ### Phase 111: Quality Score + Reconciliation Audit Trail
 **Goal**: Every scan now produces a quality score visible to the user, and the post-scan reconciliation step (external → cross-service downgrades) writes an audit row per change — both surfaced via the database and a new `impact_audit_log` MCP tool
-**Depends on**: Phase 110 (sequenced after migrations 012/013 land; this phase lands migrations 014 + 015 together — quality_score column + enrichment_log table)
+**Depends on**: Phase 110 (sequenced after migrations 013/014 land; this phase lands migrations 015 + 016 together — quality_score column + enrichment_log table)
 **Requirements**: TRUST-05, TRUST-06, TRUST-13, TRUST-14
 **Success Criteria** (what must be TRUE):
-  1. Migrations 014 (`scan_versions.quality_score REAL`) and 015 (`enrichment_log` table with scan_version_id, enricher, target_kind, target_id, field, from_value, to_value, reason, created_at) run idempotently and create the expected schema
+  1. Migrations 015 (`scan_versions.quality_score REAL`) and 016 (`enrichment_log` table with scan_version_id, enricher, target_kind, target_id, field, from_value, to_value, reason, created_at) run idempotently and create the expected schema
   2. `endScan()` computes quality score = `(high_confidence_count + 0.5 * low_confidence_count) / total_connections` and persists it to `scan_versions.quality_score`; readable via `getQualityScore(scan_version_id)`
   3. Quality score is surfaced at the end of `/arcanon:map` output and in `/arcanon:status` (when worker has graph data) in the format `"Scan quality: 87% high-confidence, 3 prose-evidence warnings"`
   4. Post-scan reconciliation that downgrades an external crossing to cross-service writes one row to `enrichment_log` per change (enricher = "reconciliation", field = "crossing", from_value = "external", to_value = "cross-service")
   5. New MCP tool `impact_audit_log(scan_version_id)` returns the rows for that scan version, callable from any project context
 **Plans**: 3 plans
 Plans:
-- [ ] 111-01-PLAN.md — Migrations 014 (scan_versions.quality_score) + 015 (enrichment_log) — schema only
+- [ ] 111-01-PLAN.md — Migrations 015 (scan_versions.quality_score) + 016 (enrichment_log) — schema only
 - [ ] 111-02-PLAN.md — endScan computes quality_score; QueryEngine getters; /api/scan-quality endpoint; /arcanon:map and /arcanon:status output
 - [ ] 111-03-PLAN.md — QueryEngine logEnrichment/getEnrichmentLog; impact_audit_log MCP tool; reconciliation audit-log writes in /arcanon:map
 
