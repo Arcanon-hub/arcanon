@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.1.3
 milestone_name: Trust & Foundations
-status: completed
-stopped_at: Completed 111-02-PLAN.md (quality-score wiring + display)
-last_updated: "2026-04-25T13:30:23.563Z"
-last_activity: "2026-04-25 — Plan 111-02 landed: endScan computes (high+0.5*low)/total → scan_versions.quality_score; new getQualityScore + getScanQualityBreakdown; new GET /api/scan-quality; /arcanon:map and /arcanon:status surface scan quality (TRUST-05, TRUST-13)"
+status: verifying
+stopped_at: Completed 112-02-PLAN.md (bats fixtures + node /api/verify tests)
+last_updated: "2026-04-25T13:35:00.000Z"
+last_activity: "2026-04-25 — Plan 112-02 landed: 7 bats tests + 13 node tests covering TRUST-07/08/09 + all four computeVerdict branches + D-02 read-only checksum proof + D-03 1000-conn cap. Phase 112 complete (4/4 REQs)."
 progress:
   total_phases: 32
   completed_phases: 0
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 ## Current Position
 
-Phase: Phase 111 (Wave 2) — Plans 111-01 + 111-02 complete; 111-03 next
-Plans complete: 107-01, 107-02, 107-03, 108-01, 108-02, 109-01, 109-02, 110-01, 111-01, 112-01, 111-02 — 11/14 plans complete
-Status: INST-01..12 + UPD-01..06 + DEP-01..06 + TRUST-01..05, 10..13 marked done in REQUIREMENTS.md (next up: 111-03 enrichment_log wiring + impact_audit_log MCP tool, then 113-01 verification gate)
-Last activity: 2026-04-25 — Plan 111-02 landed: endScan computes quality_score; getQualityScore/getScanQualityBreakdown added; GET /api/scan-quality returns latest breakdown; /arcanon:map + /arcanon:status surface scan quality (TRUST-05, TRUST-13)
+Phase: Phase 112 complete — `/arcanon:verify` Command + tests landed (4 REQs); 111-03 (enrichment_log) ran in parallel; 113 (Verification Gate) is next
+Plans complete: 107-01, 107-02, 107-03, 108-01, 108-02, 109-01, 109-02, 110-01, 111-01, 111-02, 112-01, 112-02 — 12/14 plans complete (111-03 in progress in parallel)
+Status: INST-01..12 + UPD-01..06 + DEP-01..06 + TRUST-01..05, 07..13 marked done in REQUIREMENTS.md (next up: 111-03 enrichment_log wiring + impact_audit_log MCP tool, then 113-01 verification gate)
+Last activity: 2026-04-25 — Plan 112-02 landed: 7 bats tests + 13 node tests covering TRUST-07/08/09 + all four computeVerdict branches + D-02 read-only checksum proof + D-03 1000-conn cap. Phase 112 complete (4/4 REQs).
 
 ## v0.1.3 Phase Map
 
@@ -88,6 +88,9 @@ Last activity: 2026-04-25 — Plan 111-02 landed: endScan computes quality_score
 - Phase 110 complete: services.base_path lands end-to-end via migration 014; agent emits + validator accepts + persistFindings writes; detectMismatches strips with D-02 (target-only) and D-03 (segment-boundary) semantics. 27 new tests, 2 REQs closed (TRUST-04, TRUST-12).
 - Phase 111-02 complete: scan_versions.quality_score now wired end-to-end. endScan computes (high + 0.5*low) / total per CONTEXT D-02 (NULL when total=0; NULL-confidence rows count toward total but contribute 0 to numerator). New getQualityScore + getScanQualityBreakdown methods on QueryEngine; GET /api/scan-quality returns latest breakdown for shell-driven status surfacing. /arcanon:map and /arcanon:status now print the quality lines locked in CONTEXT D-01. 15 new tests; 169/169 worker test suites passing (TRUST-05, TRUST-13).
 - Phase 111-02 deviation: status surface insertion site moved from scripts/hub.sh (a thin Node wrapper) to worker/cli/hub.js cmdStatus where the actual status implementation lives. Latest-scan fetch is best-effort with a 2-second AbortController timeout — silently omits the line on any error.
+- Phase 112 complete: `/arcanon:verify` ships (TRUST-01) plus 7 bats + 13 node tests locking all four verdicts (TRUST-07/08/09). Read-only contract D-02 has a formal byte-level checksum proof in `http.verify.test.js` Test 13. 1000-connection cap (D-03) covered by Test 12. See .planning/phases/112-arcanon-verify-command/112-VERIFICATION.md for the closure report.
+- Phase 112-02 deviation: empty-result-set message kept as the single 112-01 wording ("no connections found for the given scope") instead of the plan's two-message split, to avoid rewriting cmdVerify cosmetics for the same exit-1 outcome. Bats edges 4 and 6 assert against the actually-shipped message.
+- Phase 112-02 deviation: seed.js now stamps schema_versions after each up() call. Without this, the worker's first runMigrations() on the seeded DB re-applies migration 002 and throws "duplicate column name: type". Same end-state, but stamps make the seeder idempotent with the worker loader.
 
 ### Pending Todos
 

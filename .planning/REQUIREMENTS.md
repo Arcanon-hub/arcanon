@@ -66,9 +66,9 @@ Six items from the v0.1.0 external review, deferred since 2026-04-21. Adds a ver
 **: New migration adds `services.base_path TEXT` column; agent-prompt-service.md instructs the scanner to emit a `base_path` field per service (e.g., `/api`); connection resolution strips `base_path` from frontend-to-backend matches before comparing paths
 - [x] **TRUST-05**: New migration adds `scan_versions.quality_score REAL` column. End-of-scan output computes and persists quality score = (high_confidence_count + 0.5 × low_confidence_count) / total_connections. Surface in `/arcanon:status` output (when worker has graph data) AND end of `/arcanon:map` output. Format: `"Scan quality: 87% high-confidence, 3 prose-evidence warnings"`. _(Phase 111-01 + 111-02 — migration 015; endScan persists; new GET /api/scan-quality + getScanQualityBreakdown; format strings match D-01)_
 - [ ] **TRUST-06**: New migration adds `enrichment_log` table (`scan_version_id INTEGER REFERENCES scan_versions(id)`, `enricher TEXT`, `target_kind TEXT`, `target_id INTEGER`, `field TEXT`, `from_value TEXT`, `to_value TEXT`, `reason TEXT`, `created_at TEXT`). Post-scan reconciliation (`external` → `cross-service` reclassification) writes a row per change. New MCP tool `impact_audit_log(scan_version_id)` exposes the log.
-- [ ] **TRUST-07**: bats test — verify command happy path (cited evidence still present in source) → returns `ok`
-- [ ] **TRUST-08**: bats test — verify command file-moved path (source file no longer exists at the recorded path) → returns `moved`
-- [ ] **TRUST-09**: bats test — verify command evidence-removed path (file exists but the snippet is gone) → returns `missing`
+- [x] **TRUST-07**: bats test — verify command happy path (cited evidence still present in source) → returns `ok` _(Phase 112-02 — `tests/verify.bats` Test 1; 3 ok verdicts + exit 0)_
+- [x] **TRUST-08**: bats test — verify command file-moved path (source file no longer exists at the recorded path) → returns `moved` _(Phase 112-02 — `tests/verify.bats` Test 2; deleted users.js → 1 moved + 2 ok + exit 1)_
+- [x] **TRUST-09**: bats test — verify command evidence-removed path (file exists but the snippet is gone) → returns `missing` _(Phase 112-02 — `tests/verify.bats` Test 3; rewritten users.js → 1 missing + 2 ok + exit 1)_
 - [x] **TRUST-10**: node test — `persistFindings` evidence schema enforcement: agent emits a connection with `evidence: "this is just a paragraph with no code"` against a source file containing actual code → connection skipped, warning logged _(Phase 109-02 — `worker/db/query-engine-evidence.test.js`, 7 tests)_
 - [x] **TRUST-11**: node test — path canonicalization: agent emits two connections with template variants → upserted as one row with both templates preserved in `path_template` _(Phase 109-02 — `worker/db/query-engine-canonical.test.js`, 9 tests including helper unit tests)_
 - [x] **TRUST-12
@@ -151,9 +151,9 @@ Populated by gsd-roadmapper during ROADMAP.md creation.
 | TRUST-04 | Phase 110 | Pending |
 | TRUST-05 | Phase 111 | Done |
 | TRUST-06 | Phase 111 | Pending |
-| TRUST-07 | Phase 112 | Pending |
-| TRUST-08 | Phase 112 | Pending |
-| TRUST-09 | Phase 112 | Pending |
+| TRUST-07 | Phase 112 | Done |
+| TRUST-08 | Phase 112 | Done |
+| TRUST-09 | Phase 112 | Done |
 | TRUST-10 | Phase 109 | Done |
 | TRUST-11 | Phase 109 | Done |
 | TRUST-12 | Phase 110 | Pending |

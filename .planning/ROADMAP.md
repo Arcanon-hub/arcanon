@@ -213,7 +213,7 @@ Full details: `.planning/milestones/v0.1.2-ROADMAP.md`
 - [x] **Phase 109: Path Canonicalization + Evidence at Ingest** — Migration 013 (`connections.path_template` + `uq_connections_dedup` UNIQUE INDEX); `persistFindings` rejects prose-only evidence; template-variant collapse on upsert (TRUST-02, 03, 10, 11 all complete; 21 new tests)
 - [ ] **Phase 110: services.base_path End-to-End** — Migration 014 (`services.base_path`); agent-prompt-service emits `base_path`; connection resolution strips base_path before path matching
 - [ ] **Phase 111: Quality Score + Reconciliation Audit Trail** — Migrations 015 (`scan_versions.quality_score`) + 016 (`enrichment_log`); endScan computes score; reconciliation writes audit rows; new `impact_audit_log` MCP tool
-- [ ] **Phase 112: `/arcanon:verify` Command** — New verify command re-reads cited evidence; returns ok/moved/missing/method_mismatch verdict per connection
+- [x] **Phase 112: `/arcanon:verify` Command** — New verify command re-reads cited evidence; returns ok/moved/missing/method_mismatch verdict per connection (TRUST-01, 07, 08, 09 complete; 7 bats + 13 node tests; closure: 112-VERIFICATION.md)
 - [ ] **Phase 113: Verification Gate** — bats + node green; repo-wide grep for `runtime-deps.json` and `commands/upload.md`; manifest version bumps to 0.1.3; CHANGELOG `[0.1.3]` section pinned
 
 ## Phase Details
@@ -772,8 +772,8 @@ Plans:
   4. `/arcanon:verify` accepts either a connection ID or a source-file path argument and produces a verdict per affected connection in either case
 **Plans**: 2 plans
 Plans:
-- [ ] 112-01-PLAN.md — verify command + handler (TRUST-01)
-- [ ] 112-02-PLAN.md — bats + node test fixtures (TRUST-07, TRUST-08, TRUST-09)
+- [x] 112-01-PLAN.md — verify command + handler (TRUST-01) _(complete 2026-04-25 — d29a45a, 42e5417, fb7d6d0)_
+- [x] 112-02-PLAN.md — bats + node test fixtures (TRUST-07, TRUST-08, TRUST-09) _(complete 2026-04-25 — 02ffe9d, 880939b)_
 
 ### Phase 113: Verification Gate
 **Goal**: The release is verifiably trustworthy — bats and node test suites are green, the runtime-deps.json + commands/upload.md grep guards pass, fresh-install smoke runs cleanly on Node 25, and the four manifest files plus CHANGELOG are pinned to v0.1.3
