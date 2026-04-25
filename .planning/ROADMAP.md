@@ -23,6 +23,7 @@
 - ✅ **v0.1.1 Command Cleanup + Update + Ambient Hooks** — Phases 97-100 (shipped 2026-04-21)
 - ✅ **v0.1.2 Ligamen Residue Purge** — Phases 101-105 (shipped 2026-04-23)
 - ✅ **v0.1.3 Trust & Foundations** — Phases 107-113 (shipped 2026-04-25)
+- 🚧 **v0.1.4 Operator Surface** — Phases 114-122 (in progress, started 2026-04-25)
 
 ## Phases
 
@@ -212,6 +213,90 @@ Full details: `.planning/milestones/v0.1.2-ROADMAP.md`
 - [x] Phase 107-113: 7 phases, 14 plans — install architecture cleanup (drop runtime-deps.json, sha256 sentinel + binding-load validation, simplified mcp-wrapper.sh), `/arcanon:update --check` timeout decoupled, `/arcanon:upload` deprecated stub removed, scan trust hardening (path canonicalization, evidence-at-ingest, services.base_path, scan_versions.quality_score, enrichment_log + impact_audit_log MCP tool, new `/arcanon:verify` command)
 
 Full details: `.planning/milestones/v0.1.3-ROADMAP.md`
+
+</details>
+
+<details open>
+<summary>🚧 v0.1.4 Operator Surface (Phases 114-122) — IN PROGRESS (started 2026-04-25)</summary>
+
+**Linear scope:** THE-1023 (read-only commands), THE-1024 (scan-ops commands), THE-1025 (UX polish), THE-1026 (integration improvements)
+**Predecessor:** v0.1.3 Trust & Foundations
+**Coverage:** 41/41 REQs across 9 phases
+
+### Wave Summary
+
+| Wave | Phases | Theme | Why This Wave Order |
+|---|---|---|---|
+| **Wave 1** | 114, 115 | Read-only navigability commands | Pure read paths via worker HTTP. No DB writes, no schema changes, no migration. Lowest blast radius. |
+| **Wave 2** | 116 | UX polish (`--help` + `/arcanon:status` extension) | No DB writes; touches every existing command markdown file (HELP-01) and adds one new HTTP endpoint (FRESH-03). |
+| **Wave 3** | 117, 118 | `scan_overrides` infrastructure (write-side) | New migration + new persistence path inside the scan pipeline. **Highest design risk** — Phase 117 gets a discuss-phase before plan-phase. |
+| **Wave 4** | 119 | Shadow scan workflow | Touches DB-pool path resolution. Depends on Phase 117 for override application inside the shadow scan. |
+| **Wave 5** | 120, 121 | Integration improvements | Hub payload schema extension + offline mode + explicit OpenAPI specs + `known-externals.yaml` catalog. Parallel-safe with Wave 4. |
+| **Wave 6** | 122 | Verification gate | Always last. End-to-end smoke + manifest pin + CHANGELOG. |
+
+### Phase 114: Read-Only Navigability Commands (`/list`, `/view`, `/doctor`)
+
+**Wave:** 1 · **Owned REQs:** NAV-01..03 (3) · **Depends on:** none · **Risk:** Low · **Requires discuss-phase:** no
+
+Three new read-only slash commands: `/arcanon:list` reads the impact-map via worker HTTP and prints a project overview (linked repos, services by type, connection counts by confidence, actor count, hub status); `/arcanon:view` is a top-level alias for the existing `/arcanon:map view` graph UI launcher; `/arcanon:doctor` runs 7 diagnostic checks (worker reachability, version match, schema-version match against migration head 16, config + linked-repo resolution, data-dir perms, DB integrity via `PRAGMA quick_check`, MCP smoke via `tools/list`, hub credential check) with PASS/FAIL/WARN per check and structured exit codes. Commands stay silent in non-Arcanon directories.
+
+**Plan-phase pre-flight requirement (from v0.1.3 → v0.1.4 audit):** plan must spec the dispatch precedence for `/arcanon:view` against the existing `/arcanon:map view` subcommand. Top-level `/arcanon:view` takes precedence; implementation must guard against double-dispatch when both routes resolve.
+
+### Phase 115: Scan-Version Diff Command (`/diff`)
+
+**Wave:** 1 · **Owned REQs:** NAV-04 (1) · **Depends on:** Phase 114 · **Risk:** Medium · **Requires discuss-phase:** no
+
+`/arcanon:diff <scanA> <scanB>` accepts four input forms: integer scan version IDs, `HEAD` / `HEAD~N` shorthand resolved against `scan_versions.id` ordering, ISO timestamps resolved to the most-recent scan ≤ that timestamp, and branch heuristics (resolves to the most recent scan whose `repos.last_scanned_sha` matches each branch's HEAD). Output groups changes by services added/removed/modified, connections added/removed/modified, with per-section counts. Phase 119 (`/arcanon:diff --shadow`) reuses the same diff engine.
+
+### Phase 116: `--help` System + `/arcanon:status` Freshness Extension
+
+**Wave:** 2 · **Owned REQs:** HELP-01..04, FRESH-01..05 (9) · **Depends on:** none · **Risk:** Low · **Requires discuss-phase:** no
+
+Two complementary UX polish tracks bundled into one phase. HELP track: every command markdown file gets a `## Help` section with usage block + 2–3 examples, a `lib/help.sh` (or inline) bash detector inspects `$ARGUMENTS` and prints the section via `awk` extraction. FRESH track: new `GET /api/scan-freshness?project=<root>` endpoint returns `{last_scan_iso, last_scan_age_seconds, scan_quality_pct, repos: [{name, path, last_scanned_sha, new_commits}]}`, `/arcanon:status` calls it via `worker-client.sh worker_call` and prints both the existing scan-quality line and a new "N repos have new commits since last scan" line driven by `git log <last_scan_sha>..HEAD --oneline | wc -l` per tracked repo.
+
+**Plan-phase pre-flight requirement (from v0.1.3 → v0.1.4 audit):** plan must wire `/arcanon:status` output through the new `/api/scan-freshness` endpoint, not the existing `/api/scan-quality`. The existing endpoint stays for back-compat; freshness is a strict superset.
+
+### Phase 117: scan_overrides Persistence Layer (migration + apply hook)
+
+**Wave:** 3 · **Owned REQs:** CORRECT-01..03 (3) · **Depends on:** Phase 113 baseline · **Risk:** High · **Requires discuss-phase:** YES (`requires_discuss: true`)
+
+The only phase in v0.1.4 with real schema design surface, and therefore the only phase that gets a `/gsd-discuss-phase` round before `/gsd-plan-phase`. Migration `017_scan_overrides.js` adds the table (`override_id PK AUTOINCREMENT`, `kind CHECK IN ('connection','service')`, `target_id INTEGER`, `action CHECK IN ('delete','update','rename','set-base-path')`, `payload TEXT JSON`, `created_at`, `applied_in_scan_version_id REFERENCES scan_versions(id)` nullable, `created_by`, index on `kind+target_id`). The scan pipeline reads pending (un-applied) overrides BEFORE `endScan`, applies them to the persisted findings, and stamps `applied_in_scan_version_id` to make re-application idempotent. Discuss-phase will pin the exact column types, the `payload` JSON shape per action, conflict resolution when overrides collide with agent output, and whether `applied_in_scan_version_id` is set per-override or per-batch.
+
+**Plan-phase pre-flight requirement (from v0.1.3 → v0.1.4 audit):** v0.1.3's `worker/scan/manager.js` has no extension point between `persistFindings` and `endScan` (calls are adjacent at manager.js:797–798). Discuss-phase must pin the injection site for the override-apply pass; the plan must add an explicit hook function (e.g., `applyPendingOverrides(scanVersionId, queryEngine)` invoked between `persistFindings` and `endScan`) — not a flag wedged into either of those functions.
+
+### Phase 118: scan_overrides Operator Commands (`/correct`, `/rescan`)
+
+**Wave:** 3 · **Owned REQs:** CORRECT-04..07 (4) · **Depends on:** Phase 117 · **Risk:** Medium · **Requires discuss-phase:** no
+
+`/arcanon:rescan <repo-path-or-name>` re-scans exactly one repo, bypasses the incremental change-detection skip, and updates `scan_versions` for that repo only. Accepts both filesystem path and the `repos.name` registered identifier; non-existent repo arg exits 2 with a friendly error. Node tests cover migration 017 idempotency, `scan_overrides` insert/select round-trip, override-applied-during-scan flow, and idempotent re-apply. Bats tests cover the `/arcanon:correct connection|service` happy paths for each of the 4 actions and the `/arcanon:rescan` happy path + error case.
+
+### Phase 119: Shadow Scan + Atomic Promote
+
+**Wave:** 4 · **Owned REQs:** SHADOW-01..04 (4) · **Depends on:** Phase 117 · **Risk:** Medium · **Requires discuss-phase:** no
+
+`/arcanon:shadow-scan` writes to `$ARCANON_DATA_DIR/projects/<hash>/impact-map-shadow.db` (sibling of `impact-map.db`) by passing the shadow path through the existing scan code path via env var or scan flag — no fork of the scan pipeline. `/arcanon:diff --shadow` reuses the Phase 115 diff engine, swapping the shadow file in for one side. `/arcanon:promote-shadow` performs three atomic steps: backs up `impact-map.db` to `impact-map.db.pre-promote-<timestamp>`, renames `impact-map-shadow.db` → `impact-map.db`, reports the backup path on stdout.
+
+**Plan-phase pre-flight requirement (from v0.1.3 → v0.1.4 audit):** `worker/db/pool.js` `getQueryEngine()` caches by `projectRoot` only. Plan must spec the pool-key strategy for the shadow DB — either compose a separate cache key (`projectRoot + ":shadow"`) or have shadow-scan bypass the pool and open its own short-lived QueryEngine. Both are valid; pick one and document it. Do not let shadow and live share the cached engine.
+
+### Phase 120: Integration Data Layer (`hub.evidence_mode`, offline, explicit specs, externals shipping)
+
+**Wave:** 5 · **Owned REQs:** INT-01..05 (5) · **Depends on:** none · **Risk:** Medium · **Requires discuss-phase:** no
+
+Four data-layer changes that ship the *capability* without the *consumption*. New config flag `hub.evidence_mode: "full" | "hash-only" | "none"` defaults to `"full"` for back-compat; `"hash-only"` mode replaces the upload payload's `evidence` string with `{hash, start_line, end_line}`. Hub Payload schema extended to accept either form. `/arcanon:sync --offline` exits 0 with "scan persisted locally, no upload" and differentiates intentional offline (clean exit) from hub-unreachable. `/arcanon:drift openapi --spec <path>` accepts repeatable `--spec` args and bypasses `discoverOpenApiSpecs()`. New file `plugins/arcanon/data/known-externals.yaml` ships ~20 common third parties.
+
+**Plan-phase pre-flight requirement (from v0.1.3 → v0.1.4 audit):** v0.1.3 left the hub payload at `version: "1.0"` (or `1.1` when `libraryDepsEnabled=true`). Plan must (a) gate `evidence_mode` behind a payload version bump (`1.2`) so v1.0/v1.1 hub receivers continue to receive the shape they know, and (b) include an explicit test that a `"full"` (default) payload at the new version remains byte-identical in the `evidence` field shape — only the version bumps. Coordination with the hub team to confirm receiver tolerates unknown fields is a plan-phase task, not a roadmap blocker.
+
+### Phase 121: Integration Consumption Layer (catalog match, user extension, UI surfacing, tests)
+
+**Wave:** 5 · **Owned REQs:** INT-06..10 (5) · **Depends on:** Phase 120, Phase 114 · **Risk:** Low · **Requires discuss-phase:** no
+
+A new scan enrichment pass loads `known-externals.yaml` and matches actor URLs/host patterns against the catalog; matched actors get a friendly `label` field added to their record. User extension via `arcanon.config.json` `external_labels` key — same shape as the catalog, merged with the shipped catalog where user takes precedence on key collision. `/arcanon:list` (Phase 114) and the graph UI display the labeled name instead of the raw URL when present.
+
+### Phase 122: Verification Gate + Release Pin
+
+**Wave:** 6 · **Owned REQs:** VER-01..07 (7) · **Depends on:** Phases 114–121 all complete · **Risk:** Low · **Requires discuss-phase:** no
+
+End-to-end milestone smoke test and release pin. Bats suite green + new HELP/NAV/CORRECT/SHADOW/INT tests, with the documented macOS HOK-06 caveat at threshold=200. Node test suite green for affected modules. All commands have `## Help` sections; `/arcanon:<cmd> --help` returns non-empty output for all. Repo-wide `--help` grep refined from v0.1.3's "zero hits" rule. Fresh-install integration smoke. 4 manifest files at version 0.1.4 + lockfile regenerated. CHANGELOG `[0.1.4]` section pinned.
 
 </details>
 
@@ -718,3 +803,12 @@ Plans:
 | 111 | v0.1.3 | 3/3 | Complete | 2026-04-25 |
 | 112 | v0.1.3 | 2/2 | Complete | 2026-04-25 |
 | 113 | v0.1.3 | 1/1 | Complete | 2026-04-25 |
+| 114 | v0.1.4 | 0/? | Pending | — |
+| 115 | v0.1.4 | 0/? | Pending | — |
+| 116 | v0.1.4 | 0/? | Pending | — |
+| 117 | v0.1.4 | 0/? | Pending (discuss-phase) | — |
+| 118 | v0.1.4 | 0/? | Pending | — |
+| 119 | v0.1.4 | 0/? | Pending | — |
+| 120 | v0.1.4 | 0/? | Pending | — |
+| 121 | v0.1.4 | 0/? | Pending | — |
+| 122 | v0.1.4 | 0/? | Pending | — |
