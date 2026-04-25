@@ -23,7 +23,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import Database from "better-sqlite3";
 
 import {
   syncFindings,
@@ -67,6 +69,34 @@ function _readHubAutoSync(hubBlock) {
     return Boolean(legacyKey);
   }
   return false;
+}
+
+/**
+ * Bounded fetch with timeout. Returns a normalized result object regardless
+ * of success/failure so callers don't need try/catch boilerplate.
+ *
+ * Used by cmdDoctor checks 1, 2, and 8 (NAV-03 / Plan 114-03). The contract
+ * documented here is the surface the doctor checks rely on — do NOT change
+ * field names without updating cmdDoctor.
+ *
+ * @param {string} url
+ * @param {number} timeoutMs
+ * @param {RequestInit} [opts]
+ * @returns {Promise<{ok: boolean, status: number, json: any, elapsedMs: number, error: string|null}>}
+ */
+async function fetchWithTimeout(url, timeoutMs, opts = {}) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const start = Date.now();
+  try {
+    const res = await fetch(url, { ...opts, signal: ctrl.signal });
+    const json = await res.json().catch(() => null);
+    return { ok: res.ok, status: res.status, json, elapsedMs: Date.now() - start, error: null };
+  } catch (e) {
+    return { ok: false, status: 0, json: null, elapsedMs: Date.now() - start, error: e.message };
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 function parseArgs(argv) {
@@ -763,6 +793,242 @@ async function cmdQueue(flags) {
   emit({ rows }, flags, lines.join("\n"));
 }
 
+/**
+ * runCheck — Wrap a single doctor check fn with a 2s overall timeout and
+ * exception-to-FAIL conversion. Returns the canonical row shape consumed by
+ * formatDoctorTable / the --json emitter.
+ *
+ * The criticality argument feeds the exit-code computation in cmdDoctor —
+ * only `criticality === 'critical' && status === 'FAIL'` contributes to
+ * exit code 1 (per the exit-code matrix in 114-03-PLAN.md).
+ *
+ * @param {number} id
+ * @param {string} name
+ * @param {'critical'|'non-critical'} criticality
+ * @param {() => Promise<{status: 'PASS'|'FAIL'|'WARN'|'SKIP', detail: string}>} fn
+ * @returns {Promise<{id: number, name: string, criticality: string, status: string, detail: string}>}
+ */
+async function runCheck(id, name, criticality, fn) {
+  const TIMEOUT_MS = 2000;
+  let timer;
+  const timeoutPromise = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      resolve({ status: criticality === "critical" ? "FAIL" : "WARN", detail: `check timed out after ${TIMEOUT_MS}ms` });
+    }, TIMEOUT_MS);
+  });
+  try {
+    const result = await Promise.race([
+      Promise.resolve()
+        .then(() => fn())
+        .catch((e) => ({ status: criticality === "critical" ? "FAIL" : "WARN", detail: e.message || String(e) })),
+      timeoutPromise,
+    ]);
+    return { id, name, criticality, status: result.status, detail: result.detail };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * formatDoctorTable — Human-readable output for /arcanon:doctor.
+ * Pretty-prints `id. STATUS  name detail` aligned, plus a summary line.
+ *
+ * @param {Array<{id:number,name:string,status:string,detail:string}>} checks
+ * @param {{pass:number,warn:number,fail:number,skip:number,exit_code:number}} summary
+ * @returns {string}
+ */
+function formatDoctorTable(checks, summary) {
+  const lines = [`Arcanon doctor — version ${readPackageVersion()}`, ""];
+  // Pad name column to 22 chars for stable alignment across all 8 checks.
+  const NAME_WIDTH = 22;
+  for (const c of checks) {
+    const idCell = String(c.id).padStart(2);
+    const statusCell = c.status.padEnd(4);
+    const nameCell = c.name.padEnd(NAME_WIDTH);
+    lines.push(`  ${idCell}. ${statusCell}  ${nameCell} ${c.detail}`);
+  }
+  lines.push("");
+  lines.push(
+    `Summary: ${summary.pass} PASS, ${summary.warn} WARN, ${summary.fail} FAIL, ${summary.skip} SKIP — exit ${summary.exit_code}`,
+  );
+  return lines.join("\n");
+}
+
+/**
+ * cmdDoctor — 8-check diagnostic suite (NAV-03 / Plan 114-03).
+ *
+ * Critical checks (exit 1 on FAIL): 1 (worker reachable), 5 (data dir
+ * writable), 6 (DB integrity). Non-critical checks (FAIL → WARN; exit 0):
+ * 2 (worker version match), 3 (schema head), 4 (config + linked repos),
+ * 7 (MCP smoke), 8 (hub credentials).
+ *
+ * Read-only contract: no DB writes. Check 6 uses a fresh isolated read-only
+ * connection — it does NOT call openDb() (which is a process-cached singleton
+ * that would auto-run migrations and could be closed mid-flight). Check 7
+ * spawns the bundled MCP server with hardcoded path + arg array (no shell
+ * interpolation, no PATH dependency).
+ *
+ * Silent in non-Arcanon directories (no impact-map.db) — exits 0 with no
+ * output, mirroring the /arcanon:list contract.
+ *
+ * Flags:
+ *   --json   Single JSON object {version, project_root, checks[], summary}.
+ *
+ * Task 1 (this commit): scaffold + checks 1, 2, 5, 6 + check 8 SKIP-only.
+ * Task 2: implement checks 3 (schema head), 4 (config), 7 (MCP smoke), and
+ * the full check 8 round-trip.
+ */
+async function cmdDoctor(flags) {
+  const cwd = process.cwd();
+
+  // ----- Project detection — silent no-op contract -----
+  const dbDir = projectHashDir(cwd);
+  const dbPath = path.join(dbDir, "impact-map.db");
+  if (!fs.existsSync(dbPath)) {
+    process.exit(0);
+  }
+
+  // ----- Resolve worker port (mirrors cmdVerify pattern) -----
+  let workerPort = 37888;
+  try {
+    const portFile = path.join(resolveDataDir(), "worker.port");
+    const raw = fs.readFileSync(portFile, "utf8").trim();
+    const parsed = Number(raw);
+    if (Number.isInteger(parsed) && parsed > 0) workerPort = parsed;
+  } catch {
+    if (process.env.ARCANON_WORKER_PORT) {
+      const parsed = Number(process.env.ARCANON_WORKER_PORT);
+      if (Number.isInteger(parsed) && parsed > 0) workerPort = parsed;
+    }
+  }
+
+  const checks = [];
+
+  // Check 1 — worker HTTP reachable (CRITICAL).
+  checks.push(
+    await runCheck(1, "worker_reachable", "critical", async () => {
+      const r = await fetchWithTimeout(`http://127.0.0.1:${workerPort}/api/readiness`, 2000);
+      if (r.ok) return { status: "PASS", detail: `200 OK in ${r.elapsedMs}ms` };
+      return { status: "FAIL", detail: `worker unreachable: ${r.error || `HTTP ${r.status}`}` };
+    }),
+  );
+
+  // Check 2 — worker /api/version matches plugin version (non-critical).
+  checks.push(
+    await runCheck(2, "worker_version", "non-critical", async () => {
+      const installed = readPackageVersion();
+      const r = await fetchWithTimeout(`http://127.0.0.1:${workerPort}/api/version`, 2000);
+      if (!r.ok) {
+        return { status: "WARN", detail: `version endpoint unreachable: ${r.error || `HTTP ${r.status}`}` };
+      }
+      const wv = r.json && typeof r.json.version === "string" ? r.json.version : null;
+      if (!wv) return { status: "WARN", detail: "version endpoint returned malformed body" };
+      return wv === installed
+        ? { status: "PASS", detail: `${wv} == ${installed}` }
+        : { status: "WARN", detail: `worker ${wv} != installed ${installed}` };
+    }),
+  );
+
+  // Check 3 — DB schema head matches migration head (non-critical, Task 2 stub).
+  checks.push(
+    await runCheck(3, "schema_head", "non-critical", async () => {
+      return { status: "WARN", detail: "schema head check pending Task 2" };
+    }),
+  );
+
+  // Check 4 — config + linked repos resolve (non-critical, Task 2 stub).
+  checks.push(
+    await runCheck(4, "config_linked_repos", "non-critical", async () => {
+      return { status: "WARN", detail: "config check pending Task 2" };
+    }),
+  );
+
+  // Check 5 — $ARCANON_DATA_DIR writable (CRITICAL).
+  checks.push(
+    await runCheck(5, "data_dir_writable", "critical", async () => {
+      const dataDir = resolveDataDir();
+      if (!fs.existsSync(dataDir)) {
+        return { status: "FAIL", detail: `${dataDir} does not exist` };
+      }
+      const probe = path.join(dataDir, `.doctor-probe-${process.pid}`);
+      try {
+        fs.writeFileSync(probe, "");
+        fs.unlinkSync(probe);
+        return { status: "PASS", detail: `${dataDir} (writable)` };
+      } catch (e) {
+        // Best-effort cleanup if the probe was created but unlink failed.
+        try { fs.unlinkSync(probe); } catch { /* swallow */ }
+        return { status: "FAIL", detail: `${dataDir} not writable: ${e.code || e.message}` };
+      }
+    }),
+  );
+
+  // Check 6 — DB integrity via PRAGMA quick_check (CRITICAL).
+  // CRITICAL implementation note: do NOT use openDb() here — it is a
+  // process-cached singleton that runs migrations and would be closed by
+  // db.close() below, breaking subsequent worker queries. Use a fresh
+  // isolated read-only connection that bypasses the pool entirely.
+  checks.push(
+    await runCheck(6, "db_integrity", "critical", async () => {
+      const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+      try {
+        const row = db.prepare("PRAGMA quick_check").get();
+        // PRAGMA quick_check returns a row with a single column; the column
+        // name varies by sqlite version ("quick_check" or "integrity_check"),
+        // so read the first value defensively.
+        const v = row && (row.quick_check || row.integrity_check || row[Object.keys(row)[0]]);
+        return v === "ok"
+          ? { status: "PASS", detail: "ok" }
+          : { status: "FAIL", detail: `quick_check returned: ${v}` };
+      } finally {
+        db.close();
+      }
+    }),
+  );
+
+  // Check 7 — MCP server liveness probe (non-critical, Task 2 stub).
+  checks.push(
+    await runCheck(7, "mcp_smoke", "non-critical", async () => {
+      return { status: "WARN", detail: "mcp smoke check pending Task 2" };
+    }),
+  );
+
+  // Check 8 — hub credentials. SKIP cleanly when no creds are configured.
+  // Task 2 will add the round-trip when creds ARE present.
+  checks.push(
+    await runCheck(8, "hub_credentials", "non-critical", async () => {
+      let creds;
+      try {
+        creds = resolveCredentials();
+      } catch {
+        return { status: "SKIP", detail: "no credentials configured" };
+      }
+      // creds present — round-trip pending Task 2.
+      return { status: "SKIP", detail: `round-trip pending Task 2 (creds via ${creds.source})` };
+    }),
+  );
+
+  // Stable order by id (defensive — runCheck calls are sequential today, but
+  // a future Promise.all refactor could reorder).
+  checks.sort((a, b) => a.id - b.id);
+
+  const summary = {
+    pass: checks.filter((c) => c.status === "PASS").length,
+    warn: checks.filter((c) => c.status === "WARN").length,
+    fail: checks.filter((c) => c.status === "FAIL").length,
+    skip: checks.filter((c) => c.status === "SKIP").length,
+  };
+  // Exit-code matrix: only critical FAIL contributes to exit 1.
+  summary.exit_code = checks.some((c) => c.criticality === "critical" && c.status === "FAIL") ? 1 : 0;
+
+  emit(
+    { version: readPackageVersion(), project_root: cwd, checks, summary },
+    flags,
+    formatDoctorTable(checks, summary),
+  );
+  process.exit(summary.exit_code);
+}
+
 const HANDLERS = {
   version: cmdVersion,
   login: cmdLogin,
@@ -772,6 +1038,7 @@ const HANDLERS = {
   queue: cmdQueue,
   verify: cmdVerify, // TRUST-01
   list: cmdList,     // NAV-01
+  doctor: cmdDoctor, // NAV-03
 };
 
 async function main() {

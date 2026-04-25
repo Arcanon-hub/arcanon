@@ -12,10 +12,10 @@ setup() {
 @test "CLN-09: all surviving command files exist" {
   # Iteration list extended (114-01 / NIT 8) to cover the full v0.1.4-WIP
   # command surface. The original CLN-09 list was the seven v0.1.1 survivors;
-  # `verify` and `update` shipped in v0.1.3, `list` ships in v0.1.4 (NAV-01)
-  # and `view` ships in v0.1.4 (NAV-02 — this plan, 114-02). `doctor` from
-  # plan 114-03 will join via an additive edit in that plan.
-  for cmd in map drift impact sync login status export verify update list view; do
+  # `verify` and `update` shipped in v0.1.3, `list` ships in v0.1.4 (NAV-01),
+  # `view` ships in v0.1.4 (NAV-02), and `doctor` ships in v0.1.4 (NAV-03 —
+  # this plan, 114-03).
+  for cmd in map drift impact sync login status export verify update list view doctor; do
     [ -f "$PLUGIN_DIR/commands/$cmd.md" ] || {
       echo "MISSING: commands/$cmd.md"
       return 1
@@ -24,7 +24,7 @@ setup() {
 }
 
 @test "CLN-09: all surviving commands have description frontmatter" {
-  for cmd in map drift impact sync login status export verify update list view; do
+  for cmd in map drift impact sync login status export verify update list view doctor; do
     run grep -c '^description:' "$PLUGIN_DIR/commands/$cmd.md"
     [ "$status" -eq 0 ]
     [ "$output" -ge 1 ]
@@ -102,4 +102,24 @@ setup() {
 # such a handler.
 @test "NAV-02: worker/cli/hub.js does NOT register a view handler" {
   ! grep -q 'view: cmdView' "$PLUGIN_DIR/worker/cli/hub.js"
+}
+
+# NAV-03 (114-03): /arcanon:doctor must declare allowed-tools: Bash so the
+# slash-command runtime grants the bash block in the body the right to
+# invoke hub.sh. Mirrors the same assertion made for /arcanon:list.
+@test "NAV-03: /arcanon:doctor declares allowed-tools: Bash" {
+  [ -f "$PLUGIN_DIR/commands/doctor.md" ]
+  run grep -E '^description:' "$PLUGIN_DIR/commands/doctor.md"
+  [ "$status" -eq 0 ]
+  run grep -E '^allowed-tools:' "$PLUGIN_DIR/commands/doctor.md"
+  [ "$status" -eq 0 ]
+  grep -q 'Bash' "$PLUGIN_DIR/commands/doctor.md"
+}
+
+# NAV-03 (114-03): /arcanon:doctor command body must invoke hub.sh doctor
+# (the Node-side handler does the real work). Counterpart to the NAV-02
+# negative test — the doctor command DOES register a Node handler, so we
+# positively assert the dispatch path is intact.
+@test "NAV-03: worker/cli/hub.js registers doctor: cmdDoctor" {
+  grep -q 'doctor: cmdDoctor' "$PLUGIN_DIR/worker/cli/hub.js"
 }
