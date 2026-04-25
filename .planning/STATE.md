@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v0.1.3
 milestone_name: Trust & Foundations
 status: completed
-stopped_at: Completed 109-02-PLAN.md (Phase 109 complete)
-last_updated: "2026-04-25T14:46:00.000Z"
-last_activity: "2026-04-25 — Plan 109-02 landed: persistFindings now canonicalizes {xxx} -> {_} and rejects prose evidence (TRUST-02, TRUST-03, TRUST-10, TRUST-11). Migration 013 also gained UNIQUE INDEX uq_connections_dedup. upsertService now returns stable row id."
+stopped_at: Completed 110-01-PLAN.md (Phase 110 complete)
+last_updated: "2026-04-25T13:05:34.871Z"
+last_activity: "2026-04-25 — Plan 109-02 landed: persistFindings canonicalizes {xxx} -> {_} and rejects prose evidence; migration 013 gains UNIQUE INDEX uq_connections_dedup; upsertService returns stable row id (TRUST-02, TRUST-03, TRUST-10, TRUST-11)"
 progress:
   total_phases: 32
   completed_phases: 0
@@ -64,6 +64,7 @@ Last activity: 2026-04-25 — Plan 109-02 landed: persistFindings canonicalizes 
 | Phase 107 P03 | 30 min | 2 tasks | 3 files |
 | 109   | 01   | 1     | 2     | ~2 min   |
 | 109   | 02   | 2     | 4     | ~45 min  |
+| Phase 110 P01 | 13 | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,7 @@ Last activity: 2026-04-25 — Plan 109-02 landed: persistFindings canonicalizes 
 - Phase 109-01 complete: migration 013 adds connections.path_template TEXT (TRUST-03 schema)
 - Phase 109-02 complete: canonicalizePath helper exported; persistFindings canonicalizes {xxx} -> {_}, merges path_template comma-joined on collapse, rejects prose evidence with stderr warning. Migration 013 extended with UNIQUE INDEX uq_connections_dedup (was missing in codebase despite plan assumption). upsertService now returns stable row id (lastInsertRowid was returning stale connection-level value on UPDATE path) (TRUST-02, 03, 10, 11)
 - Phase 109 complete: all 4 TRUST requirements landed with 21 new tests; verification doc at .planning/phases/109-path-canonicalization-and-evidence/109-VERIFICATION.md
+- Phase 110 complete: services.base_path lands end-to-end via migration 014; agent emits + validator accepts + persistFindings writes; detectMismatches strips with D-02 (target-only) and D-03 (segment-boundary) semantics. 27 new tests, 2 REQs closed (TRUST-04, TRUST-12).
 
 ### Pending Todos
 
@@ -96,6 +98,6 @@ Last activity: 2026-04-25 — Plan 109-02 landed: persistFindings canonicalizes 
 
 ## Session Continuity
 
-Last session: 2026-04-25T14:46:00.000Z
-Stopped at: Completed 109-02-PLAN.md (Phase 109 complete)
+Last session: 2026-04-25T13:05:34.862Z
+Stopped at: Completed 110-01-PLAN.md (Phase 110 complete)
 Resume file: None
