@@ -32,16 +32,16 @@ import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 
 import { createHttpServer, computeVerdict } from './http.js';
-import { seedFixture, applyAllMigrations } from '../../../../tests/fixtures/verify/seed.js';
+import { seedFixture, applyAllMigrations } from '../../tests/fixtures/verify/seed.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Repo root — three directory levels above this file:
-//   plugins/arcanon/worker/server/http.verify.test.js → repo root
-const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+// Plugin root — three directory levels above this file:
+//   plugins/arcanon/worker/server/http.verify.test.js → plugins/arcanon
+const PLUGIN_ROOT = path.resolve(__dirname, '..', '..');
 const FIXTURE_SOURCE_DIR = path.join(
-  REPO_ROOT, 'tests', 'fixtures', 'verify', 'source',
+  PLUGIN_ROOT, 'tests', 'fixtures', 'verify', 'source',
 );
 
 // ---------------------------------------------------------------------------

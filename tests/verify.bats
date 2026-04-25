@@ -18,7 +18,7 @@
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 HUB_SH="${REPO_ROOT}/plugins/arcanon/scripts/hub.sh"
 WORKER_INDEX="${REPO_ROOT}/plugins/arcanon/worker/index.js"
-SEED_SH="${REPO_ROOT}/tests/fixtures/verify/seed.sh"
+SEED_SH="${REPO_ROOT}/plugins/arcanon/tests/fixtures/verify/seed.sh"
 WORKER_PORT=37999
 
 # ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ setup() {
 
   # Stage fixture source files in the project root so the relative
   # source_file paths the seeder records resolve correctly.
-  cp "${REPO_ROOT}/tests/fixtures/verify/source/"*.js \
+  cp "${REPO_ROOT}/plugins/arcanon/tests/fixtures/verify/source/"*.js \
      "$PROJECT_ROOT/tests/fixtures/verify/source/"
 
   # Compute worker DB path and seed. PROJECT_ROOT is already canonical so

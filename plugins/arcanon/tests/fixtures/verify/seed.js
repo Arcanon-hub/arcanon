@@ -19,33 +19,23 @@
  */
 
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 
-// The fixture lives outside plugins/arcanon/, so Node's default ESM
-// resolution can't find better-sqlite3 from this file's location (it walks
-// up from tests/fixtures/verify/ and never reaches plugins/arcanon/node_modules).
-// Anchor a CJS require at plugins/arcanon/package.json so require('better-sqlite3')
-// walks UP from there and immediately finds plugins/arcanon/node_modules/better-sqlite3.
-const _seedDir = path.dirname(fileURLToPath(import.meta.url));
-const _pluginPackageJson = path.resolve(_seedDir, '../../../plugins/arcanon/package.json');
-const _pluginRequire = createRequire(_pluginPackageJson);
-
-import { up as up001 } from '../../../plugins/arcanon/worker/db/migrations/001_initial_schema.js';
-import { up as up002 } from '../../../plugins/arcanon/worker/db/migrations/002_service_type.js';
-import { up as up003 } from '../../../plugins/arcanon/worker/db/migrations/003_exposed_endpoints.js';
-import { up as up004 } from '../../../plugins/arcanon/worker/db/migrations/004_dedup_constraints.js';
-import { up as up005 } from '../../../plugins/arcanon/worker/db/migrations/005_scan_versions.js';
-import { up as up006 } from '../../../plugins/arcanon/worker/db/migrations/006_dedup_repos.js';
-import { up as up007 } from '../../../plugins/arcanon/worker/db/migrations/007_expose_kind.js';
-import { up as up008 } from '../../../plugins/arcanon/worker/db/migrations/008_actors_metadata.js';
-import { up as up009 } from '../../../plugins/arcanon/worker/db/migrations/009_confidence_enrichment.js';
-import { up as up010 } from '../../../plugins/arcanon/worker/db/migrations/010_service_dependencies.js';
-import { up as up011 } from '../../../plugins/arcanon/worker/db/migrations/011_services_boundary_entry.js';
-import { up as up013 } from '../../../plugins/arcanon/worker/db/migrations/013_connections_path_template.js';
-import { up as up014 } from '../../../plugins/arcanon/worker/db/migrations/014_services_base_path.js';
-import { up as up015 } from '../../../plugins/arcanon/worker/db/migrations/015_scan_versions_quality_score.js';
-import { up as up016 } from '../../../plugins/arcanon/worker/db/migrations/016_enrichment_log.js';
+import { up as up001 } from '../../../worker/db/migrations/001_initial_schema.js';
+import { up as up002 } from '../../../worker/db/migrations/002_service_type.js';
+import { up as up003 } from '../../../worker/db/migrations/003_exposed_endpoints.js';
+import { up as up004 } from '../../../worker/db/migrations/004_dedup_constraints.js';
+import { up as up005 } from '../../../worker/db/migrations/005_scan_versions.js';
+import { up as up006 } from '../../../worker/db/migrations/006_dedup_repos.js';
+import { up as up007 } from '../../../worker/db/migrations/007_expose_kind.js';
+import { up as up008 } from '../../../worker/db/migrations/008_actors_metadata.js';
+import { up as up009 } from '../../../worker/db/migrations/009_confidence_enrichment.js';
+import { up as up010 } from '../../../worker/db/migrations/010_service_dependencies.js';
+import { up as up011 } from '../../../worker/db/migrations/011_services_boundary_entry.js';
+import { up as up013 } from '../../../worker/db/migrations/013_connections_path_template.js';
+import { up as up014 } from '../../../worker/db/migrations/014_services_base_path.js';
+import { up as up015 } from '../../../worker/db/migrations/015_scan_versions_quality_score.js';
+import { up as up016 } from '../../../worker/db/migrations/016_enrichment_log.js';
 
 /**
  * Apply every migration in order on the given Database. Mirrors the pattern
@@ -202,7 +192,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     );
     process.exit(2);
   }
-  const Database = _pluginRequire('better-sqlite3');
+  const Database = (await import('better-sqlite3')).default;
   const db = new Database(args.db);
   db.pragma('foreign_keys = ON');
   const result = seedFixture({ db, projectRoot: args.project });
