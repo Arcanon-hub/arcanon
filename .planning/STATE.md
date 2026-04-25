@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.1.3
 milestone_name: Trust & Foundations
-status: completed
+status: in_progress
 stopped_at: Completed 108-01-PLAN.md
-last_updated: "2026-04-25T12:13:44.697Z"
-last_activity: "2026-04-25 — Plan 107-02 landed: install-deps.sh rewritten with sha256 sentinel + binding-load validation + npm rebuild fallback (INST-02..05)"
+last_updated: "2026-04-25T14:18:00.000Z"
+last_activity: "2026-04-25 — Plans 107-02 + 108-01 landed in parallel: install-deps.sh sentinel/validation; update.sh --check offline gate decoupled from refresh-process timeout (THE-1027)"
 progress:
   total_phases: 32
   completed_phases: 0
