@@ -1,9 +1,12 @@
 #!/usr/bin/env bats
 # tests/mcp-wrapper.bats
-# Bats tests for scripts/mcp-wrapper.sh self-healing behavior
-# Covers: MCP-02
+# Bats tests for scripts/mcp-wrapper.sh — the trimmed (Phase 107-01) form
+# that resolves CLAUDE_PLUGIN_ROOT and execs node. All install/self-heal
+# logic now lives in install-deps.sh (covered by tests/install-deps.bats).
+# Covers: INST-06
 
 PROJECT_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
+WRAPPER="$PROJECT_ROOT/plugins/arcanon/scripts/mcp-wrapper.sh"
 
 setup() {
   MOCK_PLUGIN_ROOT="$(mktemp -d)"
@@ -11,14 +14,10 @@ setup() {
   mkdir -p "$MOCK_PLUGIN_ROOT/worker/mcp"
 
   # Copy the wrapper into mock plugin root
-  cp "$PROJECT_ROOT/plugins/arcanon/scripts/mcp-wrapper.sh" "$MOCK_PLUGIN_ROOT/scripts/"
+  cp "$WRAPPER" "$MOCK_PLUGIN_ROOT/scripts/"
 
-  # Create a mock server.js that just exits 0 (avoids actually starting the server)
+  # Default mock server.js exits 0 (avoids actually starting the server)
   printf 'process.exit(0)\n' > "$MOCK_PLUGIN_ROOT/worker/mcp/server.js"
-
-  # Create a minimal package.json for npm install (uses a trivially small dep)
-  printf '{"name":"test","version":"0.0.1","dependencies":{"is-number":"^7.0.0"}}\n' \
-    > "$MOCK_PLUGIN_ROOT/package.json"
 
   export MOCK_PLUGIN_ROOT
 }
@@ -28,11 +27,13 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
-# MCP-02: wrapper exits 0 when deps already installed
+# INST-06: wrapper happy path — execs node and exits 0
 # ---------------------------------------------------------------------------
 
-@test "MCP-02: wrapper exits 0 when better-sqlite3 already present" {
-  # Simulate deps already installed by creating the sentinel directory
+@test "INST-06: wrapper exits 0 when better-sqlite3 already present" {
+  # Simulate deps already installed by creating the (empty) module dir;
+  # the trimmed wrapper does not actually inspect node_modules — the mock
+  # server.js handles the success contract.
   mkdir -p "$MOCK_PLUGIN_ROOT/node_modules/better-sqlite3"
 
   run env CLAUDE_PLUGIN_ROOT="$MOCK_PLUGIN_ROOT" \
@@ -41,80 +42,43 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
-# MCP-02: wrapper logs to stderr and attempts npm install when deps missing
+# INST-06: wrapper file structure — no install logic, single exec, ≤ 12 lines
 # ---------------------------------------------------------------------------
 
-@test "MCP-02: wrapper logs install message to stderr when better-sqlite3 missing" {
-  # Ensure node_modules/better-sqlite3 does NOT exist
+@test "INST-06: wrapper has no install logic — it just execs node" {
+  # Zero references to install logic in the wrapper file.
+  # (The repo's REAL wrapper is the source of truth here, not the mock copy.)
+  ! grep -E "npm install|npm rebuild|node_modules/better-sqlite3" "$WRAPPER"
+
+  # Exactly one exec node line
+  [[ "$(grep -c '^exec node' "$WRAPPER")" -eq 1 ]]
+
+  # File is short (Phase 107-01 specified a 12-line ceiling)
+  [[ "$(wc -l < "$WRAPPER")" -le 12 ]]
+}
+
+# ---------------------------------------------------------------------------
+# INST-06: wrapper fails fast when binding missing — no self-heal swallowing
+# ---------------------------------------------------------------------------
+
+@test "INST-06: wrapper fails fast when better-sqlite3 is missing (no self-heal)" {
+  # node_modules absent — wrapper must still exec node, and node will exit
+  # nonzero with a Cannot-find-module error. The wrapper MUST surface that
+  # failure (exit nonzero), not swallow it via a self-heal block.
   rm -rf "$MOCK_PLUGIN_ROOT/node_modules"
+
+  # Replace the mock server.js with one that requires better-sqlite3 — will
+  # fail with module-not-found error and exit nonzero
+  cat > "$MOCK_PLUGIN_ROOT/worker/mcp/server.js" <<'JS'
+require('better-sqlite3');
+process.exit(0);
+JS
 
   run env CLAUDE_PLUGIN_ROOT="$MOCK_PLUGIN_ROOT" \
     bash "$MOCK_PLUGIN_ROOT/scripts/mcp-wrapper.sh"
 
-  # Wrapper should still exit 0 (exec node server.js succeeds with mock)
-  [ "$status" -eq 0 ]
-  # All install messages go to stderr (captured in $output by bats for stderr)
-  [[ "$output" == *"[arcanon]"* ]]
-}
-
-# ---------------------------------------------------------------------------
-# MCP-02: wrapper produces no stdout output before exec
-# ---------------------------------------------------------------------------
-
-@test "MCP-02: wrapper produces no stdout when deps are present" {
-  # Simulate deps already installed
-  mkdir -p "$MOCK_PLUGIN_ROOT/node_modules/better-sqlite3"
-
-  # Capture stdout and stderr separately
-  STDOUT=$(env CLAUDE_PLUGIN_ROOT="$MOCK_PLUGIN_ROOT" \
-    bash "$MOCK_PLUGIN_ROOT/scripts/mcp-wrapper.sh" 2>/dev/null)
-
-  # Stdout must be empty (server.js mock calls process.exit(0) with no output)
-  [ -z "$STDOUT" ]
-}
-
-@test "MCP-02: install messages go to stderr not stdout" {
-  # Remove deps to trigger install path
-  rm -rf "$MOCK_PLUGIN_ROOT/node_modules"
-
-  # Capture stdout only; stderr goes to /dev/null
-  STDOUT=$(env CLAUDE_PLUGIN_ROOT="$MOCK_PLUGIN_ROOT" \
-    bash "$MOCK_PLUGIN_ROOT/scripts/mcp-wrapper.sh" 2>/dev/null)
-
-  # Stdout must be empty regardless of install path
-  [ -z "$STDOUT" ]
-}
-
-# ---------------------------------------------------------------------------
-# MCP-02: .mcp.json uses mcp-wrapper.sh as command
-# ---------------------------------------------------------------------------
-
-@test "MCP-02: .mcp.json command field ends with mcp-wrapper.sh" {
-  local mcp_json="$PROJECT_ROOT/plugins/arcanon/.mcp.json"
-  [ -f "$mcp_json" ]
-
-  COMMAND=$(python3 -c "
-import json, sys
-with open('$mcp_json') as f:
-    d = json.load(f)
-print(d['mcpServers']['arcanon']['command'])
-")
-
-  [[ "$COMMAND" == *"mcp-wrapper.sh" ]]
-}
-
-# ---------------------------------------------------------------------------
-# MCP-02: wrapper works without CLAUDE_PLUGIN_ROOT (script-relative fallback)
-# ---------------------------------------------------------------------------
-
-@test "MCP-02: wrapper works without CLAUDE_PLUGIN_ROOT using script-relative fallback" {
-  # Simulate deps present so install isn't triggered
-  mkdir -p "$MOCK_PLUGIN_ROOT/node_modules/better-sqlite3"
-
-  # Run WITHOUT setting CLAUDE_PLUGIN_ROOT — wrapper must resolve via BASH_SOURCE
-  # Copy wrapper to a known path so dirname works correctly
-  run env -u CLAUDE_PLUGIN_ROOT \
-    bash "$MOCK_PLUGIN_ROOT/scripts/mcp-wrapper.sh"
-
-  [ "$status" -eq 0 ]
+  # Wrapper exits with node's nonzero status (NOT swallowed by self-heal)
+  [ "$status" -ne 0 ]
+  # Stderr must NOT contain the deleted self-heal prefix
+  ! [[ "$output" == *"[arcanon] installing runtime deps"* ]]
 }

@@ -21,7 +21,13 @@ The script reports:
 - Whether `hub.auto-sync` is enabled
 - Queue stats: pending / dead counts + oldest pending timestamp
 - Data directory path (`~/.arcanon/`)
+- Latest scan quality (when worker has graph data) — TRUST-05
 
 Relay the output verbatim. If anything is obviously broken (missing
 credentials with auto-sync on, dead rows in queue), call it out with
 the appropriate next command.
+
+If a `Latest scan: NN% high-confidence (S services, C connections)` line
+is shown, the percent is the high-confidence ratio of the most recent
+successful scan (formula: `(high + 0.5*low) / total`). The line is omitted
+when the worker is offline or no completed scan exists for the project.

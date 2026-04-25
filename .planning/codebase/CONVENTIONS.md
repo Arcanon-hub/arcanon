@@ -1,310 +1,304 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-03-31
+**Analysis Date:** 2026-04-24
 
-## Languages
+Arcanon is a Claude Code plugin shipped as `plugins/arcanon/` inside the `ligamen` monorepo. The plugin is a polyglot mix of Bash (hooks, libs, scripts) and Node.js ESM (worker, MCP server, UI). Both stacks have hard-enforced naming and idiom rules as of v0.1.2.
 
-**Dual-language codebase:**
-- **Bash** (`.sh`) -- Hook scripts, utility libraries, session lifecycle (`plugins/ligamen/scripts/`, `plugins/ligamen/lib/`)
-- **JavaScript** (ESM `.js`) -- Worker process, MCP server, query engine, UI modules (`plugins/ligamen/worker/`)
+## Project Layout at a Glance
 
-All JavaScript uses **ES Modules** (`"type": "module"` in `plugins/ligamen/package.json`). Use `import`/`export`, never `require()`.
+- Plugin root: `plugins/arcanon/`
+- Bash hook entry points: `plugins/arcanon/scripts/*.sh`
+- Bash sourced helpers: `plugins/arcanon/lib/*.sh`
+- Node worker (Fastify + better-sqlite3): `plugins/arcanon/worker/{cli,db,hub-sync,lib,mcp,scan,server,ui}/*.js`
+- Slash commands: `plugins/arcanon/commands/*.md`
+- Manifests: `plugins/arcanon/.claude-plugin/{plugin,marketplace}.json`, `plugins/arcanon/hooks/hooks.json`, `plugins/arcanon/package.json`
+- Bats tests: `tests/*.bats` (repo root, not plugin root)
 
-## Naming Patterns
+## Brand & Naming (v0.1.2 hard-enforced)
 
-**Files:**
-- Shell scripts: `kebab-case.sh` (e.g., `plugins/ligamen/scripts/file-guard.sh`, `plugins/ligamen/scripts/drift-versions.sh`)
-- Shell libraries: `kebab-case.sh` in `plugins/ligamen/lib/` (e.g., `lib/detect.sh`, `lib/config.sh`, `lib/linked-repos.sh`)
-- JavaScript modules: `kebab-case.js` (e.g., `worker/db/query-engine.js`, `worker/scan/manager.js`, `worker/lib/logger.js`)
-- JavaScript tests: `{module-name}.test.js` co-located with source (e.g., `worker/db/query-engine-enrich.test.js`)
-- Bats tests: `kebab-case.bats` in `tests/` (e.g., `tests/detect.bats`, `tests/file-guard.bats`)
-- Migration files: `NNN_snake_case.js` (e.g., `worker/db/migrations/001_initial_schema.js`, `worker/db/migrations/009_confidence_enrichment.js`)
-- Command definitions: `kebab-case.md` (e.g., `plugins/ligamen/commands/cross-impact.md`, `plugins/ligamen/commands/drift.md`, `plugins/ligamen/commands/map.md`)
+### Environment variables -- `ARCANON_*` only
 
-**Functions (JavaScript):**
-- Use `camelCase` for all functions: `createHttpServer()`, `getChangedFiles()`, `buildScanContext()`, `sanitizeBindings()`
-- Factory functions: `create*` prefix: `createLogger()`, `createHttpServer()`, `createCodeownersEnricher()`
-- Setter injections: `set*` prefix: `setScanLogger()`, `setAgentRunner()`, `setExtractorLogger()`
-- Boolean checks: `is*` prefix: `isChromaAvailable()`, `isViewOnlyMode()`
-- Private/internal functions: `_` prefix: `_hasServiceEntryPoint()`, `_sortServicesForBoundaries()`
+Zero-tolerance on legacy names. No `LIGAMEN_*` fallback anywhere. No two-read fallbacks. No stderr deprecation warnings for legacy env vars -- they are removed outright.
 
-**Functions (Bash):**
-- Use `snake_case`: `detect_project_type()`, `detect_language()`, `block_file()`, `warn_file()`
+Canonical surface:
 
-**Variables (JavaScript):**
-- Constants: `UPPER_SNAKE_CASE` (e.g., `MAX_LOG_BYTES`, `VALID_PROTOCOLS`, `VALID_CONFIDENCE`, `NODE_RADIUS`, `MAX_TRANSITIVE_DEPTH`, `QUERY_TIMEOUT_MS`)
-- Module-level private state: `_` prefix (e.g., `_logger`, `_capacity`, `_cache`, `_mcpLogLevel`)
-- Local variables: `camelCase` (e.g., `logPath`, `lineObj`, `repoState`, `projectRoot`, `scanVersionId`)
-- State object properties: `camelCase` (e.g., `graphData`, `selectedNodeId`, `blastNodeId`)
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `ARCANON_DATA_DIR` | Override data directory | `$HOME/.arcanon` |
+| `ARCANON_LOG_LEVEL` | Worker + MCP log level | -- |
+| `ARCANON_WORKER_PORT` | Worker HTTP port | `37888` |
+| `ARCANON_DB_PATH` | MCP server DB override | derived from `cwd` hash |
+| `ARCANON_PROJECT_ROOT` | MCP server project override | `$PWD` |
+| `ARCANON_CHROMA_MODE` / `_HOST` / `_PORT` / `_SSL` / `_API_KEY` / `_TENANT` / `_DATABASE` | ChromaDB cloud/server config | embedded |
+| `ARCANON_CONFIG_FILE` | Override auto-discovered `arcanon.config.json` | -- |
+| `ARCANON_API_KEY` / `ARCANON_API_TOKEN` | Hub bearer | -- |
+| `ARCANON_HUB_URL` | Hub base URL | `https://api.arcanon.dev` |
+| `ARCANON_LINT_THROTTLE` | Lint throttle seconds | `30` |
+| `ARCANON_EXTRA_BLOCKED` | File-guard extra patterns (colon-separated) | -- |
+| `ARCANON_DISABLE_FORMAT` / `_LINT` / `_GUARD` / `_SESSION_START` / `_HOOK` | Escape hatches (any non-empty value disables) | unset |
+| `ARCANON_IMPACT_DEBUG` | JSONL trace file for `impact-hook.sh` | unset |
 
-**Variables (Bash):**
-- Environment variables: `UPPER_SNAKE_CASE` with `LIGAMEN_` prefix (e.g., `LIGAMEN_DISABLE_LINT`, `LIGAMEN_CONFIG_FILE`, `LIGAMEN_LINT_THROTTLE`)
-- Local script variables: `UPPER_SNAKE_CASE` (e.g., `FILE`, `LINT_OUTPUT`, `LINTER_NAME`)
-- Private/guard variables: `_` prefix (e.g., `_LIGAMEN_CONFIG_LOADED`, `_linked_repo_path`, `_extra_patterns`)
+See `plugins/arcanon/lib/data-dir.sh` for the canonical resolver pattern -- it reads `ARCANON_DATA_DIR` only, falls back to `$HOME/.arcanon`, and never consults legacy names.
 
-**Types/Classes:**
-- `PascalCase`: `QueryEngine`, `StmtCache`
+### Slash commands -- `/arcanon:<verb>`
 
-**Database/Schema:**
-- `snake_case` for SQL column names: `source_service_id`, `target_service_id`, `root_path`, `auth_mechanism`, `scan_version_id`
-- Foreign keys named `{entity}_id`: `repo_id`, `actor_id`, `service_id`
+All commands live under `plugins/arcanon/commands/*.md`, one file per verb. The v0.1.2 surface is 7 canonical verbs plus 1 deprecated stub:
 
-**Environment Variables:**
-- All custom env vars use `LIGAMEN_` prefix
-- Disable toggles follow `LIGAMEN_DISABLE_{FEATURE}=1` pattern: `LIGAMEN_DISABLE_FORMAT`, `LIGAMEN_DISABLE_LINT`, `LIGAMEN_DISABLE_GUARD`
-- Configuration overrides: `LIGAMEN_LINT_THROTTLE`, `LIGAMEN_DATA_DIR`, `LIGAMEN_LOG_LEVEL`, `LIGAMEN_WORKER_PORT`
-- Extra patterns: `LIGAMEN_EXTRA_BLOCKED` (colon-separated glob patterns)
+| Verb | File | Purpose |
+|------|------|---------|
+| `/arcanon:map` | `commands/map.md` | Scan repo graph |
+| `/arcanon:impact` | `commands/impact.md` | Impact query (absorbed legacy cross-impact) |
+| `/arcanon:drift` | `commands/drift.md` | Cross-repo diff |
+| `/arcanon:sync` | `commands/sync.md` | Canonical upload + drain verb |
+| `/arcanon:upload` | `commands/upload.md` | DEPRECATED stub forwarding to `sync` |
+| `/arcanon:status` | `commands/status.md` | Worker + hub health |
+| `/arcanon:login` | `commands/login.md` | Hub auth |
+| `/arcanon:export` | `commands/export.md` | Mermaid / DOT / HTML export |
+| `/arcanon:update` | `commands/update.md` | Self-update flow |
 
-## Code Style
+`upload.md` is the *one* deprecation grace exception post-v0.1.2; it is kept for a single release only.
 
-**Formatting:**
-- The `plugins/ligamen/scripts/format.sh` hook auto-formats on every file write via PostToolUse
-- JavaScript/TypeScript: prettier (preferred) or eslint --fix
-- Python: ruff format (preferred) or black
-- Rust: rustfmt
-- Go: gofmt
-- JSON/YAML: prettier
-- Format hook always exits 0 (non-blocking) per FMTH-10 convention
-- No project-level `.eslintrc` or `.prettierrc` config files (formatting delegated to hook + tool defaults)
+### Config file -- `arcanon.config.json`
 
-**Linting:**
-- The `plugins/ligamen/scripts/lint.sh` hook runs language-specific linters on PostToolUse
-- JavaScript/TypeScript: eslint (local resolution preferred: `node_modules/.bin/eslint`)
-- Python: ruff check
-- Rust: cargo clippy (with configurable throttle, default 30 seconds per project)
-- Go: golangci-lint
-- Shell scripts: shellcheck (run via `make lint` with `-x -e SC1091` flags)
-- Lint hook always exits 0 per LNTH-07 convention; output truncated to 30 lines per LNTH-06
+- Always at repo root: `arcanon.config.json`
+- No `ligamen.config.json` fallback
+- Example template: `plugins/arcanon/arcanon.config.json.example`
+- Repo-local example: `arcanon.config.json` at repo root
+- Resolver: `plugins/arcanon/lib/config-path.sh` (`resolve_arcanon_config`)
+- Common keys: `project-name`, `linked-repos`, `hub.auto-sync` (renamed from `auto-upload`), `hub.url`, `hub.beta_features.library_deps`, `impact-map` (worker opt-in)
 
-**Indentation:**
-- JavaScript: 2 spaces
-- Shell: 2 spaces
-- SQL in JavaScript: 2 spaces inside template literals, indented relative to surrounding code
+### Data directory layout
 
-**String Quoting (JavaScript):**
-- Double quotes for strings consistently: `"node:test"`, `"INFO"`, `"rest"`
-- Template literals for interpolation: `` `received ${signal}, shutting down` ``
-- Trailing commas in multi-line function arguments and object literals
+- Root: `$ARCANON_DATA_DIR` or `$HOME/.arcanon/` -- no `~/.ligamen` fallback
+- Per-project DB: `projects/<sha256(cwd)[:12]>/impact-map.db`
+- The 12-char prefix is computed from `printf '%s' "$cwd" | sha256sum | cut -c1-12` on the shell side and `crypto.createHash('sha256').update(cwd).digest('hex').slice(0, 12)` on the Node side. The `printf '%s'` (no newline) form is required to match Node's `update(cwd)`.
 
-**Module System:**
-- ES modules exclusively (`"type": "module"` in `plugins/ligamen/package.json`)
-- All imports include `.js` extension (required for ESM resolution)
-- Use `node:` protocol prefix for built-in modules: `"node:fs"`, `"node:path"`, `"node:os"`, `"node:test"`, `"node:assert/strict"`
+## Bash Conventions
 
-## Import Organization
+### File layout
 
-**Order (JavaScript ES modules):**
-1. Node.js builtins with `node:` protocol prefix (e.g., `import fs from "node:fs"`, `import path from "node:path"`)
-2. Third-party packages (e.g., `import Database from "better-sqlite3"`, `import Fastify from "fastify"`)
-3. Local project imports using relative paths (e.g., `import { QueryEngine } from "./query-engine.js"`)
+- `plugins/arcanon/scripts/*.sh` -- hook entry points, always executable, usually invoked by Claude Code
+- `plugins/arcanon/lib/*.sh` -- sourced helpers, never executed directly
 
-**Path Aliases:**
-- None. All imports use relative paths with explicit `.js` extensions.
+### Shebang and strictness
 
-**Shell Sourcing:**
-- Guard against direct execution: `[[ "${BASH_SOURCE[0]}" != "${0}" ]] || { echo "Source this file; do not execute directly." >&2; exit 1; }`
-- Use `$CLAUDE_PLUGIN_ROOT` for cross-file references from hooks to lib
-- Source guard pattern to prevent double-loading: `_LIGAMEN_CONFIG_LOADED` variable
-- Use `source` (not `.`) for clarity
+Every script begins with:
 
-## Error Handling
-
-**JavaScript Patterns:**
-- Try/catch with empty catch for optional operations (settings not available, file not found):
-  ```javascript
-  try { /* operation */ } catch { /* File does not exist yet -- use defaults */ }
-  ```
-- Functions return `null` or empty arrays on failure, not exceptions:
-  ```javascript
-  export function getQueryEngine(projectRoot) {
-    if (!projectRoot) return null;
-    // ...
-    if (!fs.existsSync(dbPath)) return null;
-  }
-  ```
-- Validation functions return result objects: `{ valid: true, findings, warnings }` or `{ valid: false, error }`
-- Database operations use transactions for atomicity: `db.transaction(() => { ... })()`
-- Throw `Error` for programmer errors only: `throw new Error("agentRunner not initialized")`
-- Lock files validated with try-catch on JSON parse; corrupted locks removed silently
-
-**HTTP Error Responses:**
-- Structured `{ error: message }` JSON with appropriate status codes
-- 400 for missing/invalid parameters
-- 404 for not-found resources
-- 500 for internal errors (log error, return `{ error: err.message }`)
-- 503 for "data not yet available" (e.g., no scan data)
-
-**Shell Patterns:**
-- `set -euo pipefail` at top of executable scripts (not sourced libraries)
-- Sourced libraries intentionally omit `set -e`: "sourcing context owns error handling"
-- `|| true` suffix for non-critical commands that might fail
-- Exit code conventions: 0 = success/allow, 2 = hard block (PreToolUse deny)
-- `2>/dev/null` redirects for optional command checks
-
-**Hook Error Handling:**
-- Format hook: always exits 0 (non-blocking, FMTH-10)
-- Lint hook: always exits 0 (LNTH-07), lint output delivered as systemMessage JSON
-- File guard: exits 0 for allow/warn, exits 2 for hard block with hookSpecificOutput JSON
-- Example safe format call: `ruff format "$FILE" >/dev/null 2>&1 || true`
-
-## Logging
-
-**Framework:** Custom structured logger at `plugins/ligamen/worker/lib/logger.js`
-
-**Patterns:**
-- JSON-structured log lines written to `{dataDir}/logs/worker.log`
-- Each line contains: `ts`, `level`, `msg`, `pid`, `port` (optional), `component`
-- Four log levels: `DEBUG < INFO < WARN < ERROR`
-- Log level filtering at creation time via `logLevel` parameter (default: `"INFO"`)
-- Extra fields merged via `Object.assign(lineObj, extra)` pattern
-- Size-based rotation at 10 MB threshold, keeping at most 3 rotated files (.1, .2, .3)
-- TTY-aware: writes to stderr only when `process.stderr.isTTY` is truthy
-- Component tag pattern: each module gets its own component (e.g., `'worker'`, `'http'`, `'scan'`, `'mcp'`)
-
-**Logger Usage:**
-```javascript
-const logger = createLogger({ dataDir, port, logLevel, component: 'worker' });
-logger.log("INFO", "worker started", { port });
-logger.info("ChromaDB connected");
-logger.error("query failed", { route: '/graph', stack: err.stack });
-```
-
-**Logger Injection:**
-- Setter functions: `setScanLogger(logger)`, `setExtractorLogger(logger)`
-- Silent no-op when logger not injected: `if (_logger) _logger.log(...)`
-
-**Shell Logging:**
-- Stderr for warnings/errors: `echo "message" >&2`
-- Stdout reserved for machine-readable JSON output (especially in hook scripts)
-
-**Critical Rule:** Never use `console.log` in MCP server code (`plugins/ligamen/worker/mcp/server.js`). The lint hook enforces this -- `console.log` in the MCP server corrupts the JSON-RPC session. Use `console.error()` for MCP server debugging.
-
-## Comments
-
-**Section Headers:**
-- Use `// ---------------------------------------------------------------------------` (75 dashes) separator lines in both JS and Bash
-- Number major sections: `// 1. Parse CLI args`, `// 2. Read settings.json`, etc.
-- Use `# -- Section Title ----...` for bash sub-sections
-
-**File-Level Documentation:**
-- Every JavaScript module starts with a JSDoc comment describing purpose, exports, and usage
-- Shell scripts include header comments with purpose, event triggers, and exit code contracts
-
-**Requirement Tags:**
-- Every test file starts with a comment block listing which requirements it covers
-- Use ticket-style tags: `TEST-01`, `FMTH-07`, `CONF-02`, `LNTH-06`, `GRDH-03`, etc.
-- Example: `# Covers: FMTH-07 (silent success), FMTH-09 (skip generated directories)`
-- Use inline tags for individual rules: `// SREL-01 (THE-933):`, `// OWN-01`
-
-**JSDoc:**
-- Full JSDoc for all exported functions with `@param`, `@returns`
-- Type annotations reference external types: `@param {import('better-sqlite3').Database} db`
-- `@typedef` for complex object shapes:
-  ```javascript
-  /** @typedef {{ name: string, root_path: string, language: string, confidence: string }} Service */
-  ```
-
-## Function Design
-
-**Size:** Functions are focused and typically 10-50 lines. Core logic functions may be 50-200 lines.
-
-**Parameters:**
-- Positional params for required args, options object for optional config
-- Pattern: `function(required1, required2, options = {})`
-- Options destructured: `const { limit = 20, skipChroma = false } = options`
-- Query engine methods take plain objects: `upsertService({ repo_id, name, root_path, language })`
-
-**Return Values:**
-- Upsert methods return objects with `id` property: `upsertRepo() => { id }`
-- Query methods return arrays: `transitiveImpact() => [{ name, depth, ... }]`
-- Classification returns sorted arrays: `classifyImpact() => [{ severity, ... }]`
-- Search returns typed arrays: `search() => [{ kind, ... }]`
-- Validation: `{ valid: true, findings, warnings }` or `{ valid: false, error }`
-- Always return arrays (never null/undefined) for list operations -- use `[]` for empty
-
-## Module Design
-
-**Exports:**
-- Named exports only (`export function`, `export class`, `export const`)
-- No default exports
-- Test helpers exported with `_` prefix for testability: `export function _resetForTest()`
-- Migration modules export `version` (number) and `up(db)` function
-
-**Barrel Files:**
-- Not used. Each module is imported directly by path.
-
-**Singletons:**
-- Database instance cached and returned via `openDb()` / `getDb()`
-- Logger instance injected via setter, cached in `_logger`
-- Query engine per project in `plugins/ligamen/worker/db/pool.js` Map
-
-**Dependency Injection for Testability:**
-- `setAgentRunner(fn)` -- inject mock agent runner for scan tests
-- `setScanLogger(logger)` -- inject/suppress logging in tests
-- `_resetForTest()` -- reset module-level state between test runs
-- `initChromaSync(settings, mockClient)` -- accepts mock ChromaDB client
-- This pattern eliminates the need for mocking/stubbing libraries
-
-## Commit Message Conventions
-
-**Format:** Conventional Commits with scope
-- `feat(scope): description` for new features
-- `fix: description` for bug fixes
-- `chore: description` for maintenance tasks, version bumps
-- `docs(scope): description` for documentation
-- `refactor: description` for code restructuring
-
-**Scope patterns:**
-- Phase number: `feat(89-01):`, `docs(phase-91):`
-- Phase sub-plan: `docs(89-01/02):`
-- Feature area: `docs(89-crossing-semantics):`
-
-**Message style:**
-- Lowercase after prefix
-- Imperative mood: "add", "fix", "complete", "create", "bump"
-- Optional em-dash for detail: `docs(89-01/02): complete crossing-semantics plans -- CROSS-01, CROSS-02`
-- Milestone bumps: `chore: bump all manifests to vX.Y.Z`
-- Milestone completion: `chore: complete vX.Y.Z {Milestone Name} milestone`
-
-## Shell Script Conventions
-
-**Shebang:** `#!/usr/bin/env bash` for all shell scripts
-
-**Header pattern for executable scripts:**
 ```bash
 #!/usr/bin/env bash
+# <path> -- <one-line purpose>
 set -euo pipefail
 ```
 
-**Header pattern for sourced libraries:**
+Hooks additionally add a non-blocking trap:
+
 ```bash
-#!/usr/bin/env bash
-# No set -e here -- sourcing context owns error handling.
+trap 'exit 0' ERR
 ```
 
-**JSON handling in hooks:**
-- Read stdin once: `INPUT=$(cat)`
-- Parse with jq using null-coalescing: `jq -r '.tool_input.file_path // empty'`
-- Emit JSON output via jq for safe escaping: `printf '%s' "$MSG" | jq -Rs .`
-- Hook output schemas:
-  - SystemMessage: `{"systemMessage": "..."}`
-  - PreToolUse deny: `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}`
+`file-guard.sh` is the sole exception that deliberately avoids `set -e` because `realpath` can fail on pending files; it uses explicit exit codes instead.
 
-**macOS Compatibility:**
-- Avoid `mapfile` (not available in bash 3.2); use `while IFS= read -r` instead
-- Avoid GNU-specific flags (e.g., `realpath -m`); provide BSD fallbacks
-- Use `cksum` instead of `md5sum` for portability
-- Path normalization with BSD-compatible fallback (see `plugins/ligamen/scripts/file-guard.sh` lines 33-41)
+### Source guard for `lib/*.sh`
 
-## JSON Configuration Convention
+Every sourced helper starts with a source-only guard:
 
-**Config file:** `ligamen.config.json` in project root
-- Key naming: `kebab-case` for top-level keys: `"linked-repos"`, `"impact-map"`, `"project-name"`
-- Example: `{"linked-repos":["../api"],"impact-map":{"history":true},"project-name":"ligamen"}`
+```bash
+[[ "${BASH_SOURCE[0]}" != "${0}" ]] || { echo "Source this file; do not execute directly." >&2; exit 1; }
+```
 
-**Settings file:** `~/.ligamen/settings.json` for user-level settings
-- Key naming: `LIGAMEN_UPPER_SNAKE_CASE` keys: `"LIGAMEN_LOG_LEVEL"`, `"LIGAMEN_WORKER_PORT"`, `"LIGAMEN_CHROMA_MODE"`
+See `plugins/arcanon/lib/worker-client.sh:7` for the canonical pattern.
+
+### Exit code semantics
+
+- Hooks are **warn-only**: they always `exit 0`. Warnings and context are emitted as `hookSpecificOutput` JSON on stdout or human text on stderr.
+- Only `plugins/arcanon/scripts/file-guard.sh` uses `exit 2` for a hard block (Claude Code PreToolUse deny contract).
+- Escape-hatch env vars short-circuit with `exit 0` silently -- e.g., `[[ -n "${ARCANON_DISABLE_SESSION_START:-}" ]] && exit 0`.
+
+### Hook JSON output contract
+
+Hooks that inject context print a `hookSpecificOutput` object:
+
+```bash
+CONTEXT_JSON=$(printf '%s' "$CONTEXT" | jq -Rs .)
+printf '{"hookSpecificOutput":{"hookEventName":"%s","additionalContext":%s}}\n' \
+  "$EVENT" \
+  "$CONTEXT_JSON"
+```
+
+All user-supplied strings go through `jq -Rs .` for safe escaping.
+
+### Worker HTTP client
+
+`plugins/arcanon/lib/worker-client.sh` is sourced by any script that needs to talk to the Node worker. It exposes `worker_running`, `worker_call`, `wait_for_worker`, `worker_start_background`, and `worker_status_line`. `session-start.sh` sources it to perform version-check + restart-if-stale on every `UserPromptSubmit`.
+
+### Plugin-root resolution pattern
+
+Scripts resolve the plugin root in a consistent order:
+
+```bash
+if [[ -n "${CLAUDE_PLUGIN_ROOT:-}" ]] && [[ -f "${CLAUDE_PLUGIN_ROOT}/lib/detect.sh" ]]; then
+  DETECT_LIB="${CLAUDE_PLUGIN_ROOT}/lib/detect.sh"
+else
+  SCRIPT_DIR="$(dirname "$0")"
+  DETECT_LIB="${SCRIPT_DIR}/../lib/detect.sh"
+fi
+```
+
+Prefer `CLAUDE_PLUGIN_ROOT` when set; fall back to `$0`-relative path. Never hard-code `$HOME/.claude/plugins/...`.
+
+### Portability rules
+
+- macOS Bash 4+ required. CI injects Homebrew bash via PATH in bats `setup()`.
+- Portable date parsing: try GNU `date -d` first, then BSD `date -jf '%Y-%m-%d %H:%M:%S'`.
+- Portable sha256: prefer `shasum -a 256`, fall back to `sha256sum`.
+- `realpath -m` is Linux-only; macOS fallback uses `cd "$dir" && pwd`.
+
+### Shellcheck
+
+Every script and lib must pass `shellcheck -x --severity=error -e SC1091`. The `-e SC1091` is required because sourced paths are resolved at runtime. Use `# shellcheck source=path/to/file.sh` directives above `source` calls to give shellcheck a static hint.
+
+## Node (JavaScript) Conventions
+
+### Module system
+
+- `plugins/arcanon/package.json` declares `"type": "module"` -- every `.js` file is ESM.
+- **All imports must include the `.js` extension.** Example from `plugins/arcanon/worker/db/query-engine.js:24-25`:
+
+```js
+import { chromaSearch, isChromaAvailable } from "../server/chroma.js";
+import { resolveConfigPath } from "../lib/config-path.js";
+```
+
+- No `NODE_PATH` reliance. The MCP server installs deps into `CLAUDE_PLUGIN_ROOT` and imports use only relative paths.
+- Node engine: `>=20.0.0` (package.json `engines`).
+
+### File organization
+
+Worker subdirectories, each owning one concern:
+
+| Dir | Purpose |
+|-----|---------|
+| `worker/cli/` | CLI entry point(s) |
+| `worker/db/` | Database schema, migrations, query engine, pool |
+| `worker/hub-sync/` | Hub upload / drain client |
+| `worker/lib/` | Shared utilities (logger, paths, etc.) |
+| `worker/mcp/` | MCP server (stdin/stdout) |
+| `worker/scan/` | Scan manager, agent prompt orchestration |
+| `worker/server/` | Fastify HTTP server, ChromaDB client |
+| `worker/ui/` | Static UI assets |
+
+### File naming
+
+- Source: `kebab-case.js` (`query-engine.js`, `hub-sync.js`, `worker-client.js`).
+- Tests: `<module>.test.js` co-located beside the source (`query-engine.js` + `query-engine-search.test.js`).
+- Multiple tests per module split on suffix: `query-engine-enrich.test.js`, `query-engine-search.test.js`, `query-engine-actors.test.js`, etc.
+- Migrations: numbered `NNN_name.js` (`worker/db/migrations/011_services_boundary_entry.js`).
+
+### Class and function naming
+
+- Classes: `PascalCase` (`QueryEngine`, `StmtCache`).
+- Functions and methods: `camelCase` (`openDb`, `resolveConfigPath`, `enrichImpactResult`).
+- Factory / predicate / setter prefixes remain in effect: `create*`, `is*`, `set*`, `_privateHelper`.
+- Constants: `SCREAMING_SNAKE_CASE` for module-level immutable config; module-scoped private helpers use leading underscore (`_stmtCache`, `_capacity`).
+
+### Export patterns
+
+- Named exports for public API (`export class QueryEngine`, `export function search`, `export const version = 11`).
+- No default exports in library modules.
+- Tests import from the adjacent module:
+
+```js
+import { search, _stmtCache, StmtCache } from "./query-engine.js";
+```
+
+- Migrations export `version: N` plus an `up(db)` function.
+
+### Migration idioms
+
+Migrations under `plugins/arcanon/worker/db/migrations/`:
+
+```js
+export const version = 11;
+
+export function up(db) {
+  const hasCol = (table, col) =>
+    db.prepare("PRAGMA table_info(" + table + ")").all().some((c) => c.name === col);
+  if (!hasCol("services", "boundary_entry")) {
+    db.exec("ALTER TABLE services ADD COLUMN boundary_entry TEXT;");
+  }
+}
+```
+
+Rules:
+
+- Additive columns: gate with `PRAGMA table_info` (see `009_confidence_enrichment.js`, `011_services_boundary_entry.js`).
+- New tables: `CREATE TABLE IF NOT EXISTS` (see `010_service_dependencies.js`).
+- **No `down()` migrations.** Schema drift is handled at runtime via prepared-statement `try/catch` fallbacks inside `QueryEngine`.
+
+### Error and logging style
+
+- Logger module at `plugins/arcanon/worker/lib/logger.js` honours `ARCANON_LOG_LEVEL`.
+- Never `console.log` in MCP server code (`plugins/arcanon/worker/mcp/server.js`) -- it corrupts JSON-RPC. Use `console.error` for MCP debugging; shell lint enforces.
+- Throw `Error` subclasses for programmer errors; return `null` / empty arrays for "not found" semantics.
+- Validation functions return `{ valid: true, findings, warnings }` or `{ valid: false, error }`.
+
+### Comments and docstrings
+
+- Every module begins with a file-level block comment explaining its role. Example -- `plugins/arcanon/worker/db/query-engine.js:1-17`.
+- JSDoc `@param` is used for better-sqlite3 Database params and for caller-facing helpers, e.g. `@param {import('better-sqlite3').Database} db`.
+- Inline comments reference the phase/issue that introduced the code (e.g., `// REL-04`, `// Phase 14-02`, `// Issue #18 (Bug 2)`). This is deliberate -- it lets future readers trace decisions.
+
+### Async
+
+- Prefer `async/await`; avoid raw `.then()` chains.
+- Top-level `await` is allowed (ESM) and used in test files that do one-shot setup.
+
+## JSON Manifest Conventions
+
+- `plugins/arcanon/.claude-plugin/plugin.json` -- name must be `"arcanon"` (CI asserts this).
+- `plugins/arcanon/.claude-plugin/marketplace.json` -- name and `plugins[0].name` must both be `"arcanon"`.
+- `plugins/arcanon/hooks/hooks.json` -- registers which script runs on which event.
+- All JSON must pass `jq empty` (CI `lint-manifests` job).
+
+## Deprecation Policy (post-v0.1.2)
+
+- **Zero tolerance** on legacy names. When a name is renamed, the old form is removed outright -- no two-read fallback, no stderr warning.
+- `hub.auto-upload` -> `hub.auto-sync` was renamed this way. Config reader reads `auto-sync` only.
+- The single exception is `/arcanon:upload` which is a deprecated stub forwarding to `/arcanon:sync` for one release grace.
+
+## Commit Message Style
+
+Conventional prefixes with optional phase-plan scope:
+
+- `feat(NN-MM): <imperative summary>` -- new feature inside a phase
+- `fix(NN-MM): ...` -- bug fix
+- `refactor(NN-MM): ...` -- no behaviour change
+- `docs(NN-MM): ...` -- docs-only
+- `test(NN-MM): ...` -- tests only
+- `chore: ...` -- no phase scope
+
+`NN-MM` references the phase-plan ID (e.g., `feat(101-01): purge LIGAMEN_* env names`).
+
+Every commit authored with Claude assistance ends with:
+
+```
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+```
+
+## Where to Add New Code
+
+| Situation | Location |
+|-----------|----------|
+| New slash command | `plugins/arcanon/commands/<verb>.md` + register in `plugins/arcanon/.claude-plugin/plugin.json` |
+| New hook | `plugins/arcanon/scripts/<hook>.sh` + wire in `plugins/arcanon/hooks/hooks.json` |
+| New sourced helper | `plugins/arcanon/lib/<name>.sh` (with source guard) |
+| New worker HTTP route | `plugins/arcanon/worker/server/*.js` |
+| New MCP tool | `plugins/arcanon/worker/mcp/*.js` |
+| New DB schema change | `plugins/arcanon/worker/db/migrations/NNN_<name>.js` |
+| New scan capability | `plugins/arcanon/worker/scan/*.js` |
+| New test (shell) | `tests/<subsystem>.bats` |
+| New test (node) | `plugins/arcanon/worker/**/<module>.test.js` co-located |
 
 ---
 
-*Convention analysis: 2026-03-31*
+*Convention analysis: 2026-04-24*

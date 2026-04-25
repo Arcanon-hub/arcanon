@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 #
 # commands-surface.bats — CLN-09 regression: the seven surviving commands
-# of v0.1.1 are present with valid frontmatter, the deprecated /arcanon:upload
-# stub is in place with proper deprecation markers, and /arcanon:cross-impact
-# has been fully removed.
+# of v0.1.1 are present with valid frontmatter, /arcanon:cross-impact has
+# been fully removed (CLN-01), and /arcanon:upload has been fully removed
+# (DEP-03 regression guard against accidental re-add).
 
 setup() {
   PLUGIN_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")/../plugins/arcanon" && pwd)"
@@ -30,31 +30,8 @@ setup() {
   [ ! -f "$PLUGIN_DIR/commands/cross-impact.md" ]
 }
 
-@test "CLN-05: /arcanon:upload exists as deprecated stub" {
-  [ -f "$PLUGIN_DIR/commands/upload.md" ]
-  run grep -c 'DEPRECATED' "$PLUGIN_DIR/commands/upload.md"
-  [ "$status" -eq 0 ]
-  [ "$output" -ge 1 ]
-}
-
-@test "CLN-05: /arcanon:upload stub description starts with [DEPRECATED]" {
-  run grep -E '^description: "\[DEPRECATED\]' "$PLUGIN_DIR/commands/upload.md"
-  [ "$status" -eq 0 ]
-}
-
-@test "CLN-05: /arcanon:upload stub emits deprecation warning to stderr" {
-  run grep '>&2' "$PLUGIN_DIR/commands/upload.md"
-  [ "$status" -eq 0 ]
-}
-
-@test "CLN-05: /arcanon:upload stub forwards arguments to hub.sh upload" {
-  run grep 'hub.sh upload \$ARGUMENTS' "$PLUGIN_DIR/commands/upload.md"
-  [ "$status" -eq 0 ]
-}
-
-@test "CLN-05: /arcanon:upload stub carries v0.2.0 removal anchor" {
-  run grep 'remove in v0.2.0' "$PLUGIN_DIR/commands/upload.md"
-  [ "$status" -eq 0 ]
+@test "DEP-03: /arcanon:upload command file has been removed (regression guard)" {
+  [ ! -f "$PLUGIN_DIR/commands/upload.md" ]
 }
 
 @test "CLN-03: /arcanon:sync advertises --drain, --repo, --dry-run, --force in argument-hint" {

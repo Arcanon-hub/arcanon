@@ -47,6 +47,29 @@ If the repo also contains shared libraries (e.g. `lib/`, `packages/`), report th
 For `type: "service"`: list every endpoint as `"METHOD /path"` or `"topic-name"` for events.
 For `type: "library"` in the same repo: list exported function signatures as `"functionName(param: Type): ReturnType"`.
 
+## base_path Field (optional)
+
+If your service is exposed under a URL prefix that the reverse proxy, ingress, or framework router **strips before forwarding** to your handlers, set `base_path` to that prefix. This lets connection resolution match an outbound `/api/users` (caller view) against your service's internal `/users` (handler view), eliminating false-mismatch findings.
+
+**When to emit `base_path`:**
+
+- Express: `app.use('/api', router)` — routes are exposed under `/api/*` externally → `base_path: "/api"`
+- Spring Boot: `@RequestMapping("/api")` on a controller class → `base_path: "/api"`
+- FastAPI: `app.include_router(api_router, prefix="/api")` → `base_path: "/api"`
+- NestJS: `@Controller({ path: 'api' })` at the controller class → `base_path: "/api"`
+- Reverse proxy / API Gateway: nginx `location /api/ { proxy_pass http://svc/; }` strips `/api/` before forwarding → `base_path: "/api"`
+- Kubernetes Ingress with `pathType: Prefix` and `path: /api` rewriting to `/` → `base_path: "/api"`
+
+**When NOT to emit `base_path` (leave absent or null):**
+
+- Service exposes routes at the root (`/users`, `/orders` directly with no shared prefix).
+- Each route declares its own absolute path with no shared prefix.
+- The prefix is preserved in forwarding (the backend genuinely receives `/api/users` and you list `"GET /api/users"` in `exposes`).
+
+**Format:** `"/api"` or `"/api/v1"` (multi-segment supported). No trailing slash. Always starts with `/`.
+
+**`exposes` interaction:** When you set `base_path`, `exposes` continues to list the **internal** route paths the handler sees (e.g., `"GET /users"`), NOT the external `/api/users` path. The matcher applies `base_path` automatically.
+
 ## Connection Path Format
 
 | Protocol | Path format | Example |
@@ -82,6 +105,7 @@ For `sdk` connections: the `path` must be the specific exported function(s) the 
       "language": "typescript",
       "type": "service",
       "boundary_entry": "src/index.ts",
+      "base_path": "/api",
       "exposes": ["GET /users", "GET /users/{id}", "POST /users"],
       "confidence": "high"
     }
@@ -93,11 +117,11 @@ For `sdk` connections: the `path` must be the specific exported function(s) the 
       "protocol": "rest",
       "crossing": "cross-service",
       "method": "POST",
-      "path": "/auth/validate",
+      "path": "/api/auth/validate",
       "source_file": "src/middleware/auth.ts:validateToken",
       "target_file": null,
       "confidence": "high",
-      "evidence": "const res = await fetch('/auth/validate', { method: 'POST' })"
+      "evidence": "const res = await fetch('/api/auth/validate', { method: 'POST' })"
     },
     {
       "source": "user-api",

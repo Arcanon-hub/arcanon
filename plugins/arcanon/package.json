@@ -1,6 +1,6 @@
 {
   "name": "@arcanon/plugin",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Arcanon — cross-repo service dependency scanner for Claude Code",
   "license": "AGPL-3.0-only",
   "type": "module",

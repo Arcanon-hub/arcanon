@@ -10,6 +10,129 @@ import { resolveConfigPath } from "../lib/config-path.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
+ * Compute the verify verdict for a single connection (TRUST-01).
+ *
+ * Pure function — no side effects, no DB access, no network. Reads the
+ * cited source_file from disk and inspects the literal `evidence` snippet.
+ *
+ * @param {object} conn - Row with { connection_id, source_file, method, path, evidence }
+ * @param {string} projectRoot - Absolute path to the project root (used to
+ *                               resolve relative source_file paths)
+ * @returns {{
+ *   connection_id: number,
+ *   verdict: 'ok'|'moved'|'missing'|'method_mismatch',
+ *   source_file: string|null,
+ *   line_start: number|null,
+ *   line_end: number|null,
+ *   evidence_present: boolean,
+ *   snippet: string|null,
+ *   message: string|null,
+ *   method: string|null
+ * }}
+ */
+function computeVerdict(conn, projectRoot) {
+  const base = {
+    connection_id: conn.connection_id,
+    source_file: conn.source_file || null,
+    line_start: null,
+    line_end: null,
+    evidence_present: false,
+    snippet: null,
+    message: null,
+    method: conn.method || null,
+  };
+
+  // 1. Missing source_file column → treat as moved (cannot verify).
+  if (!conn.source_file) {
+    return {
+      ...base,
+      verdict: "moved",
+      message: "no source_file recorded on connection",
+    };
+  }
+
+  const absPath = path.resolve(projectRoot, conn.source_file);
+
+  // 2. File does not exist → moved.
+  if (!fs.existsSync(absPath)) {
+    return {
+      ...base,
+      verdict: "moved",
+      message: "source_file not found at recorded path",
+    };
+  }
+
+  // 3. File exists — read it. Permission errors are reported as moved
+  //    (same user remedy: rescan / fix the path).
+  let content;
+  try {
+    content = fs.readFileSync(absPath, "utf8");
+  } catch (err) {
+    return {
+      ...base,
+      verdict: "moved",
+      message: `cannot read source_file: ${err.message}`,
+    };
+  }
+
+  // 4. No evidence recorded — pre-Phase-109 connection. Degraded but not
+  //    a failure: verdict ok with evidence_present=false.
+  const evidence =
+    typeof conn.evidence === "string" ? conn.evidence.trim() : "";
+  if (!evidence) {
+    return {
+      ...base,
+      verdict: "ok",
+      message: "no-evidence-recorded",
+    };
+  }
+
+  // 5. Search for literal evidence substring anywhere in the file.
+  const matchIdx = content.indexOf(evidence);
+  if (matchIdx === -1) {
+    return {
+      ...base,
+      verdict: "missing",
+      message: "evidence snippet not found in file",
+    };
+  }
+
+  // 6. Found — compute 1-indexed line_start by counting newlines before
+  //    the match index, line_end by adding newlines inside the snippet.
+  const lineStart = (content.slice(0, matchIdx).match(/\n/g) || []).length + 1;
+  const newlinesInSnippet = (evidence.match(/\n/g) || []).length;
+  const lineEnd = lineStart + newlinesInSnippet;
+  const truncatedSnippet =
+    evidence.length > 80 ? evidence.slice(0, 80) + "…" : evidence;
+
+  // 7. If method recorded, check it appears as a whole word in the snippet.
+  if (conn.method && String(conn.method).trim().length > 0) {
+    const methodEsc = String(conn.method).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const methodRe = new RegExp(`\\b${methodEsc}\\b`, "i");
+    if (!methodRe.test(evidence)) {
+      return {
+        ...base,
+        verdict: "method_mismatch",
+        line_start: lineStart,
+        line_end: lineEnd,
+        evidence_present: true,
+        snippet: truncatedSnippet,
+        message: `method '${conn.method}' not found in evidence`,
+      };
+    }
+  }
+
+  return {
+    ...base,
+    verdict: "ok",
+    line_start: lineStart,
+    line_end: lineEnd,
+    evidence_present: true,
+    snippet: truncatedSnippet,
+  };
+}
+
+/**
  * Create and start a Fastify HTTP server exposing the query engine over REST.
  *
  * The worker is project-agnostic. Each request includes a `?project=` query
@@ -79,6 +202,239 @@ async function createHttpServer(queryEngine, options = {}) {
     } catch {
       return reply.send({ version: "unknown" });
     }
+  });
+
+  /**
+   * 1c. GET /api/scan-quality — Latest scan's quality breakdown (TRUST-05, D-05)
+   *
+   * Used by `/arcanon:status` (via worker/cli/hub.js cmdStatus) to surface the
+   * "Latest scan: NN% high-confidence (S services, C connections)" line. The
+   * /arcanon:map command does NOT use this endpoint — it calls
+   * QueryEngine.getScanQualityBreakdown() directly via the inline-Node DB
+   * handle in commands/map.md Step 5.
+   *
+   * Status codes (locked in CONTEXT D-05):
+   *   200 — body matches the documented shape (see schema below)
+   *   503 — { error: "no_scan_data" } when the resolver returned a QE but no
+   *         scan_versions row has a non-null completed_at
+   *   404 — { error: "project_not_found" } when the caller passed ?project=
+   *         and resolveQueryEngine returned null
+   *
+   * Response 200 shape:
+   *   {
+   *     scan_version_id: number,
+   *     completed_at: string,
+   *     quality_score: number | null,
+   *     total_connections: number,
+   *     high_confidence: number,
+   *     low_confidence: number,
+   *     null_confidence: number,
+   *     prose_evidence_warnings: number,   // 0 today (D-01 placeholder)
+   *     service_count: number,
+   *   }
+   *
+   * Query params:
+   *   project=<absolute-root>   optional — selects the per-project DB. When
+   *                              omitted, falls back to the static queryEngine
+   *                              (test-only path).
+   */
+  fastify.get("/api/scan-quality", async (request, reply) => {
+    const project = request.query?.project;
+    const qe = getQE(request);
+    if (!qe) {
+      // Distinguish 404 (caller asked for a specific project that does not
+      // resolve) from 503 (no project arg AND no static QE — server has no
+      // data). The /api/scan-quality contract maps these to project_not_found
+      // and no_scan_data respectively.
+      if (project) {
+        return reply.code(404).send({ error: "project_not_found" });
+      }
+      return reply.code(503).send({ error: "no_scan_data" });
+    }
+    try {
+      const latest = qe._db
+        .prepare(
+          `SELECT id FROM scan_versions
+            WHERE completed_at IS NOT NULL
+            ORDER BY completed_at DESC, id DESC
+            LIMIT 1`,
+        )
+        .get();
+      if (!latest) {
+        return reply.code(503).send({ error: "no_scan_data" });
+      }
+      const breakdown = qe.getScanQualityBreakdown(latest.id);
+      if (!breakdown) {
+        // Pre-migration-015 db (column absent) — treat as no_scan_data so the
+        // status line degrades cleanly without leaking schema details.
+        return reply.code(503).send({ error: "no_scan_data" });
+      }
+      return reply.send({
+        scan_version_id: breakdown.scan_version_id,
+        completed_at: breakdown.completed_at,
+        quality_score: breakdown.quality_score,
+        total_connections: breakdown.total,
+        high_confidence: breakdown.high,
+        low_confidence: breakdown.low,
+        null_confidence: breakdown.null_count,
+        prose_evidence_warnings: breakdown.prose_evidence_warnings,
+        service_count: breakdown.service_count,
+      });
+    } catch (err) {
+      httpLog("ERROR", err.message, {
+        route: "/api/scan-quality",
+        stack: err.stack,
+      });
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  /**
+   * GET /api/verify — Read-only verification of cited evidence (TRUST-01).
+   *
+   * Re-reads each cited source file and confirms the recorded evidence snippet
+   * is still present. Returns a per-connection verdict so stale scan data is
+   * detectable without running a full /arcanon:map.
+   *
+   * Verdicts (D-01, exhaustive — every connection gets exactly one):
+   *   - ok              : file exists, evidence snippet present (and method
+   *                       matches if recorded). Pre-Phase-109 connections with
+   *                       no evidence are also returned as `ok` with
+   *                       evidence_present=false and message="no-evidence-recorded".
+   *   - moved           : file at recorded source_file does NOT exist on disk
+   *                       (or cannot be read).
+   *   - missing         : file exists but the literal evidence substring was
+   *                       not found anywhere in the file.
+   *   - method_mismatch : evidence found, but the recorded HTTP method does
+   *                       not appear (whole-word, case-insensitive) in the
+   *                       matched snippet.
+   *
+   * Read-only contract (D-02): NO INSERT/UPDATE/DELETE in this code path.
+   * The connections, scan_versions, and enrichment_log tables are byte-
+   * identical before and after a verify call.
+   *
+   * Hard cap (D-03): when the un-scoped query would return more than 1000
+   * connections, the response is `{ truncated: true, total: N, results: [],
+   * message: "..." }`. Caller should scope with --connection or --source.
+   *
+   * Note on line_start/line_end: the schema (as of v0.1.2) has no line_start
+   * column on connections; the agent emits `evidence` as a TEXT snippet, not
+   * a line range. We therefore search for the literal substring anywhere in
+   * the file and compute the matched line as a 1-indexed offset for display.
+   * This degrades the original ±3-line semantics (TRUST-01) to "snippet
+   * present anywhere in the file" until the schema gains line_start.
+   *
+   * Query params:
+   *   project=<absolute-root>     required — resolves the per-project DB
+   *   connection_id=<integer>     optional — single connection by ID
+   *   source_file=<rel-path>      optional — basename match if no `/`,
+   *                               exact match otherwise
+   *   (neither set)               implicit --all (D-06)
+   */
+  fastify.get("/api/verify", async (request, reply) => {
+    const projectRoot = request.query?.project;
+    if (!projectRoot) {
+      return reply.code(400).send({ error: "missing required param: project" });
+    }
+
+    const qe = getQE(request);
+    if (!qe) {
+      return reply.code(404).send({ error: `project not indexed: ${projectRoot}` });
+    }
+
+    // --- Resolve scope (D-06) -------------------------------------------------
+    let scope; // "connection" | "source" | "all"
+    let rows;
+    try {
+      if (request.query?.connection_id !== undefined) {
+        const idStr = String(request.query.connection_id);
+        if (!/^\d+$/.test(idStr) || Number(idStr) <= 0) {
+          return reply.code(400).send({ error: "invalid connection_id" });
+        }
+        scope = "connection";
+        rows = qe._db
+          .prepare(
+            `SELECT id AS connection_id, source_file, method, path, evidence
+               FROM connections
+              WHERE id = ?`,
+          )
+          .all(Number(idStr));
+        if (rows.length === 0) {
+          return reply
+            .code(404)
+            .send({ error: `no connection with id ${idStr}` });
+        }
+      } else if (request.query?.source_file) {
+        scope = "source";
+        const value = String(request.query.source_file);
+        const isExactPath = value.includes("/");
+        if (isExactPath) {
+          rows = qe._db
+            .prepare(
+              `SELECT id AS connection_id, source_file, method, path, evidence
+                 FROM connections
+                WHERE source_file = ?
+                  AND scan_version_id = (
+                    SELECT MAX(scan_version_id) FROM connections
+                     WHERE scan_version_id IS NOT NULL
+                  )`,
+            )
+            .all(value);
+        } else {
+          // Basename match — fetch latest-scan rows then filter in JS.
+          const all = qe._db
+            .prepare(
+              `SELECT id AS connection_id, source_file, method, path, evidence
+                 FROM connections
+                WHERE source_file IS NOT NULL
+                  AND scan_version_id = (
+                    SELECT MAX(scan_version_id) FROM connections
+                     WHERE scan_version_id IS NOT NULL
+                  )`,
+            )
+            .all();
+          rows = all.filter((r) => path.basename(r.source_file) === value);
+        }
+      } else {
+        scope = "all";
+        rows = qe._db
+          .prepare(
+            `SELECT id AS connection_id, source_file, method, path, evidence
+               FROM connections
+              WHERE scan_version_id = (
+                SELECT MAX(scan_version_id) FROM connections
+                 WHERE scan_version_id IS NOT NULL
+              )
+              AND source_file IS NOT NULL`,
+          )
+          .all();
+      }
+    } catch (err) {
+      httpLog('ERROR', err.message, { route: '/api/verify', stack: err.stack });
+      return reply.code(500).send({ error: err.message });
+    }
+
+    const total = rows.length;
+
+    // D-03: 1000-connection cap, only for unscoped --all invocations.
+    if (scope === "all" && total > 1000) {
+      return reply.send({
+        results: [],
+        total,
+        truncated: true,
+        scope,
+        message: `too many connections (${total} > 1000) — scope with --source <path> or --connection <id>`,
+      });
+    }
+
+    const results = rows.map((conn) => computeVerdict(conn, projectRoot));
+
+    return reply.send({
+      results,
+      total,
+      truncated: false,
+      scope,
+    });
   });
 
   // 2. GET /projects — list all projects with DBs
@@ -279,4 +635,4 @@ async function createHttpServer(queryEngine, options = {}) {
   return fastify;
 }
 
-export { createHttpServer };
+export { createHttpServer, computeVerdict };

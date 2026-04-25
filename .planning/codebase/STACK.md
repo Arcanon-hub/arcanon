@@ -1,186 +1,156 @@
 # Technology Stack
 
-**Analysis Date:** 2026-03-31
+**Analysis Date:** 2026-04-24
+**Plugin version:** 0.1.2 (shipped 2026-04-24)
+**Most recent milestones:** v0.1.1 (2026-04-23) hub-sync + impact-hook; v0.1.2 (2026-04-24) Node 25 ABI fix + `boundary_entry` migration 011
 
 ## Languages
 
 **Primary:**
-- JavaScript (ES Modules, `"type": "module"`) — worker server, MCP server, database layer, scan engine, graph UI, query engine (`plugins/ligamen/worker/**/*.js`)
-- Bash (targets macOS bash 3.2 compat — avoids `mapfile`, uses `while read` loops) — plugin hooks, CLI scripts, drift checkers, file guard, format/lint dispatchers, worker lifecycle (`plugins/ligamen/scripts/*.sh`, `plugins/ligamen/lib/*.sh`)
+- **JavaScript (ES Modules, Node runtime)** — `"type": "module"` in `plugins/arcanon/package.json`. All worker, MCP server, scan pipeline, hub-sync, and migration code. Roughly 80+ `.js` files across `plugins/arcanon/worker/`.
+- **Bash 4+** — All hooks and orchestration glue. 17 scripts in `plugins/arcanon/scripts/` and 8 sourceable libraries in `plugins/arcanon/lib/`.
 
-**Secondary:**
-- HTML/CSS — single-page graph UI (`plugins/ligamen/worker/ui/index.html`)
-- JSON — configuration files, Claude Code plugin manifests, hook definitions (`ligamen.config.json`, `plugins/ligamen/.claude-plugin/plugin.json`)
+**Secondary / embedded:**
+- **Markdown** — Slash-command definitions in `plugins/arcanon/commands/*.md` (9 commands: drift, export, impact, login, map, status, sync, update, upload). Skills in `plugins/arcanon/skills/impact/SKILL.md`. Agent prompts in `plugins/arcanon/worker/scan/agent-prompt-*.md`.
+- **JSON** — All manifests (`plugin.json`, `hooks.json`, `marketplace.json`, `agent-schema.json`, `package.json`, `runtime-deps.json`).
+- **SQL** — Embedded in migration files `plugins/arcanon/worker/db/migrations/001_initial_schema.js` … `011_services_boundary_entry.js`. 11 migrations total.
+- **HTML / CSS / client JS** — Graph UI in `plugins/arcanon/worker/ui/` (`index.html`, `graph.js`, `force-worker.js`, `modules/`, `styles/`). Served statically by Fastify.
 
 ## Runtime
 
 **Environment:**
-- Node.js >= 20.0.0 (declared in `plugins/ligamen/package.json` `engines` field)
-- Bash (POSIX-compatible; avoids `mapfile` for macOS 3.2 compat per `plugins/ligamen/lib/config.sh`)
+- **Node.js >= 20.0.0** — `engines.node` in `plugins/arcanon/package.json`. CI matrix runs **Node 20 and Node 22** (`.github/workflows/ci.yml` job `test-hub-sync`). Bats job uses Node 22.
+- **Node 25** is explicitly supported as of v0.1.2 via the `better-sqlite3 ^12.9.0` bump (prebuilt Node ABI v141 binaries — see `plugins/arcanon/CHANGELOG.md` issue #18 Bug 1).
+- **Bash 4+** — On macOS this requires Homebrew bash (system bash is 3.2).
+- **SQLite** bundled via `better-sqlite3` native addon (no separate server process).
 
 **Package Manager:**
-- npm (used with `--omit=dev --no-fund --no-audit --package-lock=false` in install scripts)
-- Lockfile: intentionally absent (`--package-lock=false` flag in `plugins/ligamen/scripts/install-deps.sh`)
+- **npm** (with `package-lock.json`) — CI uses `npm ci --no-audit --no-fund` from `plugins/arcanon/` directory.
+- Lockfile: `plugins/arcanon/package-lock.json` committed.
+- **Two package.json files:**
+  - `plugins/arcanon/package.json` — dev/test dependency manifest (checked into git).
+  - `plugins/arcanon/runtime-deps.json` — reduced runtime-only manifest; `scripts/install-deps.sh` (SessionStart hook) runs `npm install --prefix "$CLAUDE_PLUGIN_ROOT" --omit=dev` against this when the plugin is first loaded.
 
 ## Frameworks
 
-**Core:**
-- Fastify ^5.8.2 — HTTP server for background worker REST API (`plugins/ligamen/worker/server/http.js`)
-- @modelcontextprotocol/sdk ^1.27.1 — MCP server exposing tools to Claude Code sessions (`plugins/ligamen/worker/mcp/server.js`)
+**Core HTTP:**
+- **fastify** `^5.8.5` — Worker HTTP server in `plugins/arcanon/worker/server/http.js`. Default port `37888` (persisted to `~/.arcanon/worker.port`).
+- **@fastify/cors** `^10.0.0` — CORS for localhost dev UI (allows `127.0.0.1:*` and `:5173`).
+- **@fastify/static** `^9.1.1` in dev, `^8.0.0` in `runtime-deps.json` — Serves the graph UI bundle from `plugins/arcanon/worker/ui/`.
 
-**Testing:**
-- BATS (Bash Automated Testing System) — shell script tests, vendored as git submodule at `tests/bats/`, test files at `tests/*.bats` (16 test files)
-- bats-assert — assertion helpers (git submodule at `tests/test_helper/bats-assert/`)
-- bats-support — support library (git submodule at `tests/test_helper/bats-support/`)
-- Node.js built-in test runner (`node --test`) — JavaScript unit tests (`plugins/ligamen/worker/**/*.test.js`)
-- Node.js built-in assertions (`node:assert/strict`) — assertion library for JS tests
+**MCP:**
+- **@modelcontextprotocol/sdk** `^1.27.1` — `McpServer` + `StdioServerTransport` from `@modelcontextprotocol/sdk/server/mcp.js`. Entrypoint `plugins/arcanon/worker/mcp/server.js`. Registers **8 stdio tools** (5 impact + 3 drift).
+- **zod** `^3.25.0` — Input schema for every MCP tool (used directly in `server.tool(name, { schema }, handler)`).
 
-**Build/Dev:**
-- Make — build orchestration (`Makefile` with targets: test, lint, check, install, uninstall, dev)
-- ShellCheck — bash linting (invoked via `make lint`)
-- jq — JSON validation of `plugin.json` and `hooks.json` (invoked via `make check`)
-- Prettier — code formatter for JS/TS/JSON/YAML (invoked by `plugins/ligamen/scripts/format.sh`)
-- ESLint — JS/TS linter (invoked by `plugins/ligamen/scripts/lint.sh`)
+**Plugin framework:**
+- **Claude Code plugin marketplace** — Declared via `.claude-plugin/marketplace.json` (root) and `plugins/arcanon/.claude-plugin/plugin.json` (plugin). Hooks registered in `plugins/arcanon/hooks/hooks.json`: `SessionStart`, `UserPromptSubmit`, `PreToolUse` (Write|Edit|MultiEdit), `PostToolUse` (Write|Edit|MultiEdit). Slash commands declared as frontmatter-headed markdown files under `plugins/arcanon/commands/`.
+
+## Storage
+
+**Primary — SQLite:**
+- **better-sqlite3** `^12.9.0` — Synchronous SQLite driver, bundled with prebuilt binaries for Node ABI up to v141 (Node 25). Lifecycle in `plugins/arcanon/worker/db/database.js`.
+- Enabled pragmas: `journal_mode = WAL` (see `worker/db/database.js` and re-applied in `worker/mcp/server.js`).
+- **FTS5 virtual tables** (`connections_fts`, `services_fts`, `endpoints_fts`) created in migration 001 with triggers to keep them in sync — second-tier keyword search.
+- **11 migrations** under `plugins/arcanon/worker/db/migrations/`: initial schema, service_type, exposed_endpoints, dedup_constraints, scan_versions, dedup_repos, expose_kind, actors_metadata, confidence_enrichment, service_dependencies, services_boundary_entry.
+- **Per-project DB paths:** `~/.arcanon/projects/<sha256(projectRoot)[:12]>/impact-map.db`. Hashing ported to bash in `plugins/arcanon/lib/db-path.sh` so hooks can resolve the DB without shelling into Node.
+
+**Optional — Vector search:**
+- **chromadb** `^3.3.3` — Semantic search tier in `plugins/arcanon/worker/server/chroma.js`. Collection name `arcanon-impact` (renamed from `ligamen-impact` in v0.1.2 BREAKING). Enabled when `ARCANON_CHROMA_MODE=local` is set; module is imported lazily and a ChromaDB outage never blocks SQLite writes.
+- **@chroma-core/default-embed** `^1.0.0` — Declared as an `optionalDependencies` entry so installs succeed if native deps fail.
+- Three-tier search fallback in `querySearch()` (`worker/db/query-engine.js` ~line 441): ChromaDB -> FTS5 -> SQL `LIKE`.
+
+**Other on-disk state under `~/.arcanon/`:**
+- `projects/<hash>/impact-map.db` — per-project graph DB
+- `projects/<hash>/scan-lock` — scan mutex
+- `queue/` — offline hub-sync outbox (used by `worker/hub-sync/queue.js`)
+- `logs/worker.log` — structured JSON log from `plugins/arcanon/worker/lib/logger.js`
+- `settings.json` — runtime log level + feature flags
+- `worker.port`, `worker.pid` — worker handshake files
+- `.arcanon-deps-installed.json` in `CLAUDE_PLUGIN_DATA` — install sentinel
 
 ## Key Dependencies
 
-**Critical (from `plugins/ligamen/package.json`):**
-- `better-sqlite3` ^12.8.0 — embedded SQLite database with native bindings. WAL mode, 64MB page cache, 5s busy timeout, migration system, per-project DB pooling (`plugins/ligamen/worker/db/database.js`, `plugins/ligamen/worker/db/pool.js`)
-- `fastify` ^5.8.2 — HTTP server for worker REST API (`plugins/ligamen/worker/server/http.js`)
-- `@modelcontextprotocol/sdk` ^1.27.1 — MCP protocol implementation; uses `McpServer` and `StdioServerTransport` classes (`plugins/ligamen/worker/mcp/server.js`)
-- `zod` ^3.25.0 — runtime schema validation for MCP tool parameter definitions (`plugins/ligamen/worker/mcp/server.js`)
-- `chromadb` ^3.3.3 — optional vector database client for semantic search; collection name `ligamen-impact` (`plugins/ligamen/worker/server/chroma.js`)
-- `picomatch` ^4.0.3 — glob pattern matching (used in CODEOWNERS parsing, `plugins/ligamen/worker/scan/codeowners.js`)
+**Critical (production):**
+- `@modelcontextprotocol/sdk ^1.27.1` — Exposes the MCP server that Claude Code connects to.
+- `better-sqlite3 ^12.9.0` — Entire persistence layer; floor bumped in v0.1.2 for Node 25 compat.
+- `fastify ^5.8.5` — Worker HTTP surface (REST + UI + readiness).
+- `chromadb ^3.3.3` — Optional semantic search; declared as a required dep but treated as optional at runtime.
+- `zod ^3.25.0` — MCP tool input validation.
+- `picomatch ^4.0.4` — CODEOWNERS glob matching in `plugins/arcanon/worker/scan/codeowners.js`. CJS-only, loaded via `createRequire`.
 
-**Infrastructure:**
-- `@fastify/cors` ^10.0.0 — CORS middleware for localhost dev access to worker API (`plugins/ligamen/worker/server/http.js`)
-- `@fastify/static` ^8.0.0 — static file serving for graph UI from `plugins/ligamen/worker/ui/` (`plugins/ligamen/worker/server/http.js`)
-
-**Optional:**
-- `@chroma-core/default-embed` ^1.0.0 — ChromaDB default embedding function (listed in `optionalDependencies`)
-
-**Runtime Dependencies (`plugins/ligamen/runtime-deps.json`):**
-- Subset of main dependencies installed into `CLAUDE_PLUGIN_DATA` at session start via `plugins/ligamen/scripts/install-deps.sh`
-- Mirrors: `@modelcontextprotocol/sdk`, `better-sqlite3`, `fastify`, `@fastify/cors`, `@fastify/static`, `chromadb`, `zod`
-- Diff-based idempotency: skips install if `runtime-deps.json` matches sentinel file
-
-**Frontend (CDN-loaded, no build step):**
-- D3 Force v3 — graph physics simulation loaded via ESM CDN in Web Worker (`plugins/ligamen/worker/ui/force-worker.js`: `https://cdn.jsdelivr.net/npm/d3-force@3/+esm`)
-
-## External Tool Dependencies
-
-**Required (checked at runtime by shell scripts):**
-- `jq` — JSON parsing in all shell scripts (guard: exits 0 silently if missing)
-- `curl` — HTTP client for worker communication (`plugins/ligamen/lib/worker-client.sh`)
-- `npm` — dependency installation (`plugins/ligamen/scripts/install-deps.sh`)
-- `node` — worker and MCP server execution
-- `git` — repo scanning, diff detection, changed file enumeration (`plugins/ligamen/worker/scan/manager.js`)
-
-**Optional (format dispatchers in `plugins/ligamen/scripts/format.sh`):**
-- Python: `ruff format` or `black`
-- Rust: `rustfmt`
-- TypeScript/JavaScript: `prettier` or local `./node_modules/.bin/prettier` or `eslint --fix`
-- Go: `gofmt`
-- JSON/YAML: `prettier`
-
-**Optional (lint dispatchers in `plugins/ligamen/scripts/lint.sh`):**
-- Python: `ruff check`
-- Rust: `cargo clippy` (throttled at 30s intervals via `LIGAMEN_LINT_THROTTLE`)
-- TypeScript/JavaScript: `eslint` (resolution: local > npm bin > global)
-- Go: `golangci-lint`
+**Dev vs runtime split:**
+- `@fastify/static` has a different version range between `package.json` (`^9.1.1`) and `runtime-deps.json` (`^8.0.0`) — intentional so dev tests use the current Fastify 5 line while the slim runtime uses the older, smaller tree.
 
 ## Configuration
 
-**Environment Variables:**
-- `LIGAMEN_DATA_DIR` — override data directory (default: `~/.ligamen`)
-- `LIGAMEN_WORKER_PORT` — override worker port (default: 37888)
-- `LIGAMEN_LOG_LEVEL` — log verbosity: DEBUG, INFO, WARN, ERROR (default: INFO)
-- `LIGAMEN_DB_PATH` — override computed database path (MCP server only)
-- `LIGAMEN_PROJECT_ROOT` — override cwd as project root (MCP server only)
-- `LIGAMEN_DISABLE_FORMAT` — set to "1" to disable auto-format hook
-- `LIGAMEN_DISABLE_LINT` — set to any non-empty value to disable auto-lint hook
-- `LIGAMEN_DISABLE_GUARD` — set to "1" to disable file guard hook
-- `LIGAMEN_DISABLE_SESSION_START` — set to any non-empty value to disable session context injection
-- `LIGAMEN_EXTRA_BLOCKED` — colon-separated glob patterns for additional file guard blocks
-- `LIGAMEN_LINT_THROTTLE` — seconds between Rust clippy runs (default: 30)
-- `LIGAMEN_CHROMA_MODE` — "local" to enable ChromaDB (empty = disabled)
-- `LIGAMEN_CHROMA_HOST` — ChromaDB host (default: localhost)
-- `LIGAMEN_CHROMA_PORT` — ChromaDB port (default: 8000)
-- `LIGAMEN_CHROMA_SSL` — "true" for HTTPS
-- `LIGAMEN_CHROMA_API_KEY` — ChromaDB auth token
-- `LIGAMEN_CHROMA_TENANT` — ChromaDB tenant (default: default_tenant)
-- `LIGAMEN_CHROMA_DATABASE` — ChromaDB database (default: default_database)
-- `CLAUDE_PLUGIN_ROOT` — set by Claude Code plugin system; base path for plugin files
-- `CLAUDE_PLUGIN_DATA` — set by Claude Code plugin system; persistent data directory
+**User configuration:**
+- **Claude Code plugin `userConfig`** — Defined in `plugins/arcanon/.claude-plugin/plugin.json`: `api_token` (sensitive, `arc_...` bearer), `hub_url` (default `https://api.arcanon.dev`), `auto_sync` (boolean), `project_slug` (for org-scoped keys).
+- **Per-repo config:** `arcanon.config.json` at the repo root (example at `plugins/arcanon/arcanon.config.json.example`). Config discovery via `plugins/arcanon/lib/config-path.sh` and `plugins/arcanon/worker/lib/config-path.js`. Legacy `ligamen.config.json` support was **removed** in v0.1.2 (BREAKING).
 
-**Settings Files:**
-- `~/.ligamen/settings.json` — machine-level settings (log level, worker port, ChromaDB config)
-- `ligamen.config.json` — per-project config (linked repos, boundaries, impact-map settings)
+**Environment variables (all `ARCANON_*`):**
+- `ARCANON_PROJECT_ROOT` — override the project root seen by the MCP server.
+- `ARCANON_DB_PATH` — bypass per-project hashing and point the MCP server at a specific DB.
+- `ARCANON_CHROMA_MODE` (`local` | empty) — enables the ChromaDB tier.
+- `ARCANON_CHROMA_HOST`, `ARCANON_CHROMA_PORT` — ChromaDB network target.
+- `ARCANON_API_KEY` — Hub bearer token (fallback path when `userConfig.api_token` is unset).
+- `ARCANON_LOG_LEVEL` — logger threshold (also readable from `~/.arcanon/settings.json`).
+- `ARCANON_DISABLE_HOOK=1` — escape hatch that silences the PreToolUse impact hook.
+- `ARCANON_IMPACT_DEBUG=1` — emit JSONL trace from the impact hook.
+- `IMPACT_HOOK_LATENCY_THRESHOLD` — bats benchmark ceiling (ms). `100` in CI, `50` locally (HOK-06).
+- All legacy `LIGAMEN_*` env reads were **removed** in v0.1.2 (BREAKING).
 
-**Plugin Manifests:**
-- `plugins/ligamen/.claude-plugin/plugin.json` — Claude Code plugin metadata (v5.7.0)
-- `plugins/ligamen/.claude-plugin/marketplace.json` — marketplace registration manifest
-- `plugins/ligamen/hooks/hooks.json` — hook definitions (PostToolUse, PreToolUse, SessionStart, UserPromptSubmit)
+**Claude Code injected variables:**
+- `CLAUDE_PLUGIN_ROOT` — absolute path to the installed plugin.
+- `CLAUDE_PLUGIN_DATA` — per-plugin state dir; used for the install sentinel.
 
-## Data Storage Layout
+## Build / Test Tools
 
-**Per-machine:**
-- `~/.ligamen/` — root data directory
-- `~/.ligamen/settings.json` — machine settings
-- `~/.ligamen/worker.pid` — background worker PID file
-- `~/.ligamen/worker.port` — background worker port file
-- `~/.ligamen/logs/worker.log` — structured JSON log (10MB rotation, 3 rotated files max)
+**Build:**
+- **GNU Make** — Top-level `Makefile` with targets: `test`, `lint`, `check`, `install`, `uninstall`, `dev`. `make install` wires the marketplace registration + `claude plugin install`.
+- **`jq`** — Manifest validation in `make check` and CI.
 
-**Per-project:**
-- `~/.ligamen/projects/<sha256(projectRoot).slice(0,12)>/impact-map.db` — SQLite database
-- `~/.ligamen/projects/<hash>/snapshots/` — VACUUM INTO snapshots
+**Test frameworks:**
+- **Node test runner** (`node --test`) — All JS unit/integration tests. Runner configured through npm scripts in `plugins/arcanon/package.json`:
+  - `test` — runs every `worker/**/*.test.js` (excluding `node_modules`).
+  - `test:storage` — `worker/db/query-engine-*.test.js`.
+  - `test:hub-sync` — `worker/hub-sync/**/*.test.js`.
+  - `test:migrations` — `worker/db/migration-*.test.js` and `worker/db/migrations.test.js`.
+  - 40+ `.test.js` files total across `worker/db/`, `worker/hub-sync/`, `worker/mcp/`, `worker/scan/`, `worker/server/`, `worker/cli/`.
+- **bats-core** — End-to-end shell integration tests. Bundled as a git submodule at `tests/bats/` (run via `./tests/bats/bin/bats tests/*.bats`). 35+ `.bats` files in `tests/` covering hooks, commands surface, config, detect, drift dispatcher, file guard, format/lint, impact hook latency + merged features, install-deps, MCP launch/wrapper/server, session-start + enrichment, structure, update, worker index/lifecycle/restart.
+- **Shared bats helpers:** `tests/test_helper.bash`, `tests/test_helper/`, `tests/helpers/`, plus fixture trees under `tests/fixtures/`, `tests/integration/`, `tests/storage/`, `tests/ui/`, `tests/worker/`.
 
-**SQLite Schema Migrations (9 as of v5.7.0):**
-- `plugins/ligamen/worker/db/migrations/001_initial_schema.js` through `009_confidence_enrichment.js`
-- Domain tables: repos, services, connections, schemas, fields, map_versions, repo_state
-- FTS5 virtual tables: connections_fts, services_fts, fields_fts (with sync triggers)
-- Later migrations add: service type, exposed_endpoints, dedup constraints, scan_versions, expose_kind, actors/actor_connections/node_metadata, confidence/enrichment columns
+**Linting / formatting:**
+- **shellcheck** — Enforced in `make lint` and CI (`shell-lint` job). Severity is `error` in CI, full checks locally. Flags: `-x -e SC1091`. Covers `plugins/arcanon/scripts/*.sh` and `plugins/arcanon/lib/*.sh`.
+- **`scripts/format.sh` + `scripts/lint.sh`** — PostToolUse hooks that auto-format/lint on every Write|Edit|MultiEdit. 10s timeout.
+- No JS formatter/linter (eslint/prettier) is declared in `package.json`.
 
-## Module System
+## CI / CD
 
-- All JavaScript uses ES Modules (`"type": "module"` in `plugins/ligamen/package.json`)
-- Top-level `await` used in `plugins/ligamen/worker/db/database.js` for migration preloading
-- Web Worker in UI uses ESM imports from CDN (`plugins/ligamen/worker/ui/force-worker.js`)
-- No build step, no transpilation, no bundler — all source files run directly
+**GitHub Actions** (`.github/workflows/ci.yml`) — four jobs on every push/PR to `main`:
+1. `lint-manifests` — `jq empty` on every JSON manifest + asserts plugin/marketplace names equal `"arcanon"`.
+2. `shell-lint` — installs shellcheck on `ubuntu-latest` and runs with `--severity=error`.
+3. `test-hub-sync` — matrix `node: ['20', '22']`, runs `node --test worker/hub-sync/` after `npm ci`.
+4. `test-bats` — Node 22, runs the full bats suite with `IMPACT_HOOK_LATENCY_THRESHOLD=100`.
+
+All jobs use `actions/checkout@v4` with `submodules: recursive` (bats submodule).
 
 ## Platform Requirements
 
-**Development:**
-- macOS or Linux (bash scripts use POSIX compat; `realpath -m` has macOS fallback)
-- Node.js >= 20
-- jq, curl, npm, git
-- ShellCheck (for `make lint`)
-- BATS (vendored in `tests/bats/`)
+**Development (macOS / Linux):**
+- Node >= 20 (Node 22 or 25 recommended; 25 requires v0.1.2+).
+- npm (ships with Node).
+- Bash >= 4 (Homebrew `bash` on macOS).
+- `jq`, `shellcheck`, `git`.
+- `claude` CLI (Claude Code) for `make install` / `make dev`.
 
-**Production (as Claude Code plugin):**
-- Node.js >= 20 (for worker + MCP server)
-- jq (for JSON parsing in hooks)
-- curl (for worker HTTP communication)
-- npm (for one-time dependency installation at session start)
-- No Docker, no cloud services required (fully local)
+**Production runtime (end-user machine running Claude Code):**
+- Same Node and Bash floors. MCP runtime deps are installed automatically into `CLAUDE_PLUGIN_ROOT/node_modules/` by `scripts/install-deps.sh` the first time the plugin session starts (diff-based idempotency against `runtime-deps.json`).
 
-## Entrypoints
-
-**Worker Process:**
-- `plugins/ligamen/worker/index.js` — main HTTP server daemon (spawned by `plugins/ligamen/scripts/worker-start.sh` via `nohup node`)
-- Listens on `127.0.0.1:37888` (configurable)
-
-**MCP Server:**
-- `plugins/ligamen/worker/mcp/server.js` — standalone MCP server (stdio transport)
-- Launched by `plugins/ligamen/scripts/mcp-wrapper.sh` (self-healing: installs deps if missing)
-
-**Slash Commands:**
-- `plugins/ligamen/commands/map.md` — `/ligamen:map`
-- `plugins/ligamen/commands/cross-impact.md` — `/ligamen:cross-impact`
-- `plugins/ligamen/commands/drift.md` — `/ligamen:drift`
-
-**Version:** 5.7.0 | **License:** AGPL-3.0-only
+**Not used:**
+- No Docker / containerization for the plugin itself (bats upstream ships a Dockerfile but it is not part of Arcanon's runtime).
+- No Python, Go, or Rust in the plugin code path. Language detection inside `worker/mcp/server.js` (`detectRepoLanguage`) and `drift-types.sh` *reads* ts/go/py/rs repos but only via regex extraction from JS/bash.
+- No bundler / transpiler. Everything runs as plain ESM off disk.
 
 ---
 
-*Stack analysis: 2026-03-31*
+*Stack analysis: 2026-04-24*

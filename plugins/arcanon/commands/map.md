@@ -224,22 +224,30 @@ for (const finding of allFindings) {
 
 **Downgrade external to cross-service:**
 
-For every connection across all findings: if `crossing === "external"` AND `target` is in `knownServices`, change `crossing` to `"cross-service"`:
+For every connection across all findings: if `crossing === "external"` AND `target` is in `knownServices`, change `crossing` to `"cross-service"`. Capture the original value on the connection object so Step 5 can write an `enrichment_log` audit row after `endScan` resolves the connection's DB id (TRUST-06, defer-and-write per Phase 111 CONTEXT D-04):
 
 ```javascript
+let _reconciledCount = 0;
 for (const finding of allFindings) {
   for (const conn of (finding.connections || [])) {
     if (conn.crossing === 'external' && knownServices.has(conn.target)) {
+      // Capture original value BEFORE mutation for audit log (TRUST-06).
+      // The `_reconciliation` field rides through the JSON write-then-read
+      // round-trip in Step 5 (it's a plain own enumerable property).
+      conn._reconciliation = {
+        from: 'external',
+        to: 'cross-service',
+        reason: 'target matches known service: ' + conn.target,
+      };
       conn.crossing = 'cross-service';
+      _reconciledCount++;
     }
   }
 }
-```
 
-Print a reconciliation summary if any crossings were changed:
-
-```
-Reconciliation: 3 connection(s) reclassified external → cross-service
+if (_reconciledCount > 0) {
+  console.log('Reconciliation: ' + _reconciledCount + ' connection(s) reclassified external → cross-service');
+}
 ```
 
 If no changes, print nothing.
@@ -298,6 +306,53 @@ node --input-type=module -e "
   qe.persistFindings(repoId, findings, findings.commit || null, scanVersionId);
   qe.endScan(repoId, scanVersionId);
   console.log('saved');
+  // TRUST-05: surface scan quality at end-of-output. Format string locked in
+  // CONTEXT D-01 — \"Scan quality: NN% high-confidence, M prose-evidence warnings\".
+  // prose_evidence_warnings is a 0 placeholder for v0.1.3 (D-01).
+  const breakdown = qe.getScanQualityBreakdown(scanVersionId);
+  if (breakdown && breakdown.quality_score !== null) {
+    const pct = Math.round(breakdown.quality_score * 100);
+    console.log('Scan quality: ' + pct + '% high-confidence, ' + breakdown.prose_evidence_warnings + ' prose-evidence warnings');
+  } else if (breakdown) {
+    console.log('Scan quality: n/a (' + breakdown.total + ' connections)');
+  }
+  // TRUST-06: write audit rows for connections reclassified by Step 3 reconciliation.
+  // The \`_reconciliation\` field was attached in Step 3 BEFORE persistFindings so
+  // it survives the JSON write-then-read round-trip (plain own enumerable property).
+  // We resolve each reconciled connection's DB id by looking up the persisted
+  // (source, target, path, method) tuple, then call qe.logEnrichment.
+  for (const conn of (findings.connections || [])) {
+    if (!conn._reconciliation) continue;
+    const sourceRow = db.prepare(
+      'SELECT id FROM services WHERE name = ? AND repo_id = ?'
+    ).get(conn.source, repoId);
+    const targetRow = db.prepare(
+      'SELECT id FROM services WHERE name = ?'
+    ).get(conn.target);
+    if (!sourceRow || !targetRow) continue;
+    // \`IS ? OR = ?\` handles SQL's null-vs-string mismatch — NULL is not equal
+    // to NULL via \`=\`, but \`IS\` handles it. Both bind sites for each column
+    // receive the same value.
+    const connRow = db.prepare(
+      'SELECT id FROM connections WHERE source_service_id = ? AND target_service_id = ? AND ' +
+      '(path IS ? OR path = ?) AND (method IS ? OR method = ?)'
+    ).get(
+      sourceRow.id, targetRow.id,
+      conn.path || null, conn.path || '',
+      conn.method || null, conn.method || ''
+    );
+    if (!connRow) continue;
+    qe.logEnrichment(
+      scanVersionId,
+      'reconciliation',
+      'connection',
+      connRow.id,
+      'crossing',
+      conn._reconciliation.from,
+      conn._reconciliation.to,
+      conn._reconciliation.reason
+    );
+  }
 "
 rm -f "${FINDINGS_FILE}"
 ```

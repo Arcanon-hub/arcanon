@@ -6,6 +6,87 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-04-25
+
+### BREAKING
+
+- **`/arcanon:upload` removed** (DEP-01..05). The deprecated stub introduced in
+  v0.1.1 is now gone. Use `/arcanon:sync` (canonical since v0.1.1). CI pipelines
+  or scripts hardcoded to `/arcanon:upload` will fail with "command not found";
+  migrate to `/arcanon:sync`.
+- **`runtime-deps.json` removed** (INST-01). `package.json` is now the single
+  source of truth for runtime npm dependencies. The `@arcanon/runtime-deps`
+  package identity is retired. `scripts/install-deps.sh` no longer reads any
+  separate manifest — it derives its sentinel from
+  `jq '.dependencies + .optionalDependencies' package.json` directly.
+
+### Added
+
+- **`/arcanon:verify` command** (TRUST-01, 07, 08, 09). Re-reads cited evidence
+  in source files and returns one of `ok` / `moved` / `missing` /
+  `method_mismatch` per connection, without re-running a full `/arcanon:map`.
+  Read-only and idempotent — safe to wire into CI or pre-commit hooks. Supports
+  `--connection <id>` / `--source <file>` filters and structured exit codes
+  (0=all-ok, 1=findings, 2=usage-error).
+- **`services.base_path` column** (TRUST-04, 12). Migration 012 adds the column.
+  `agent-prompt-service.md` instructs the scanner to emit per-service
+  `base_path` (e.g., `/api`); connection resolution strips `base_path` before
+  path matching, eliminating a class of false-mismatch findings on services
+  that mount their routes under a common prefix.
+- **`scan_versions.quality_score` column** (TRUST-05, 13). Migration 014 adds
+  the column. `endScan()` computes
+  `(high_confidence_count + 0.5 × low_confidence_count) / total_connections`
+  and persists it. Surfaced in `/arcanon:status` and at the end of
+  `/arcanon:map` as `Scan quality: 87% high-confidence, 3 prose-evidence warnings`.
+- **`enrichment_log` table + `impact_audit_log` MCP tool** (TRUST-06, 14).
+  Migration 015 adds the table. Post-scan reconciliation (e.g., external →
+  cross-service downgrades) writes a row per change. New MCP tool
+  `impact_audit_log(scan_version_id)` exposes the log to any project context
+  (brings MCP tool count to 9).
+
+### Changed
+
+- **`scripts/install-deps.sh` rewritten** (INST-02..05). Sentinel is sha256 of
+  `jq '.dependencies + .optionalDependencies' package.json`. Validation uses
+  `node -e "require('better-sqlite3'); ..."` (binding-load), not file
+  existence. Broken binding triggers `npm rebuild better-sqlite3` once before
+  giving up. Happy path exits in <100ms with no `npm` process spawn. Always
+  exits 0 — genuine failures are surfaced via worker startup, not by failing
+  the SessionStart hook.
+- **`scripts/mcp-wrapper.sh` simplified** (INST-06). Reduced to
+  `CLAUDE_PLUGIN_ROOT` resolution + `exec node "${PLUGIN_ROOT}/worker/mcp/server.js"`.
+  No self-heal block, no dep-install fallback, no file-existence checks.
+- **`/arcanon:status` surfaces scan quality score** (TRUST-05). When the worker
+  has graph data, status output now includes the same `Scan quality: NN%` line
+  as `/arcanon:map`.
+
+### Fixed
+
+- **`/arcanon:update --check` 5-second false-offline** (THE-1027 / UPD-01..03).
+  The mirror file (`~/.claude/plugins/marketplaces/arcanon/.../marketplace.json`)
+  is now the source of truth for the offline-decision. A slow
+  `claude plugin marketplace update arcanon` (>5s) no longer flips the verdict
+  to `offline` — that status is reserved for genuinely missing mirror dirs
+  (fresh install, no network).
+- **Evidence-at-ingest enforcement** (TRUST-02, 03, 10, 11). `persistFindings`
+  now rejects connections whose `evidence` field is prose with no literal
+  substring match against the cited `source_file` at ±3 lines of `line_start`.
+  Rejected connections log a structured warning and are skipped; the rest of
+  the scan completes normally. Stops a class of hallucinated connections from
+  polluting the graph. Migration 013 also canonicalizes the historical
+  `path_template` column.
+
+### Removed
+
+- **`plugins/arcanon/runtime-deps.json`** (INST-01). File deleted; package
+  identity `@arcanon/runtime-deps` retired. See `### Changed → install-deps.sh`
+  for the replacement sentinel mechanism.
+- **`/arcanon:upload`** (DEP-01..05). `commands/upload.md` deleted; the 5
+  deprecated-stub assertions in `tests/commands-surface.bats` removed (replaced
+  with a single regression-guard test asserting absence); `README.md` Quick
+  start + Commands table mentions removed; `plugins/arcanon/skills/impact/SKILL.md`
+  mentions removed. Use `/arcanon:sync` (canonical since v0.1.1).
+
 ## [0.1.2] - 2026-04-24
 
 ### Fixed

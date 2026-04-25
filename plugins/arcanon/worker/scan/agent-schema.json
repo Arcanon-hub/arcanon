@@ -13,6 +13,7 @@
         "language": "string — typescript, python, go, rust, java, yaml, etc.",
         "type": "service | library | sdk | infra",
         "boundary_entry": "string | null — entry point file",
+        "base_path": "string | null — URL prefix stripped by reverse proxy or framework router (e.g. '/api', '/api/v1'). Optional; emit only when an external prefix is stripped before forwarding to internal routes. Connection resolution strips this from outbound paths before matching exposed endpoints.",
         "exposes": ["string — format depends on type (see prompt)"],
         "confidence": "high | low"
       }

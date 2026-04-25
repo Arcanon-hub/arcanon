@@ -204,8 +204,9 @@ fi
 
 # 2. Refresh marketplace with 5s cap (REQ UPD-11 — Pitfall 10)
 #    Uses background-subshell+timer because timeout(1) is not on macOS by default.
+#    The timer caps how long we wait for refresh; its outcome (timeout or success)
+#    is informational only and does NOT gate the offline branch below. (THE-1027)
 MARKETPLACE_DIR="${HOME}/.claude/plugins/marketplaces/arcanon"
-OFFLINE=false
 {
   (claude plugin marketplace update arcanon >/dev/null 2>&1) &
   refresh_pid=$!
@@ -217,14 +218,19 @@ OFFLINE=false
       kill -TERM "$refresh_pid" 2>/dev/null || true
       sleep 0.1
       kill -KILL "$refresh_pid" 2>/dev/null || true
-      OFFLINE=true
+      # Timer fired: stop waiting for refresh. Do NOT flip an offline flag —
+      # the cached mirror file (if present) is still authoritative. (THE-1027)
       break
     fi
   done
   wait "$refresh_pid" 2>/dev/null || true
 } 2>/dev/null
 
-if [[ "$OFFLINE" == "true" ]] || [[ ! -f "${MARKETPLACE_DIR}/plugins/arcanon/.claude-plugin/marketplace.json" ]]; then
+# Offline gate: mirror file existence is the single source of truth.
+# Refresh-process timeout is a staleness signal (we may have an old mirror)
+# but NOT an offline signal — if the mirror file is on disk, we still
+# compute newer/equal/ahead from it. (THE-1027, UPD-01..03)
+if [[ ! -f "${MARKETPLACE_DIR}/plugins/arcanon/.claude-plugin/marketplace.json" ]]; then
   # REQ UPD-11: exit 0 with offline status; commands/update.md formats the user-facing message
   printf '{"status":"offline","installed":"%s","remote":null,"update_available":false,"changelog_preview":""}\n' "$INSTALLED_VER"
   exit 0

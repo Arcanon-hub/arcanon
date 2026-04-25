@@ -183,15 +183,65 @@ Every edit is automatically formatted and linted, every quality check runs with 
 - ✓ Docs + README purge: CHANGELOG BREAKING section, README legacy paragraphs removed, Related repos section deleted (DOC-01..03, README-01..03) — v0.1.2
 - ✓ Final verification gate: zero ligamen refs in source/tests/docs (CHANGELOG BREAKING section exempt) (VER-01..03) — v0.1.2
 
+- ✓ Install architecture rebuilt — single source of truth = package.json; `install-deps.sh` rewritten with sha256-of-deps sentinel + `require("better-sqlite3")` binding-load validation + npm rebuild fallback; `mcp-wrapper.sh` trimmed to 12 lines (INST-01..12) — v0.1.3
+- ✓ `/arcanon:update --check` decoupled from 5s refresh timeout — file-existence is offline source of truth (UPD-01..06) — v0.1.3
+- ✓ `/arcanon:upload` deprecated stub removed — README + skill + tests scrubbed (DEP-01..06) — v0.1.3
+- ✓ New `/arcanon:verify` command — re-reads cited evidence; returns ok/moved/missing/method_mismatch verdicts (TRUST-01) — v0.1.3
+- ✓ Evidence-at-ingest enforcement — `persistFindings` rejects prose-only evidence (TRUST-02) — v0.1.3
+- ✓ Path canonicalization — template variants collapse via `{xxx}` → `{_}` with originals in `connections.path_template` (TRUST-03) — v0.1.3
+- ✓ `services.base_path` migration + agent prompt + connection resolution stripping (TRUST-04) — v0.1.3
+- ✓ Per-scan quality score — `scan_versions.quality_score` + `/api/scan-quality` endpoint + surface in /arcanon:map and /arcanon:status (TRUST-05) — v0.1.3
+- ✓ Reconciliation audit trail — `enrichment_log` table + `impact_audit_log` MCP tool (9 tools total) (TRUST-06) — v0.1.3
+- ✓ v0.1.3 release gate — bats 315/315, node 630/631 (1 pre-existing carry-forward), 4 manifests at 0.1.3 + lockfile, CHANGELOG `[0.1.3]` pinned (VER-01..07) — v0.1.3
+
 ### Active
 
 ## Next Milestone Goals
 
-Candidates for v0.2.0+ (unchanged from v0.1.1):
+After v0.1.3 ships:
+- **v0.1.4 Read-only & UX** — THE-1023 (`/list`, `/view`, `/doctor`, `/diff` commands), THE-1025 remainder (`--help` system across commands + `/arcanon:status` git-commits-since-scan count)
+- **v0.1.5 Scan Ops & Integration** — THE-1024 (`/rescan`, `/correct`, `/shadow-scan` + `scan_overrides` table + shadow DB infrastructure), THE-1026 (offline mode, explicit OpenAPI specs, known-externals catalog)
+- **v0.2.0 Skills & Agents** — Design the skills layer on top of shipped hooks, refactor inline `Explore` agent calls, add MCP-tool-composing investigator agent. Intentionally deferred since v0.1.1.
 
-- **v0.2.0 Skills & Agents** — Design the skills layer on top of shipped hooks, refactor inline `Explore` agent calls, add MCP-tool-composing investigator agent. Intentionally deferred from v0.1.1.
-- **Scan quality** (THE-1022 and related Linear tickets) — High-priority items surfaced by external review of v0.1.0.
-- **UX polish & integration improvements** (THE-1023..1026) — Read-only command polish, scan ops, UX improvements, integration coverage.
+## (archived) Milestone: v0.1.3 Trust & Foundations
+
+**Goal:** Land both High-priority backlog items (THE-1022 scan trust, THE-1028 install architecture) plus a tightly-scoped fix (THE-1027 update-check timeout) and remove the deprecated `/arcanon:upload` stub. v0.1.3 ships with a trustworthy install path, a trustworthy scan layer, and a tighter command surface.
+
+**Target work (4 categories):**
+
+1. **THE-1028 — Install + worker startup architecture cleanup** (High)
+   - Delete `runtime-deps.json`; single source of truth = `package.json`
+   - Rewrite `install-deps.sh` with sha256 sentinel + `require()` validation + rebuild fallback
+   - Reduce `mcp-wrapper.sh` to plain `exec node server.js`
+
+2. **THE-1022 — Scan quality & trust hardening** (High, 6 sub-items)
+   - New `/arcanon:verify` command (re-read source, confirm cited evidence)
+   - Evidence schema enforcement at `persistFindings`
+   - Path canonicalization (template variable normalization)
+   - `services.base_path` migration + scan prompt update
+   - Per-scan quality score (`scan_versions.quality_score`)
+   - Reconciliation audit trail (`enrichment_log` table)
+
+3. **THE-1027 — `/arcanon:update --check` 5s timeout false-offline** (Medium)
+   - Decouple offline-decision from refresh-outcome
+
+4. **DEP — Deprecated command removal** (no Linear ticket, scope addition)
+   - Delete `commands/upload.md` and its 5 bats tests
+   - Add regression test asserting `/arcanon:upload` is absent
+   - Scrub README + skill + doc references
+   - Brings forward the originally-planned v0.2.0 removal
+
+**Breaking changes:** `/arcanon:upload` removed (CI scripts hardcoded to it must update). `runtime-deps.json` deletion forces install-deps.sh sentinel mismatch on first session post-upgrade → one-time reinstall. Both documented in CHANGELOG `### BREAKING`.
+
+**Scope discipline:** No new commands beyond `/arcanon:verify`. Not adding `/arcanon:list`, `/arcanon:doctor`, `/arcanon:diff` — those are v0.1.4. Not adding `--help` system — that's v0.1.4. Not touching scan ops or integrations — those are v0.1.5.
+
+## Next Milestone Goals
+
+After v0.1.3 ships:
+
+- **v0.1.4 Read-only & UX** — THE-1023 (`/list`, `/view`, `/doctor`, `/diff` commands), THE-1025 (status freshness completion + `--help` on every command)
+- **v0.1.5 Scan Ops & Integration** — THE-1024 (`/rescan`, `/correct`, `/shadow-scan` + `scan_overrides` table + shadow DB), THE-1026 (offline mode, explicit OpenAPI specs, known-externals catalog)
+- **v0.2.0 Skills & Agents** — Design the skills layer on top of shipped hooks, refactor inline `Explore` agent calls, add MCP-tool-composing investigator agent. Intentionally deferred since v0.1.1.
 
 ### Out of Scope
 
@@ -214,7 +264,7 @@ Architecture: commands/ for user-invoked features, skills/ for auto-invoked know
 Known tech debt: db/database.js has console.log in script-mode guard, getQueryEngineByHash inline migration workaround, renderLibraryConnections() unused `outgoing` parameter, node_metadata table unused (forward-looking for STRIDE/vuln views), impact-flow.bats imports stale module paths (pre-existing from v3.0 restructure), package.json bin entry references non-existent ligamen-init.js, graph-fit-to-screen.test.js has 2 stale assertions for inlined fitToScreen() (Phase 26 regression).
 
 ---
-*Last updated: 2026-04-23 — v0.1.2 SHIPPED (Ligamen Residue Purge)*
+*Last updated: 2026-04-25 — v0.1.3 SHIPPED (Trust & Foundations)*
 
 ## Constraints
 
@@ -288,4 +338,4 @@ Known tech debt: db/database.js has console.log in script-mode guard, getQueryEn
 | Combined plan+execute for phases 102–105 — v0.1.2 | Scope well-understood after Phase 101 discovery; separate planner spawns would have been ceremony. Saved ~4 agent round-trips. | ✓ Good |
 
 ---
-*Last updated: 2026-04-23 — v0.1.2 SHIPPED (Ligamen Residue Purge)*
+*Last updated: 2026-04-25 — v0.1.3 SHIPPED (Trust & Foundations)*

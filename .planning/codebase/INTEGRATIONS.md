@@ -1,207 +1,205 @@
 # External Integrations
 
-**Analysis Date:** 2026-03-31
+**Analysis Date:** 2026-04-24
+**Plugin version:** 0.1.2
+**Scope:** Arcanon is a Claude Code plugin. Its integrations are almost entirely local (SQLite, optional ChromaDB, `git`) plus one outbound SaaS target (Arcanon Hub).
 
-## APIs & External Services
+## Claude Code Plugin Integration
 
-**Claude Code Plugin System:**
-- Ligamen is a Claude Code plugin registered via `plugins/ligamen/.claude-plugin/marketplace.json`
-- Plugin manifest: `plugins/ligamen/.claude-plugin/plugin.json`
-- Hook system: `plugins/ligamen/hooks/hooks.json` defines 4 hook events:
-  - `PostToolUse` (Write|Edit|MultiEdit) — auto-format + auto-lint
-  - `PreToolUse` (Write|Edit|MultiEdit) — file guard
-  - `SessionStart` — dependency install + session context injection
-  - `UserPromptSubmit` — session context injection (fallback for upstream bug #10373)
-- Slash commands: `plugins/ligamen/commands/map.md`, `cross-impact.md`, `drift.md`
-- Skills: `plugins/ligamen/skills/impact/SKILL.md`
+This is the primary integration surface. Arcanon ships as a marketplace plugin that Claude Code loads from `plugins/arcanon/`.
 
-**Model Context Protocol (MCP):**
-- SDK: `@modelcontextprotocol/sdk` ^1.27.1
-- Transport: stdio (configured in `plugins/ligamen/.mcp.json`, launched via `plugins/ligamen/scripts/mcp-wrapper.sh`)
-- Server: `plugins/ligamen/worker/mcp/server.js`
-- Exposed tools:
-  - `impact_query` — query impact of a specific service/endpoint change
-  - `impact_changed` — impact analysis based on git-changed files
-  - `impact_graph` — full dependency graph retrieval
-  - `impact_search` — semantic search across service graph (ChromaDB or FTS5 fallback)
-  - `impact_scan` — trigger repo scanning
-  - `drift_versions` — cross-repo dependency version drift detection
-  - `drift_types` — shared type definition drift detection
-  - `drift_openapi` — OpenAPI spec breaking change detection
-- Query engine resolution: accepts absolute path, 12-char hex hash, repo name, or falls back to env/cwd
-- Transitive impact traversal: max depth 7 (`MAX_TRANSITIVE_DEPTH`), timeout 30s (`QUERY_TIMEOUT_MS`)
+**Manifest files:**
+- `.claude-plugin/marketplace.json` — root marketplace manifest, pins plugin version `0.1.2`.
+- `plugins/arcanon/.claude-plugin/plugin.json` — plugin metadata, license (AGPL-3.0-only), `userConfig` schema (api_token, hub_url, auto_sync, project_slug).
+- `plugins/arcanon/hooks/hooks.json` — hook registration.
 
-**Git Integration:**
-- Local git commands via `execFileSync()` in `plugins/ligamen/worker/scan/manager.js`
-- Operations: `git diff` (changed file detection), `git log` (commit history), `git rev-parse` (branch tracking)
-- Used for incremental scanning: only re-scans files changed since last commit
-- Drift scripts use git for cross-repo comparison: `plugins/ligamen/scripts/drift-versions.sh`, `drift-types.sh`, `drift-openapi.sh`
+**Hooks (`plugins/arcanon/hooks/hooks.json`):**
+- `SessionStart` — runs `scripts/install-deps.sh` (120s timeout; installs MCP runtime deps into `CLAUDE_PLUGIN_ROOT` on first use) then `scripts/session-start.sh` (10s; emits the ambient banner "N services mapped. K load-bearing files. Last scan: date. Hub: status").
+- `UserPromptSubmit` — re-runs `scripts/session-start.sh` (10s) so the banner refreshes mid-session.
+- `PreToolUse` (matcher `Write|Edit|MultiEdit`) — runs `scripts/file-guard.sh` then `scripts/impact-hook.sh` (each 10s). The impact hook surfaces a cross-repo consumer warning as `systemMessage` before a schema edit lands. Tier 1 classifies schema files (`*.proto`, `openapi.*`, `swagger.*`); Tier 2 does an SQLite `root_path` prefix match via worker HTTP with direct-SQLite fallback.
+- `PostToolUse` (matcher `Write|Edit|MultiEdit`) — runs `scripts/format.sh` then `scripts/lint.sh` (each 10s) to auto-format/lint edits.
 
-**CDN (D3 Force):**
-- D3 Force v3 loaded at runtime via ESM CDN: `https://cdn.jsdelivr.net/npm/d3-force@3/+esm`
-- Used in the Web Worker for graph physics simulation (`plugins/ligamen/worker/ui/force-worker.js`)
-- No local installation; requires internet access for first graph UI load (cached by browser thereafter)
+**Slash commands** (`plugins/arcanon/commands/*.md` — markdown with frontmatter):
+- `/arcanon:map` — scan linked repos, build graph, open UI.
+- `/arcanon:impact` — cross-repo impact query. `--exclude`, `--changed` flags; 3-state degradation (no worker -> grep; worker but no data -> prompt + grep; worker + data -> graph).
+- `/arcanon:drift` — dispatch to drift-versions / drift-types / drift-openapi.
+- `/arcanon:sync` — canonical upload+drain verb. `--drain`, `--repo`, `--dry-run`, `--force`.
+- `/arcanon:upload` — deprecated stub forwarding to `/arcanon:sync` (scheduled for removal in v0.2.0).
+- `/arcanon:status` — worker + hub status.
+- `/arcanon:login` — stash Hub API key into userConfig.
+- `/arcanon:export` — export the graph.
+- `/arcanon:update` — self-update (`--check`, `--kill`, `--prune-cache`, `--verify`).
 
-## Data Storage
+**Skills** (`plugins/arcanon/skills/`):
+- `impact/SKILL.md` — single skill describing the impact workflow. Loaded by Claude Code's skill system.
 
-**Databases:**
-- SQLite 3 (primary, embedded via better-sqlite3)
-  - Binding: `better-sqlite3` ^12.8.0
-  - Location: `~/.ligamen/projects/<sha256(projectRoot).slice(0,12)>/impact-map.db`
-  - Client: `QueryEngine` class in `plugins/ligamen/worker/db/query-engine.js`
-  - Pool: `plugins/ligamen/worker/db/pool.js` (Map-based cache, keyed by project root)
-  - Database lifecycle: `plugins/ligamen/worker/db/database.js` (openDb, runMigrations)
-  - Pragmas: WAL mode, foreign keys ON, synchronous NORMAL, 64MB cache, 5s busy timeout
-  - Migrations: 9 versions in `plugins/ligamen/worker/db/migrations/` (001 through 009)
-  - FTS5: full-text search virtual tables for services, connections, and fields
-  - Snapshots: VACUUM INTO for atomic copies, stored in `snapshots/` subdirectory
-  - Prepared statement cache: LRU cache (capacity 50) in `StmtCache` class (`plugins/ligamen/worker/db/query-engine.js`)
+**Agent prompts** (`plugins/arcanon/worker/scan/agent-prompt-*.md`) — shipped but invoked via a locally injected `agentRunner`, not via Claude Code's `Task` tool (see note in `worker/scan/manager.js`: "Background subagents cannot access MCP tools — Claude Code issue #13254").
 
-**Vector Database (Optional):**
-- ChromaDB v3.3.3
-  - Client: `plugins/ligamen/worker/server/chroma.js`
-  - Collection name: `ligamen-impact`
-  - Initialization: non-blocking at worker startup (controlled by `LIGAMEN_CHROMA_MODE` setting in `~/.ligamen/settings.json`)
-  - Health check: `client.heartbeat()` on init
-  - Operations:
-    - `syncFindings()` — fire-and-forget upsert of services and endpoints with enriched metadata (boundary names, actor names)
-    - `chromaSearch()` — semantic search; throws on unavailable to trigger FTS5 fallback
-  - Configuration via `~/.ligamen/settings.json`:
-    - `LIGAMEN_CHROMA_MODE` — "local" to enable
-    - `LIGAMEN_CHROMA_HOST` — host (default: localhost)
-    - `LIGAMEN_CHROMA_PORT` — port (default: 8000)
-    - `LIGAMEN_CHROMA_SSL` — "true" for HTTPS
-    - `LIGAMEN_CHROMA_API_KEY` — Bearer token auth
-    - `LIGAMEN_CHROMA_TENANT` — tenant (default: default_tenant)
-    - `LIGAMEN_CHROMA_DATABASE` — database (default: default_database)
-  - Failure mode: ChromaDB outage never prevents SQLite persistence; all sync is fire-and-forget
+## MCP Server
 
-**File Storage:**
-- Local filesystem only
-  - Logs: `~/.ligamen/logs/worker.log` (structured JSON, 10MB rotation, 3 rotated files)
-  - PID tracking: `~/.ligamen/worker.pid`, `~/.ligamen/worker.port`
-  - Settings: `~/.ligamen/settings.json`
-  - Per-project DBs: `~/.ligamen/projects/<hash>/impact-map.db`
+Stdio MCP server in `plugins/arcanon/worker/mcp/server.js`, launched via `plugins/arcanon/scripts/mcp-wrapper.sh`.
+
+**8 tools registered** (all with `zod` input schemas):
+
+*Impact tools (5):*
+- `impact_scan` — trigger a fresh scan of linked repos (delegates to `worker/scan/manager.js:scanRepos`).
+- `impact_query` — resolve a symbol/service to its cross-repo callers.
+- `impact_changed` — show impact of `git diff`-detected changes.
+- `impact_graph` — return the enriched service subgraph (nodes + edges) for a service root.
+- `impact_search` — three-tier search over connections (ChromaDB -> FTS5 -> SQL LIKE).
+
+*Drift tools (3):*
+- `drift_versions` — package-version drift across linked repos.
+- `drift_types` — structural type/struct/class shape drift across repos.
+- `drift_openapi` — OpenAPI contract drift across repos.
+
+**Database resolution:** `resolveDb(project)` in `worker/mcp/server.js` accepts an absolute path, 12-char sha256 hash, or bare repo name; falls back to `ARCANON_PROJECT_ROOT` / `cwd`. Absolute paths are sandboxed under `~/.arcanon/projects/`.
+
+**Transport:** `StdioServerTransport` — Claude Code spawns the MCP server as a subprocess and talks JSON-RPC over stdio.
+
+## Arcanon Hub (api.arcanon.dev)
+
+The single outbound SaaS integration. Client lives in `plugins/arcanon/worker/hub-sync/`.
+
+**Endpoints consumed:**
+- `POST {hub_url}/api/v1/scans/upload` — upload a `ScanPayloadV1` envelope. Documented contract in `worker/hub-sync/client.js`.
+  - `202` -> `{ scan_upload_id, status, latest_payload_version }` (success or idempotent hit).
+  - `409` -> idempotent hit (treated as success).
+  - `400` -> project not found.
+  - `401` -> missing/invalid key (JWTs explicitly rejected; must be `arc_...` bearer).
+  - `413` -> payload too large (< 10 MB enforced client-side in `payload.js:MAX_PAYLOAD_BYTES`).
+  - `422` -> Pydantic validation failed server-side.
+  - `429` -> rate limited; honors `Retry-After`.
+  - `5xx` / network -> retry with exponential backoff.
+
+**Client behaviour:**
+- `RETRY_ATTEMPTS = 3`, `BASE_BACKOFFS_MS = [1000, 2000, 4000]`, `DEFAULT_TIMEOUT_MS = 30_000`.
+- Offline queue at `~/.arcanon/queue/` drained by `worker/hub-sync/queue.js` and `/arcanon:sync --drain`.
+
+**Payload format:**
+- `worker/hub-sync/payload.js` emits `ScanPayloadV1` (`version: "1.0"` exact literal).
+- `metadata.tool = "claude-code"` (from the `KNOWN_TOOLS` enum mirrored from the server's `scan_payload.py`).
+- `metadata.repo_name`, `metadata.commit_sha` required; git metadata derived via `execFileSync("git", ...)` in `deriveGitMetadata()`.
+- `metadata.project_slug` required only for org-scoped API keys (supplied via `userConfig.project_slug`).
+- **Hub Payload v1.1** is behind a feature flag (additive fields on top of v1.0); default emitter remains v1.0.
+
+**Authentication:**
+- Bearer token `arc_...` from:
+  1. `userConfig.api_token` (Claude Code plugin settings), OR
+  2. `ARCANON_API_KEY` environment variable (fallback).
+- Get a key at `https://app.arcanon.dev/settings/api-keys` (per plugin.json description).
+- Auth logic in `worker/hub-sync/auth.js`.
+
+**Auto-sync:**
+- `userConfig.auto_sync` (renamed from legacy `auto_upload` in v0.1.1) — when `true`, every `/arcanon:map` uploads the current scan and drains the offline queue. Legacy key `auto_upload` is read via two-read fallback with a stderr deprecation warning.
+
+**Hub status surfaced via:**
+- `/arcanon:status` — worker + hub health.
+- Session-start banner (`scripts/session-start.sh`) — emits `Hub: auto-sync on | manual | not configured`.
+
+## Local Data Stores
+
+**SQLite (primary, required):**
+- One DB per project: `~/.arcanon/projects/<sha256(projectRoot)[:12]>/impact-map.db`.
+- Opened via `better-sqlite3` with `journal_mode = WAL`.
+- 11 migrations in `plugins/arcanon/worker/db/migrations/` apply idempotently via `IF NOT EXISTS`.
+- FTS5 virtual tables (`connections_fts`, `services_fts`, `endpoints_fts`) for keyword search.
+- No separate database server; entire store is a single file.
+
+**ChromaDB (optional, opt-in):**
+- Client: `chromadb ^3.3.3` in `plugins/arcanon/worker/server/chroma.js`.
+- Collection: `arcanon-impact` (renamed from `ligamen-impact` in v0.1.2 BREAKING — legacy collections are orphaned).
+- Activated only when `ARCANON_CHROMA_MODE=local`; `ARCANON_CHROMA_HOST`/`ARCANON_CHROMA_PORT` override the target.
+- Availability determined once at startup via `heartbeat()`. Outage is non-fatal — `syncFindings()` is fire-and-forget and SQLite persistence is never blocked.
+- Consumption pattern: `querySearch()` in `worker/db/query-engine.js` tries Chroma first, falls through to FTS5, then SQL `LIKE`.
+
+**File storage:**
+- All persistent state under `~/.arcanon/`. No cloud object store.
 
 **Caching:**
-- In-memory QueryEngine pool in `plugins/ligamen/worker/db/pool.js`
-  - Cache key: absolute project path (or `__hash__<hash>` for hash-based lookups)
-  - Cache value: `QueryEngine` instance with open DB connection
-  - Lifetime: worker process lifetime (cleared on shutdown)
-  - Lookup methods: by project root path, by 12-char SHA-256 hash, by repo name (scans all DBs)
+- None beyond the SQLite DB and the runtime-deps install sentinel (`$CLAUDE_PLUGIN_DATA/.arcanon-deps-installed.json`).
 
-## Authentication & Identity
+## Git Integration
 
-**Auth Provider:**
-- None required for internal APIs (worker binds to `127.0.0.1` only)
-- Claude Code provides session context via MCP stdio transport
-- ChromaDB connection supports optional Bearer token auth via `LIGAMEN_CHROMA_API_KEY`
+`git` is shelled out via `execFileSync("git", args, { cwd })` from Node:
+- `worker/hub-sync/payload.js:gitSafe()` — `remote get-url origin`, `rev-parse --abbrev-ref HEAD`, `rev-parse HEAD` to derive repo URL, branch, commit SHA for hub payload metadata.
+- `worker/scan/manager.js:getChangedFiles()` — `git diff` for incremental scan mode.
+- `/arcanon:impact --changed` — reads `git diff` to auto-detect changed symbols.
 
-**Security Controls:**
-- Worker HTTP server binds to `127.0.0.1` only (no network exposure) — `plugins/ligamen/worker/server/http.js` line 272
-- MCP server database access: read-only mode for query operations (`readonly: true` in `plugins/ligamen/worker/mcp/server.js`)
-- File guard blocks writes to sensitive files: `.env`, `.env.*`, `*.pem`, `*.key`, `*credentials*`, `*secret*`, `*.lock`, `package-lock.json`, `node_modules/`, `.venv/`, `target/` (`plugins/ligamen/scripts/file-guard.sh`)
+Every git call is fail-safe: on non-zero exit or missing repo the helpers return `null` / `[]` rather than throwing.
 
-## Monitoring & Observability
+## CODEOWNERS Integration
 
-**Error Tracking:**
-- None (no external error tracking service)
+Ownership enrichment in `plugins/arcanon/worker/scan/codeowners.js`:
+- Probes `.github/CODEOWNERS`, `CODEOWNERS`, `docs/CODEOWNERS` (GitHub spec order).
+- Parses glob-pattern ownership rules.
+- `picomatch ^4.0.4` performs last-match-wins matching. Loaded via `createRequire` because picomatch ships CJS only.
+- Owners are stored into `node_metadata` on services (OWN-01).
 
-**Logging:**
-- Structured JSON logging via `plugins/ligamen/worker/lib/logger.js`
-- Format: `{"ts": "ISO8601", "level": "INFO|WARN|ERROR|DEBUG", "msg": "...", "pid": N, "port": N, "component": "worker|http|mcp|scan", ...extra}`
-- Output: `~/.ligamen/logs/worker.log`
-- Rotation: size-based at 10MB threshold, keeps 3 rotated files (.1, .2, .3)
-- Log viewing: `GET /api/logs?component=&since=` endpoint serves parsed log lines to UI
-- Component tags: `worker`, `http`, `mcp`, `scan` — used for filtering
+Not an integration with GitHub's API — pure file parsing.
 
-**Health Checks:**
-- `GET /api/readiness` — always returns `{"status": "ok"}` (worker liveness)
-- `GET /api/version` — returns `{"version": "5.7.0"}` (version mismatch detection for auto-restart)
-- Worker status check: `plugins/ligamen/lib/worker-client.sh` `worker_running()` uses curl to `/api/readiness`
+## Authentication
 
-## CI/CD & Deployment
+**Hub (outbound):** Bearer `arc_...` tokens (see Arcanon Hub section).
 
-**Hosting:**
-- Fully local; runs as a background daemon on developer machines
-- Distributed as a Claude Code plugin via marketplace
+**Local worker HTTP server:** No authentication. Binds only to localhost; CORS whitelist limited to `http://localhost:5173`, `http://127.0.0.1:5173`, and `127.0.0.1:*` in dev.
 
-**CI Pipeline:**
-- No GitHub Actions or external CI detected
-- Local CI via Makefile targets:
-  - `make test` — runs BATS tests (`tests/*.bats`)
-  - `make lint` — ShellCheck on `plugins/ligamen/scripts/*.sh` and `plugins/ligamen/lib/*.sh`
-  - `make check` — validates `plugin.json` and `hooks.json` with jq
-  - `make install` / `make uninstall` — plugin registration
-  - `make dev` — launch Claude Code with plugin loaded (no install)
+**No OAuth, SSO, or third-party identity provider.**
 
-**Deployment:**
-- Plugin installation: `claude plugin marketplace add <url>` then `claude plugin install ligamen@ligamen --scope user`
-- Dependency installation: automated at session start via `plugins/ligamen/scripts/install-deps.sh` (npm install with diff-based idempotency)
-- Worker auto-start: triggered by `plugins/ligamen/scripts/session-start.sh` when `ligamen.config.json` has `impact-map` key
-- Version mismatch auto-restart: both `plugins/ligamen/scripts/worker-start.sh` and `plugins/ligamen/scripts/session-start.sh` check installed vs running version and restart if mismatched
+## Monitoring / Observability
 
-## REST API Endpoints
+**Logs:**
+- Structured JSON lines via `plugins/arcanon/worker/lib/logger.js`.
+- Location: `~/.arcanon/logs/worker.log` (and per-component log levels via `ARCANON_LOG_LEVEL`).
+- MCP server reads its log level from `~/.arcanon/settings.json` at startup (see `worker/mcp/server.js`).
 
-**Worker HTTP Server (`plugins/ligamen/worker/server/http.js`, default port 37888):**
+**Error tracking:**
+- No external error-tracker (Sentry / Rollbar / Datadog) integrated.
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/readiness` | Health check (always 200) |
-| GET | `/api/version` | Worker version from package.json |
-| GET | `/api/logs` | Filtered log lines for UI polling (`?component=`, `?since=`) |
-| GET | `/projects` | List all projects with DBs (hash, path, service/repo counts) |
-| GET | `/graph` | Full service dependency graph (`?project=` or `?hash=`) |
-| GET | `/impact` | Impact analysis for a change (`?change=`, `?project=`) |
-| GET | `/service/:name` | Service details by name (`?project=`) |
-| GET | `/versions` | Map version history (`?project=`) |
-| POST | `/scan` | Persist scan findings (body: `repo_path`, `findings`, `commit`, `project`) |
+**Metrics:**
+- Impact-hook latency benchmarked in bats (`tests/impact-hook-latency.sh`) with `IMPACT_HOOK_LATENCY_THRESHOLD` — `100` ms in CI, `50` ms locally. No metrics are exported at runtime.
 
-**CORS Policy:**
-- Origins: `http://localhost:5173`, `http://127.0.0.1:5173`, `http://127.0.0.1:*` (regex)
+## CI / Release
 
-**Static Files:**
-- Served from `plugins/ligamen/worker/ui/` at `/` prefix
+**CI:** GitHub Actions only (`.github/workflows/ci.yml`) — lint-manifests, shell-lint, test-hub-sync (Node 20/22), test-bats.
 
-## Agent Scanning System
+**Release / distribution:**
+- Consumed via the Claude Code plugin marketplace (`claude plugin marketplace add <this-repo>` then `claude plugin install arcanon@arcanon`).
+- Self-update path via `/arcanon:update` (version check against the marketplace, `--kill` gracefully stops the worker, `--verify` polls worker health).
+- No npm publish, Docker registry, or GitHub Releases artifact pipeline currently wired.
 
-**Scan orchestration:** `plugins/ligamen/worker/scan/manager.js`
-- Injected agent runner pattern (decouples from Claude's Task tool)
-- Modes: `full` (all files), `incremental` (only git-changed files), `incremental-noop` (no changes)
-- Discovery pass: `plugins/ligamen/worker/scan/discovery.js` — identifies repos from `ligamen.config.json` linked-repos + parent directory scan
-- Findings parser: `plugins/ligamen/worker/scan/findings.js` — extracts fenced JSON from agent output, validates schema
-- Enrichment pipeline: `plugins/ligamen/worker/scan/enrichment.js` (registry pattern)
-  - CODEOWNERS enricher: `plugins/ligamen/worker/scan/codeowners.js`
-  - Auth/DB extractor: `plugins/ligamen/worker/scan/enrichment/auth-db-extractor.js` — file-system-based detection of auth mechanisms and database backends
-- Confirmation step: `plugins/ligamen/worker/scan/confirmation.js`
-- Agent output schema: `plugins/ligamen/worker/scan/agent-schema.json`
+## Webhooks / Callbacks
 
-## Environment Configuration
-
-**Required env vars (set by Claude Code plugin system):**
-- `CLAUDE_PLUGIN_ROOT` — base path for plugin files
-- `CLAUDE_PLUGIN_DATA` — persistent data directory for plugin
-
-**Optional env vars (user-configurable):**
-- See STACK.md "Environment Variables" section for complete list
-
-**Settings files:**
-- `~/.ligamen/settings.json` — machine-wide settings (worker port, log level, ChromaDB config)
-- `ligamen.config.json` — per-project (linked repos, boundaries, impact-map settings)
-
-**Secrets:**
-- ChromaDB API key stored in `~/.ligamen/settings.json` (key: `LIGAMEN_CHROMA_API_KEY`)
-- No `.env` files used by Ligamen itself
-- No external secret management service
-
-## Webhooks & Callbacks
-
-**Incoming:**
-- None
+**Incoming:** None. The worker exposes a local-only REST API on `127.0.0.1:${port}` (default 37888) consumed by the built-in UI and by the plugin's own bash scripts (`lib/worker-client.sh`). Endpoints include `/api/readiness`, `/api/version`, and query-engine routes.
 
 **Outgoing:**
-- None
+- `POST {hub_url}/api/v1/scans/upload` — the only outbound HTTP call.
+
+## Explicitly NOT Integrated
+
+Per the plugin brief:
+- **Issue trackers** (Linear, GitHub Issues, Jira) — not integrated. Ownership info comes from `CODEOWNERS`, not from an API.
+- **Chat** (Slack, Discord, Teams) — not integrated.
+- **Other SaaS APIs** — none. The plugin ships entirely offline-capable, with Arcanon Hub as the single opt-in SaaS endpoint.
+
+## Required Environment Variables (summary)
+
+| Variable | Purpose | Required? |
+|----------|---------|-----------|
+| `ARCANON_API_KEY` | Hub bearer token fallback | Only if `userConfig.api_token` unset |
+| `ARCANON_PROJECT_ROOT` | Override project root for MCP server | No |
+| `ARCANON_DB_PATH` | Override per-project DB location | No |
+| `ARCANON_CHROMA_MODE` | Enable ChromaDB tier (`local`) | No (default disabled) |
+| `ARCANON_CHROMA_HOST`, `ARCANON_CHROMA_PORT` | ChromaDB target | No |
+| `ARCANON_LOG_LEVEL` | Logger threshold | No |
+| `ARCANON_DISABLE_HOOK` | Silence the PreToolUse impact hook | No (escape hatch) |
+| `ARCANON_IMPACT_DEBUG` | Emit JSONL trace from impact hook | No |
+| `IMPACT_HOOK_LATENCY_THRESHOLD` | bats latency ceiling (ms) | CI only |
+| `CLAUDE_PLUGIN_ROOT` | Plugin install dir | Injected by Claude Code |
+| `CLAUDE_PLUGIN_DATA` | Per-plugin state dir | Injected by Claude Code |
+
+Legacy `LIGAMEN_*` env vars were **removed** in v0.1.2 (BREAKING). No fallback.
 
 ---
 
-*Integration audit: 2026-03-31*
+*Integration audit: 2026-04-24*

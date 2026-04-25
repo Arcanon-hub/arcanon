@@ -156,6 +156,13 @@ export function validateFindings(obj) {
       );
       continue;
     }
+    // base_path is optional (D-01); when present, must be string or null (D-03 multi-segment OK)
+    if ("base_path" in svc && svc.base_path !== null && typeof svc.base_path !== "string") {
+      warnings.push(
+        `services[${i}].base_path must be a string or null — skipping`,
+      );
+      continue;
+    }
     validServices.push(svc);
   }
 

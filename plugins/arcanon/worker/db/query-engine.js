@@ -214,6 +214,30 @@ export async function search(query, options = {}) {
 const SEVERITY_ORDER = { CRITICAL: 0, WARN: 1, INFO: 2 };
 
 // ---------------------------------------------------------------------------
+// Path canonicalization (TRUST-03)
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonicalize a connection path by replacing every `{xxx}` template variable
+ * with `{_}`. Used by persistFindings to collapse template-variant connections
+ * (e.g. /runtime/streams/{stream_id} and /runtime/streams/{name} both become
+ * /runtime/streams/{_}). Returns null/empty unchanged so we don't mint a `{_}`
+ * for paths the agent didn't claim.
+ *
+ * Out of scope this phase: Express `:id` style, OpenAPI named groups, JAX-RS
+ * constraint suffixes. See 109-CONTEXT.md D-06 in
+ * .planning/phases/109-path-canonicalization-and-evidence/.
+ *
+ * @param {string|null|undefined} pathStr
+ * @returns {string|null}
+ */
+export function canonicalizePath(pathStr) {
+  if (pathStr == null) return null;
+  if (pathStr === "") return "";
+  return pathStr.replace(/\{[^/}]+\}/g, "{_}");
+}
+
+// ---------------------------------------------------------------------------
 // Binding sanitizer
 // ---------------------------------------------------------------------------
 
@@ -229,6 +253,39 @@ function sanitizeBindings(obj) {
     out[key] = obj[key] === undefined ? null : obj[key];
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// base_path strip helper (TRUST-04 / Phase 110)
+// ---------------------------------------------------------------------------
+
+/**
+ * Strips a target service's `base_path` from an outbound connection path,
+ * if and only if the prefix is at a path-segment boundary.
+ *
+ * Algorithm (D-02 + D-03):
+ *   1. If basePath is null/empty/undefined → return null (no strip applies).
+ *   2. Normalize trailing slash on basePath.
+ *   3. If connPath === basePath → return "/" (full match collapses to root).
+ *   4. If connPath starts with basePath + "/" → return connPath.slice(bp.length).
+ *   5. Otherwise (substring without segment boundary, or no prefix at all) → return null.
+ *
+ * Returns null in every "no strip" case — callers should fall back to literal
+ * compare (which preserves correctness when basePath is absent).
+ *
+ * @param {string} connPath - Outbound connection path (the "candidate to strip from")
+ * @param {string|null|undefined} basePath - Target service's base_path
+ * @returns {string|null} Stripped path, or null when no strip applies.
+ */
+export function stripBasePath(connPath, basePath) {
+  if (basePath == null || basePath === "") return null;
+  // Normalize trailing slash
+  const bp = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
+  if (bp === "") return null;
+  if (connPath === bp) return "/";
+  if (connPath.startsWith(bp + "/")) return connPath.slice(bp.length);
+  // bp is a substring but not a path-segment boundary, OR no prefix at all.
+  return null;
 }
 
 export class QueryEngine {
@@ -352,52 +409,81 @@ export class QueryEngine {
         scanned_at = COALESCE(excluded.scanned_at, scanned_at)
     `);
 
-    // Try with boundary_entry column (migration 011). Fall back to pre-011 schema
-    // for databases that haven't yet applied the migration.
+    // Try with base_path column (migration 014, TRUST-04). Fall back through
+    // migration-011 (boundary_entry only), then pre-011 plain shape for older
+    // databases. Mirrors the connections.path_template multi-tier fallback.
+    this._hasBasePath = false;
     try {
       this._stmtUpsertService = db.prepare(`
-        INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id, boundary_entry)
-        VALUES (@repo_id, @name, @root_path, @language, @type, @scan_version_id, @boundary_entry)
+        INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id, boundary_entry, base_path)
+        VALUES (@repo_id, @name, @root_path, @language, @type, @scan_version_id, @boundary_entry, @base_path)
         ON CONFLICT(repo_id, name) DO UPDATE SET
           root_path = excluded.root_path,
           language = excluded.language,
           type = excluded.type,
           scan_version_id = excluded.scan_version_id,
-          boundary_entry = excluded.boundary_entry
+          boundary_entry = excluded.boundary_entry,
+          base_path = excluded.base_path
       `);
+      this._hasBasePath = true;
     } catch {
-      // boundary_entry column not present — pre-migration-011 database
-      this._stmtUpsertService = db.prepare(`
-        INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id)
-        VALUES (@repo_id, @name, @root_path, @language, @type, @scan_version_id)
-        ON CONFLICT(repo_id, name) DO UPDATE SET
-          root_path = excluded.root_path,
-          language = excluded.language,
-          type = excluded.type,
-          scan_version_id = excluded.scan_version_id
-      `);
-    }
-
-    // Try with confidence+evidence columns (migration 009). Fall back to
-    // crossing-only (migration 008), then pre-migration-008 for compatibility.
-    try {
-      this._stmtUpsertConnection = db.prepare(`
-        INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, source_file, target_file, scan_version_id, crossing, confidence, evidence)
-        VALUES (@source_service_id, @target_service_id, @protocol, @method, @path, @source_file, @target_file, @scan_version_id, @crossing, @confidence, @evidence)
-      `);
-    } catch {
-      // confidence/evidence columns not present — try with crossing only (migration 008)
+      // base_path column not present — try migration-011 shape
       try {
-        this._stmtUpsertConnection = db.prepare(`
-          INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, source_file, target_file, scan_version_id, crossing)
-          VALUES (@source_service_id, @target_service_id, @protocol, @method, @path, @source_file, @target_file, @scan_version_id, @crossing)
+        this._stmtUpsertService = db.prepare(`
+          INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id, boundary_entry)
+          VALUES (@repo_id, @name, @root_path, @language, @type, @scan_version_id, @boundary_entry)
+          ON CONFLICT(repo_id, name) DO UPDATE SET
+            root_path = excluded.root_path,
+            language = excluded.language,
+            type = excluded.type,
+            scan_version_id = excluded.scan_version_id,
+            boundary_entry = excluded.boundary_entry
         `);
       } catch {
-        // crossing column not present — pre-migration-008 database
-        this._stmtUpsertConnection = db.prepare(`
-          INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, source_file, target_file, scan_version_id)
-          VALUES (@source_service_id, @target_service_id, @protocol, @method, @path, @source_file, @target_file, @scan_version_id)
+        // boundary_entry column not present — pre-migration-011 database
+        this._stmtUpsertService = db.prepare(`
+          INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id)
+          VALUES (@repo_id, @name, @root_path, @language, @type, @scan_version_id)
+          ON CONFLICT(repo_id, name) DO UPDATE SET
+            root_path = excluded.root_path,
+            language = excluded.language,
+            type = excluded.type,
+            scan_version_id = excluded.scan_version_id
         `);
+      }
+    }
+
+    // Try with path_template column (migration 013, TRUST-03). Falls back
+    // through migration-009 (confidence+evidence), migration-008 (crossing),
+    // then pre-008 plain columns for legacy DBs.
+    this._hasPathTemplate = false;
+    try {
+      this._stmtUpsertConnection = db.prepare(`
+        INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, path_template, source_file, target_file, scan_version_id, crossing, confidence, evidence)
+        VALUES (@source_service_id, @target_service_id, @protocol, @method, @path, @path_template, @source_file, @target_file, @scan_version_id, @crossing, @confidence, @evidence)
+      `);
+      this._hasPathTemplate = true;
+    } catch {
+      // path_template column not present — pre-migration-013 db
+      try {
+        this._stmtUpsertConnection = db.prepare(`
+          INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, source_file, target_file, scan_version_id, crossing, confidence, evidence)
+          VALUES (@source_service_id, @target_service_id, @protocol, @method, @path, @source_file, @target_file, @scan_version_id, @crossing, @confidence, @evidence)
+        `);
+      } catch {
+        // confidence/evidence columns not present — try with crossing only (migration 008)
+        try {
+          this._stmtUpsertConnection = db.prepare(`
+            INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, source_file, target_file, scan_version_id, crossing)
+            VALUES (@source_service_id, @target_service_id, @protocol, @method, @path, @source_file, @target_file, @scan_version_id, @crossing)
+          `);
+        } catch {
+          // crossing column not present — pre-migration-008 database
+          this._stmtUpsertConnection = db.prepare(`
+            INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, source_file, target_file, scan_version_id)
+            VALUES (@source_service_id, @target_service_id, @protocol, @method, @path, @source_file, @target_file, @scan_version_id)
+          `);
+        }
       }
     }
 
@@ -524,6 +610,91 @@ export class QueryEngine {
     } catch {
       // service_dependencies table not present (pre-migration-010 db)
       this._stmtUpsertDependency = null;
+    }
+
+    // --- quality_score statements (migration 015 / TRUST-05, TRUST-13) ---
+    // The breakdown SQL counts confidence='high' and confidence='low' rows in
+    // a single scan. Wrapped in try/catch so a pre-migration-015 db (no
+    // quality_score column) cleanly disables persistence — endScan stays
+    // best-effort.
+    //
+    // Lock-phrase (Phase 111 CONTEXT D-02, verbatim — kept on a single line so
+    // the source-grep test in query-engine.quality-score.test.js can verify it):
+    // NULL confidence is counted in `total` but contributes 0 to the numerator — agent omissions do not count as 'low'.
+    this._stmtUpdateQualityScore = null;
+    this._stmtSelectQualityScore = null;
+    this._stmtSelectQualityBreakdown = null;
+    try {
+      this._stmtUpdateQualityScore = db.prepare(
+        "UPDATE scan_versions SET quality_score = ? WHERE id = ?"
+      );
+      this._stmtSelectQualityScore = db.prepare(
+        "SELECT quality_score FROM scan_versions WHERE id = ?"
+      );
+      this._stmtSelectQualityBreakdown = db.prepare(`
+        SELECT
+          COUNT(*) AS total,
+          SUM(CASE WHEN confidence = 'high' THEN 1 ELSE 0 END) AS high,
+          SUM(CASE WHEN confidence = 'low'  THEN 1 ELSE 0 END) AS low,
+          SUM(CASE WHEN confidence IS NULL  THEN 1 ELSE 0 END) AS null_count
+        FROM connections
+        WHERE scan_version_id = ?
+      `);
+      // Probe: a pre-015 db has scan_versions but no quality_score column. The
+      // SELECT above does not reference quality_score, so the prepare succeeds
+      // even on pre-015. We must explicitly verify the column exists before
+      // arming the writer; otherwise endScan would throw at run() time.
+      const cols = db.prepare("PRAGMA table_info(scan_versions)").all();
+      if (!cols.some((c) => c.name === "quality_score")) {
+        this._stmtUpdateQualityScore = null;
+        this._stmtSelectQualityScore = null;
+        this._stmtSelectQualityBreakdown = null;
+      }
+    } catch {
+      // scan_versions table absent (pre-migration-005) — disable.
+      this._stmtUpdateQualityScore = null;
+      this._stmtSelectQualityScore = null;
+      this._stmtSelectQualityBreakdown = null;
+    }
+
+    // --- enrichment_log statements (migration 016 / TRUST-06, TRUST-14) ---
+    // Wrapped in try/catch so a pre-migration-016 db (no enrichment_log table)
+    // cleanly disables the writers/readers — logEnrichment returns null and
+    // getEnrichmentLog returns []. Mirrors the actor / node_metadata /
+    // service_dependencies fallback pattern above.
+    //
+    // Decision (Phase 111 CONTEXT D-04): logEnrichment does NOT pre-validate
+    // target_kind in JS. The migration-016 SQL CHECK constraint is the source
+    // of truth — duplicating the check would silently mask SQL-level errors
+    // and drift if the CHECK loosens in a later migration.
+    this._stmtInsertEnrichmentLog = null;
+    this._stmtSelectEnrichmentLog = null;
+    this._stmtSelectEnrichmentLogByEnricher = null;
+    try {
+      this._stmtInsertEnrichmentLog = db.prepare(`
+        INSERT INTO enrichment_log
+          (scan_version_id, enricher, target_kind, target_id, field, from_value, to_value, reason)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      this._stmtSelectEnrichmentLog = db.prepare(`
+        SELECT id, scan_version_id, enricher, target_kind, target_id, field,
+               from_value, to_value, reason, created_at
+        FROM enrichment_log
+        WHERE scan_version_id = ?
+        ORDER BY created_at ASC, id ASC
+      `);
+      this._stmtSelectEnrichmentLogByEnricher = db.prepare(`
+        SELECT id, scan_version_id, enricher, target_kind, target_id, field,
+               from_value, to_value, reason, created_at
+        FROM enrichment_log
+        WHERE scan_version_id = ? AND enricher = ?
+        ORDER BY created_at ASC, id ASC
+      `);
+    } catch {
+      // enrichment_log table absent — migration 016 not applied.
+      this._stmtInsertEnrichmentLog = null;
+      this._stmtSelectEnrichmentLog = null;
+      this._stmtSelectEnrichmentLogByEnricher = null;
     }
   }
 
@@ -671,20 +842,42 @@ export class QueryEngine {
   }
 
   /**
-   * Inserts or replaces a service row.
+   * Inserts or replaces a service row. Always returns the stable row id —
+   * looks up by (repo_id, name) UNIQUE key when the prepared statement reports
+   * lastInsertRowid=0 (UPDATE path) or returns a stale rowid from a prior
+   * INSERT on a different table. (#TRUST-03 idempotency: caller wires
+   * serviceIdMap from this return value, so a stale rowid from a sibling
+   * INSERT in the same connection produced cross-wired connection FK
+   * references on re-scan.)
+   *
    * @param {{ repo_id: number, name: string, root_path: string, language: string }} serviceData
    * @returns {number} Row id
    */
   upsertService(serviceData) {
-    const result = this._stmtUpsertService.run(
-      sanitizeBindings({
-        type: "service",
-        scan_version_id: null,
-        boundary_entry: null,
-        ...serviceData,
-      })
+    const sanitized = sanitizeBindings({
+      type: "service",
+      scan_version_id: null,
+      boundary_entry: null,
+      base_path: null,
+      ...serviceData,
+    });
+    // If the prepared statement does NOT include base_path (pre-migration-014),
+    // strip the key so better-sqlite3 doesn't reject the extra named param.
+    if (!this._hasBasePath) delete sanitized.base_path;
+    this._stmtUpsertService.run(sanitized);
+    // lastInsertRowid is unreliable on the ON CONFLICT DO UPDATE path
+    // (returns 0 or a stale rowid from a prior INSERT on another table).
+    // Always look up by the UNIQUE(repo_id, name) tuple to get the stable id.
+    if (!this._stmtSelectServiceByRepoName) {
+      this._stmtSelectServiceByRepoName = this._db.prepare(
+        "SELECT id FROM services WHERE repo_id = ? AND name = ?"
+      );
+    }
+    const row = this._stmtSelectServiceByRepoName.get(
+      sanitized.repo_id,
+      sanitized.name
     );
-    return result.lastInsertRowid;
+    return row ? row.id : null;
   }
 
   /**
@@ -693,20 +886,166 @@ export class QueryEngine {
    * @returns {number} Row id
    */
   upsertConnection(connData) {
-    const result = this._stmtUpsertConnection.run(
-      sanitizeBindings({
-        method: null,
-        path: null,
-        source_file: null,
-        target_file: null,
-        scan_version_id: null,
-        crossing: null,
-        confidence: null,
-        evidence: null,
-        ...connData,
-      })
-    );
+    const sanitized = sanitizeBindings({
+      method: null,
+      path: null,
+      source_file: null,
+      target_file: null,
+      scan_version_id: null,
+      crossing: null,
+      confidence: null,
+      evidence: null,
+      path_template: null,
+      ...connData,
+    });
+    // If the prepared statement does NOT include path_template (pre-migration-013),
+    // strip the key so better-sqlite3 doesn't complain about an extra named param.
+    if (!this._hasPathTemplate) delete sanitized.path_template;
+    const result = this._stmtUpsertConnection.run(sanitized);
     return result.lastInsertRowid;
+  }
+
+  // --------------------------------------------------------------------------
+  // Evidence-substring guard helpers (TRUST-02)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Look up the repo root path from `repos.path` for the given repoId.
+   * Used by _validateEvidence to resolve relative source_file references the
+   * agent typically emits. Returns null if the repo row is missing.
+   *
+   * @param {number} repoId
+   * @returns {string|null}
+   */
+  _getRepoRootPath(repoId) {
+    if (!this._stmtGetRepoRootPath) {
+      this._stmtGetRepoRootPath = this._db.prepare(
+        "SELECT path FROM repos WHERE id = ?"
+      );
+    }
+    const row = this._stmtGetRepoRootPath.get(repoId);
+    return row ? row.path : null;
+  }
+
+  /**
+   * Validate that `evidence` appears as a literal substring in `source_file`.
+   * Returns `{ ok: true }` on success or skip-with-warn cases (null/empty
+   * evidence, null source_file, missing/unreadable source_file). Returns
+   * `{ ok: false, reason }` only when evidence is non-empty AND source_file
+   * resolves to a readable file AND the literal substring is not found.
+   *
+   * Per .planning/phases/109-path-canonicalization-and-evidence/109-CONTEXT.md:
+   *   D-03: whole-file substring check (no line_start window — schema doesn't
+   *         carry one).
+   *   D-04: literal substring, no whitespace/regex normalization.
+   *   D-05: lenient on null/missing/unreadable — return ok:true (warn when
+   *         appropriate; persist anyway).
+   *
+   * @param {{ evidence?: string|null, source_file?: string|null }} conn
+   * @param {string|null} repoRootPath - From repos.path; used to resolve
+   *   relative source_file references the agent typically emits.
+   * @returns {{ ok: boolean, warn?: string, reason?: string }}
+   */
+  _validateEvidence(conn, repoRootPath) {
+    const evidence = (conn.evidence ?? "").trim();
+    if (!evidence) return { ok: true }; // D-05 case 1: agent didn't claim evidence
+
+    const srcRel = conn.source_file;
+    if (srcRel == null || srcRel === "") return { ok: true }; // D-05 case 2
+
+    // Resolve relative paths against repo root. Absolute paths used as-is.
+    let abs = srcRel;
+    if (!path.isAbsolute(srcRel) && repoRootPath) {
+      abs = path.join(repoRootPath, srcRel);
+    }
+
+    let content;
+    try {
+      content = fs.readFileSync(abs, "utf8");
+    } catch (e) {
+      // D-05 case 3: file missing or unreadable — warn but don't reject
+      const detail = e.code || e.message || "unknown error";
+      return {
+        ok: true,
+        warn:
+          "[persistFindings] cannot validate evidence: source_file '" +
+          srcRel +
+          "' does not exist or is unreadable (" +
+          detail +
+          ")",
+      };
+    }
+
+    if (content.indexOf(evidence) !== -1) {
+      return { ok: true };
+    }
+
+    const preview =
+      evidence.length > 80 ? evidence.slice(0, 80) + "..." : evidence;
+    return {
+      ok: false,
+      reason: "evidence not found in '" + srcRel + "': " + preview,
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // path_template merge helpers (TRUST-03)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Merge a new template into an existing comma-separated list, dedup'd by
+   * literal-equality. Returns the joined string. Used by persistFindings
+   * before INSERT OR REPLACE clobbers the existing path_template value.
+   *
+   * @param {string|null} existingCsv - Current path_template value (may be null/empty)
+   * @param {string|null} newTemplate - The agent's raw conn.path
+   * @returns {string|null}
+   */
+  _mergePathTemplates(existingCsv, newTemplate) {
+    if (!newTemplate) return existingCsv ?? null;
+    if (!existingCsv) return newTemplate;
+    const parts = existingCsv
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.includes(newTemplate)) return existingCsv;
+    parts.push(newTemplate);
+    return parts.join(",");
+  }
+
+  /**
+   * Read the current path_template value for the row that would be hit by an
+   * upsertConnection call, identified by the 5-col UNIQUE tuple
+   * (source, target, protocol, method, canonical path). Returns null when no
+   * row exists yet, or when the schema is pre-migration-013.
+   *
+   * Note: `method IS ?` (not `=`) so NULL methods compare correctly.
+   *
+   * @param {number} sourceId
+   * @param {number} targetId
+   * @param {string} protocol
+   * @param {string|null} method
+   * @param {string|null} canonicalPath
+   * @returns {string|null}
+   */
+  _getExistingPathTemplate(sourceId, targetId, protocol, method, canonicalPath) {
+    if (!this._hasPathTemplate) return null;
+    if (!this._stmtSelectExistingPathTemplate) {
+      this._stmtSelectExistingPathTemplate = this._db.prepare(`
+        SELECT path_template FROM connections
+        WHERE source_service_id = ? AND target_service_id = ?
+          AND protocol = ? AND method IS ? AND path IS ?
+        LIMIT 1
+      `);
+    }
+    const row = this._stmtSelectExistingPathTemplate.get(
+      sourceId,
+      targetId,
+      protocol,
+      method,
+      canonicalPath
+    );
+    return row ? row.path_template : null;
   }
 
   /**
@@ -756,6 +1095,78 @@ export class QueryEngine {
       value: value ?? null,
     });
     return result.lastInsertRowid;
+  }
+
+  /**
+   * Write a row to enrichment_log. (TRUST-06 / TRUST-14 — migration 016.)
+   *
+   * No-op (returns null) when migration 016 is not applied — the table is
+   * absent and the prepared statement could not arm in the constructor.
+   *
+   * Throws (SqliteError) when the SQL CHECK on `target_kind` fails — JS does
+   * NOT pre-validate per Phase 111 CONTEXT D-04 (the SQL CHECK is the source
+   * of truth; duplicating the check would silently mask SQL-level errors).
+   *
+   * @param {number} scanVersionId
+   * @param {string} enricher          — e.g., 'reconciliation', 'codeowners', 'auth-db'
+   * @param {'service'|'connection'} targetKind
+   * @param {number} targetId          — services.id or connections.id
+   * @param {string} field             — e.g., 'crossing', 'owner'
+   * @param {string|null} fromValue
+   * @param {string|null} toValue
+   * @param {string|null} reason
+   * @returns {number|null} lastInsertRowid, or null on pre-016 db
+   */
+  logEnrichment(
+    scanVersionId,
+    enricher,
+    targetKind,
+    targetId,
+    field,
+    fromValue,
+    toValue,
+    reason,
+  ) {
+    if (!this._stmtInsertEnrichmentLog) return null;
+    const result = this._stmtInsertEnrichmentLog.run(
+      scanVersionId,
+      enricher,
+      targetKind,
+      targetId,
+      field,
+      fromValue ?? null,
+      toValue ?? null,
+      reason ?? null,
+    );
+    return Number(result.lastInsertRowid);
+  }
+
+  /**
+   * Read rows from enrichment_log for a scan_version, optionally filtered by
+   * `enricher`. Returns [] (not null, not throwing) on a pre-016 db, on an
+   * unknown scan_version_id, or on any read error. Sort order: created_at ASC,
+   * id ASC (id is the tie-breaker because created_at granularity is 1s).
+   *
+   * @param {number} scanVersionId
+   * @param {{ enricher?: string }} [opts]
+   * @returns {Array<{id:number, scan_version_id:number, enricher:string,
+   *   target_kind:string, target_id:number, field:string,
+   *   from_value:string|null, to_value:string|null, reason:string|null,
+   *   created_at:string}>}
+   */
+  getEnrichmentLog(scanVersionId, opts = {}) {
+    if (!this._stmtSelectEnrichmentLog) return [];
+    try {
+      if (opts && opts.enricher) {
+        return this._stmtSelectEnrichmentLogByEnricher.all(
+          scanVersionId,
+          opts.enricher,
+        );
+      }
+      return this._stmtSelectEnrichmentLog.all(scanVersionId);
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -905,6 +1316,26 @@ export class QueryEngine {
     }
     this._stmtEndScan.run(new Date().toISOString(), scanVersionId);
 
+    // TRUST-05: compute quality_score = (high + 0.5 * low) / total and persist
+    // it on the scan_versions row. NULL when total = 0 (no connections in this
+    // scan). NULL confidence rows count toward `total` but contribute 0 to the
+    // numerator (Phase 111 D-02). Best-effort — a write failure here MUST NOT
+    // prevent the bracket close, so the call is wrapped in try/catch.
+    if (this._stmtSelectQualityBreakdown && this._stmtUpdateQualityScore) {
+      try {
+        const row = this._stmtSelectQualityBreakdown.get(scanVersionId);
+        const total = row?.total ?? 0;
+        const high = row?.high ?? 0;
+        const low = row?.low ?? 0;
+        const score = total > 0 ? (high + 0.5 * low) / total : null;
+        this._stmtUpdateQualityScore.run(score, scanVersionId);
+      } catch (err) {
+        const warn =
+          this._logger?.warn?.bind(this._logger) ?? console.warn;
+        warn(`[arcanon] endScan: quality_score write failed: ${err.message}`);
+      }
+    }
+
     // Clean up orphaned schema rows BEFORE deleting stale connections
     // (schemas FK references connections — must delete child rows first to avoid FK violation)
     //
@@ -959,6 +1390,87 @@ export class QueryEngine {
    */
   getRepoByPath(repoPath) {
     return this._stmtGetRepoByPath.get(repoPath) ?? null;
+  }
+
+  /**
+   * Returns the persisted quality_score for the given scan version, or null
+   * when the value has not been written (column absent on a pre-015 db, the
+   * scan_version row is missing, or endScan has not yet run for this scan).
+   *
+   * The score formula and NULL semantics are documented at the SQL site in the
+   * constructor and in `endScan` — see Phase 111 CONTEXT D-02. (TRUST-05.)
+   *
+   * @param {number} scanVersionId
+   * @returns {number | null}
+   */
+  getQualityScore(scanVersionId) {
+    if (!this._stmtSelectQualityScore) return null;
+    try {
+      const row = this._stmtSelectQualityScore.get(scanVersionId);
+      return row?.quality_score ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Returns the full quality breakdown for a scan version. Used by the
+   * /api/scan-quality HTTP endpoint and by `/arcanon:map` end-of-output.
+   *
+   * Shape:
+   *   {
+   *     scan_version_id: number,
+   *     total: number,
+   *     high: number,
+   *     low: number,
+   *     null_count: number,
+   *     prose_evidence_warnings: number,   // D-01: 0 placeholder for v0.1.3
+   *     service_count: number,
+   *     quality_score: number | null,
+   *     completed_at: string | null,
+   *   }
+   *
+   * `prose_evidence_warnings` returns 0 today — the TRUST-02 prose-evidence
+   * rejection logic logs to stderr but does not persist a counter. A future
+   * ticket will add a `scan_versions.prose_evidence_warnings INTEGER` column
+   * populated by `persistFindings` (out of v0.1.3 scope per CONTEXT D-01).
+   *
+   * Returns null when the quality_score column is absent (pre-015 db) or when
+   * the scan_version row does not exist.
+   *
+   * @param {number} scanVersionId
+   * @returns {object | null}
+   */
+  getScanQualityBreakdown(scanVersionId) {
+    if (!this._stmtSelectQualityBreakdown) return null;
+    try {
+      const breakdown = this._stmtSelectQualityBreakdown.get(scanVersionId);
+      const sv = this._db
+        .prepare(
+          "SELECT id, completed_at, quality_score, repo_id FROM scan_versions WHERE id = ?",
+        )
+        .get(scanVersionId);
+      if (!sv) return null;
+      const serviceCount =
+        this._db
+          .prepare("SELECT COUNT(*) AS n FROM services WHERE scan_version_id = ?")
+          .get(scanVersionId)?.n ?? 0;
+      return {
+        scan_version_id: scanVersionId,
+        total: breakdown?.total ?? 0,
+        high: breakdown?.high ?? 0,
+        low: breakdown?.low ?? 0,
+        null_count: breakdown?.null_count ?? 0,
+        // TODO(post-v0.1.3): persist prose_evidence_warnings counter on
+        // scan_versions and surface it here. See CONTEXT.md D-01.
+        prose_evidence_warnings: 0,
+        service_count: serviceCount,
+        quality_score: sv.quality_score ?? null,
+        completed_at: sv.completed_at ?? null,
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -1168,38 +1680,80 @@ export class QueryEngine {
       .get();
     if (!tableExists) return [];
 
-    const mismatches = this._db
-      .prepare(
-        `
-      SELECT c.id, c.method, c.path, c.protocol,
-             s_src.name as source, s_tgt.name as target
-      FROM connections c
-      JOIN services s_src ON c.source_service_id = s_src.id
-      JOIN services s_tgt ON c.target_service_id = s_tgt.id
-      WHERE c.protocol NOT IN ('internal', 'sdk', 'import')
-        AND c.path IS NOT NULL
-        -- Target has exposed endpoints (was scanned properly)
-        AND EXISTS (
-          SELECT 1 FROM exposed_endpoints ep
-          WHERE ep.service_id = c.target_service_id
+    // Phase 110 (TRUST-04): pull candidate connections + their target's
+    // base_path, and apply base_path stripping in JS before comparing against
+    // the target's exposed endpoints. Falls back to a SQL shape that omits
+    // s_tgt.base_path for pre-migration-014 databases.
+    let rows;
+    try {
+      rows = this._db
+        .prepare(
+          `
+        SELECT c.id, c.method, c.path, c.protocol,
+               s_src.name as source, s_tgt.name as target,
+               s_tgt.id as target_id, s_tgt.base_path as target_base_path
+        FROM connections c
+        JOIN services s_src ON c.source_service_id = s_src.id
+        JOIN services s_tgt ON c.target_service_id = s_tgt.id
+        WHERE c.protocol NOT IN ('internal', 'sdk', 'import')
+          AND c.path IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM exposed_endpoints ep
+            WHERE ep.service_id = c.target_service_id
+          )
+      `,
         )
-        -- But this specific path is NOT in the exposed list
-        AND NOT EXISTS (
-          SELECT 1 FROM exposed_endpoints ep
-          WHERE ep.service_id = c.target_service_id
-            AND ep.path = c.path
+        .all();
+    } catch {
+      // Pre-migration-014 db: services.base_path doesn't exist. Fall back to
+      // the legacy shape (no base_path column) and treat target_base_path as null.
+      rows = this._db
+        .prepare(
+          `
+        SELECT c.id, c.method, c.path, c.protocol,
+               s_src.name as source, s_tgt.name as target,
+               s_tgt.id as target_id
+        FROM connections c
+        JOIN services s_src ON c.source_service_id = s_src.id
+        JOIN services s_tgt ON c.target_service_id = s_tgt.id
+        WHERE c.protocol NOT IN ('internal', 'sdk', 'import')
+          AND c.path IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM exposed_endpoints ep
+            WHERE ep.service_id = c.target_service_id
+          )
+      `,
         )
-    `,
-      )
-      .all();
+        .all()
+        .map((r) => ({ ...r, target_base_path: null }));
+    }
 
-    return mismatches.map((c) => ({
-      connection_id: c.id,
-      source: c.source,
-      target: c.target,
-      type: "endpoint_not_exposed",
-      detail: `${c.method || c.protocol} ${c.path} — ${c.target} does not expose this endpoint`,
-    }));
+    const exposedStmt = this._db.prepare(
+      `SELECT path FROM exposed_endpoints WHERE service_id = ?`,
+    );
+
+    const mismatches = [];
+    for (const c of rows) {
+      const exposedPaths = new Set(
+        exposedStmt.all(c.target_id).map((r) => r.path),
+      );
+      // Try literal match first — preserves correctness when base_path is
+      // absent (D-02) and when the agent emitted the literal prefixed path
+      // in `exposes` (Test 8).
+      if (exposedPaths.has(c.path)) continue;
+      // Try stripped match if target has base_path (D-02: gated on target).
+      const stripped = stripBasePath(c.path, c.target_base_path);
+      if (stripped !== null && exposedPaths.has(stripped)) continue;
+      // Neither match — real mismatch.
+      mismatches.push({
+        connection_id: c.id,
+        source: c.source,
+        target: c.target,
+        type: "endpoint_not_exposed",
+        detail: `${c.method || c.protocol} ${c.path} — ${c.target} does not expose this endpoint`,
+      });
+    }
+    return mismatches;
   }
 
   /**
@@ -1237,6 +1791,7 @@ export class QueryEngine {
         type: svc.type || "service",
         scan_version_id: scanVersionId ?? null,
         boundary_entry: svc.boundary_entry || null,
+        base_path: svc.base_path || null,
       });
       serviceIdMap.set(svc.name, id);
     }
@@ -1266,12 +1821,60 @@ export class QueryEngine {
       // Unknown internal target — still skip; we have no row to point at.
       if (!targetId) continue;
 
+      // TRUST-02: evidence guard — runs BEFORE canonicalize+upsert.
+      // Skip the connection (and warn) when prose evidence does not appear
+      // verbatim in the cited source_file. Lenient on null/missing files
+      // (D-05): persist with a warning when the file is unreadable, persist
+      // silently when source_file or evidence are null/empty.
+      const repoRoot = this._getRepoRootPath(repoId);
+      const evVerdict = this._validateEvidence(conn, repoRoot);
+      if (!evVerdict.ok) {
+        const skipMsg =
+          "[persistFindings] skipping connection " +
+          conn.source +
+          "->" +
+          conn.target +
+          " (" +
+          (conn.protocol || "unknown") +
+          " " +
+          (conn.method || "") +
+          " " +
+          (conn.path || "") +
+          "): " +
+          evVerdict.reason;
+        if (this._logger?.warn) this._logger.warn(skipMsg);
+        else process.stderr.write(skipMsg + "\n");
+        continue; // skip — do NOT upsert this connection
+      }
+      if (evVerdict.warn) {
+        if (this._logger?.warn) this._logger.warn(evVerdict.warn);
+        else process.stderr.write(evVerdict.warn + "\n");
+        // fall through — persist anyway (D-05)
+      }
+
+      // TRUST-03: canonicalize path ({xxx} -> {_}) and merge path_template.
+      // Reading the existing path_template BEFORE the INSERT OR REPLACE prevents
+      // clobbering on re-scan (the REPLACE deletes-then-inserts).
+      const protocol = conn.protocol || "unknown";
+      const method = conn.method || null;
+      const rawPath = conn.path || null;
+      const canonicalPath = canonicalizePath(rawPath);
+      const existingTemplate = this._getExistingPathTemplate(
+        sourceId,
+        targetId,
+        protocol,
+        method,
+        canonicalPath
+      );
+      const mergedTemplate = this._mergePathTemplates(existingTemplate, rawPath);
+
       const connId = this.upsertConnection({
         source_service_id: sourceId,
         target_service_id: targetId,
-        protocol: conn.protocol || "unknown",
-        method: conn.method || null,
-        path: conn.path || null,
+        protocol,
+        method,
+        path: canonicalPath,
+        path_template: mergedTemplate,
         source_file: conn.source_file || null,
         target_file: conn.target_file || null,
         scan_version_id: scanVersionId ?? null,

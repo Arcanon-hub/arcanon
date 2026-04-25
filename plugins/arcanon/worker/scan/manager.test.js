@@ -655,6 +655,12 @@ describe("scanRepos — incremental prompt constraint", () => {
       beginScan: (_repoId) => 7,
       persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
       endScan: (_repoId, _scanVersionId) => {},
+      // _db stub for the post-persist service-id backfill (manager.js:805)
+      // and the enrichment-pass SELECT (manager.js:820). Returns empty rows
+      // so the loops are no-ops; this test only asserts on the agent prompt.
+      _db: {
+        prepare: () => ({ all: () => [], get: () => null, run: () => ({}) }),
+      },
     };
   }
 

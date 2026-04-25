@@ -41,7 +41,7 @@ teardown() {
   assert_output --partial '"protocolVersion"'
 }
 
-@test "MCP-01: all 8 tools still listed when @chroma-core/default-embed is absent" {
+@test "MCP-01: all 9 tools still listed when @chroma-core/default-embed is absent" {
   local embed_dir="node_modules/@chroma-core/default-embed"
   local renamed=false
   if [ -d "$embed_dir" ]; then
@@ -66,6 +66,8 @@ teardown() {
   assert_output --partial '"drift_versions"'
   assert_output --partial '"drift_types"'
   assert_output --partial '"drift_openapi"'
+  # impact_audit_log added in Phase 111 Plan 03 (TRUST-06 / TRUST-14).
+  assert_output --partial '"impact_audit_log"'
 }
 
 @test "MCP-01: impact_query works when ChromaDB unavailable" {

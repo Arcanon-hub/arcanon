@@ -32,10 +32,10 @@ setup() {
 }
 
 # ---------------------------------------------------------------------------
-# MCP-01: tools/list returns all 8 MCP tools
+# MCP-01: tools/list returns all 9 MCP tools (was 8 before Phase 111 Plan 03)
 # ---------------------------------------------------------------------------
 
-@test "MCP-01: tools/list returns all 8 MCP tools" {
+@test "MCP-01: tools/list returns all 9 MCP tools" {
   local init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
   local list='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
   run bash -c "printf '%s\n%s\n' '$init' '$list' | ARCANON_DB_PATH='.arcanon/nonexistent-test.db' timeout 5 node worker/mcp/server.js 2>/dev/null"
@@ -48,17 +48,20 @@ setup() {
   assert_output --partial '"drift_versions"'
   assert_output --partial '"drift_types"'
   assert_output --partial '"drift_openapi"'
+  # impact_audit_log added in Phase 111 Plan 03 (TRUST-06 / TRUST-14).
+  assert_output --partial '"impact_audit_log"'
 }
 
-@test "MCP-01: tools/list returns exactly 8 tools" {
+@test "MCP-01: tools/list returns exactly 9 tools" {
   local init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
   local list='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
   run bash -c "printf '%s\n%s\n' '$init' '$list' | ARCANON_DB_PATH='.arcanon/nonexistent-test.db' timeout 5 node worker/mcp/server.js 2>/dev/null"
   assert_success
-  # Extract tools count from the tools/list response (last JSON line of output)
+  # Extract tools count from the tools/list response (last JSON line of output).
+  # Count was 8 before Phase 111 Plan 03 added impact_audit_log (TRUST-06/TRUST-14).
   local tool_count
   tool_count=$(echo "$output" | tail -1 | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const r=JSON.parse(d);console.log(r.result.tools.length)}catch(e){console.log(0)}})")
-  [ "$tool_count" = "8" ]
+  [ "$tool_count" = "9" ]
 }
 
 # ---------------------------------------------------------------------------
