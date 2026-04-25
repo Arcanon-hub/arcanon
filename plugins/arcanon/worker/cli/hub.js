@@ -287,6 +287,164 @@ async function cmdSync(flags) {
   );
 }
 
+/**
+ * cmdVerify — Re-read cited source files and report per-connection verdicts
+ * (TRUST-01). Read-only; never writes to the scan database.
+ *
+ * Verdicts (D-01, exhaustive): ok | moved | missing | method_mismatch
+ *
+ * Flags:
+ *   --connection <id>  Verify exactly one connection by integer ID
+ *   --source <path>    Verify connections whose source_file matches
+ *                      (basename match if no `/`, exact match otherwise)
+ *   --json             Emit machine-readable JSON
+ *   --repo <path>      Override project root (defaults to process.cwd())
+ *
+ * Exit codes (D-04):
+ *   0 — all verdicts ok
+ *   1 — at least one non-ok verdict OR truncated cap hit OR worker down
+ *   2 — invocation error (bad --connection ID, etc.)
+ */
+async function cmdVerify(flags) {
+  const repoPath = path.resolve(flags.repo || process.cwd());
+
+  const params = new URLSearchParams();
+  params.set("project", repoPath);
+
+  if (flags.connection !== undefined && flags.connection !== true) {
+    const idStr = String(flags.connection);
+    if (!/^\d+$/.test(idStr) || Number(idStr) <= 0) {
+      console.error("error: --connection requires a positive integer ID");
+      process.exit(2);
+    }
+    params.set("connection_id", idStr);
+  } else if (flags.source !== undefined && flags.source !== true) {
+    params.set("source_file", String(flags.source));
+  }
+  // else: implicit --all (D-06) — no further params
+
+  // Resolve worker port: <dataDir>/worker.port → $ARCANON_WORKER_PORT → 37888
+  let workerPort = 37888;
+  try {
+    const portFile = path.join(resolveDataDir(), "worker.port");
+    const raw = fs.readFileSync(portFile, "utf8").trim();
+    const parsed = Number(raw);
+    if (Number.isInteger(parsed) && parsed > 0) workerPort = parsed;
+  } catch {
+    if (process.env.ARCANON_WORKER_PORT) {
+      const parsed = Number(process.env.ARCANON_WORKER_PORT);
+      if (Number.isInteger(parsed) && parsed > 0) workerPort = parsed;
+    }
+  }
+
+  const url = `http://127.0.0.1:${workerPort}/api/verify?${params.toString()}`;
+
+  let response;
+  try {
+    response = await fetch(url);
+  } catch (err) {
+    const msg = `worker not running — run /arcanon:status to check, then /arcanon:map to start it (${err.message})`;
+    if (flags.json) {
+      emit({ ok: false, error: msg }, flags);
+    } else {
+      process.stderr.write(`error: ${msg}\n`);
+    }
+    process.exit(1);
+  }
+
+  let body;
+  try {
+    body = await response.json();
+  } catch (err) {
+    process.stderr.write(`error: invalid response from worker: ${err.message}\n`);
+    process.exit(1);
+  }
+
+  if (!response.ok) {
+    const errMsg = body?.error || `HTTP ${response.status}`;
+    // 404 on connection_id / project = treat as user error → exit 1.
+    // 400 = bad invocation → exit 2.
+    const code = response.status === 400 ? 2 : 1;
+    if (flags.json) {
+      emit({ ok: false, error: errMsg, status: response.status }, flags);
+    } else {
+      process.stderr.write(`error: ${errMsg}\n`);
+    }
+    process.exit(code);
+  }
+
+  // Truncated cap — D-03.
+  if (body.truncated === true) {
+    const msg =
+      body.message ||
+      `too many connections (${body.total} > 1000) — scope with --source <path> or --connection <id>`;
+    if (flags.json) {
+      emit(body, flags);
+    } else {
+      process.stderr.write(`${msg}\n`);
+    }
+    process.exit(1);
+  }
+
+  const results = Array.isArray(body.results) ? body.results : [];
+
+  // Empty result set — friendlier than printing just a header.
+  if (results.length === 0) {
+    if (flags.json) {
+      emit(body, flags);
+    } else {
+      process.stdout.write("no connections found for the given scope\n");
+    }
+    process.exit(1);
+  }
+
+  // Tally
+  const counts = { ok: 0, moved: 0, missing: 0, method_mismatch: 0 };
+  for (const r of results) {
+    if (counts[r.verdict] !== undefined) counts[r.verdict] += 1;
+  }
+  const allOk = counts.ok === results.length;
+
+  if (flags.json) {
+    emit(body, flags);
+  } else {
+    const headers =
+      "connection_id | verdict          | source_file:line_start            | evidence_excerpt";
+    const sep =
+      "--------------+------------------+-----------------------------------+----------------------";
+    const lines = [headers, sep];
+    for (const r of results) {
+      const idCell = String(r.connection_id).padEnd(13);
+      const verdictCell = String(r.verdict).padEnd(16);
+      const loc =
+        (r.source_file || "(unknown)") +
+        ":" +
+        (r.line_start !== null && r.line_start !== undefined ? r.line_start : "?");
+      const locCell = loc.length > 33 ? loc.slice(0, 32) + "…" : loc.padEnd(33);
+      let excerpt;
+      if (r.verdict === "moved") {
+        excerpt = "(file not found)";
+      } else if (r.verdict === "missing") {
+        excerpt = "(snippet not found)";
+      } else if (r.verdict === "method_mismatch") {
+        excerpt = `method '${r.method || "?"}' not in snippet`;
+      } else if (r.snippet) {
+        excerpt = r.snippet.length > 40 ? r.snippet.slice(0, 39) + "…" : r.snippet;
+      } else {
+        excerpt = r.message || "";
+      }
+      lines.push(`${idCell} | ${verdictCell} | ${locCell} | ${excerpt}`);
+    }
+    lines.push(
+      "",
+      `${counts.ok} ok, ${counts.moved} moved, ${counts.missing} missing, ${counts.method_mismatch} method_mismatch (total ${results.length})`,
+    );
+    process.stdout.write(lines.join("\n") + "\n");
+  }
+
+  process.exit(allOk ? 0 : 1);
+}
+
 async function cmdQueue(flags) {
   const rows = listAllUploads();
   if (flags.json) {
@@ -314,6 +472,7 @@ const HANDLERS = {
   upload: cmdUpload,
   sync: cmdSync,
   queue: cmdQueue,
+  verify: cmdVerify, // TRUST-01
 };
 
 async function main() {
@@ -340,4 +499,4 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
 }
 
 // Exported for test access only (_-prefixed = internal helper, not public surface).
-export { _readHubAutoSync };
+export { _readHubAutoSync, cmdVerify };
