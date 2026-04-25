@@ -1527,6 +1527,73 @@ server.tool(
   },
 );
 
+// ── impact_audit_log ─────────────────────────────────────────
+/**
+ * Handler for the `impact_audit_log` MCP tool. (TRUST-06 / TRUST-14, Plan 111-03.)
+ *
+ * Returns rows from `enrichment_log` for a given scan_version_id, optionally
+ * filtered by `enricher`. Resolves the per-project DB via `resolveDb` exactly
+ * like the other impact_* tools (absolute path / 12-char hash / repo name /
+ * default to ARCANON_PROJECT_ROOT or cwd).
+ *
+ * Exported as a top-level function so tests can call it without going through
+ * the MCP SDK stdio transport (parity with queryImpact, queryChanged, etc.).
+ *
+ * @param {{ scan_version_id: number, enricher?: string, project?: string }} params
+ * @returns {Promise<{ content: Array<{ type: 'text', text: string }> }>}
+ */
+export async function handleImpactAuditLog(params) {
+  try {
+    const qe = resolveDb(params.project);
+    if (!qe) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              error: "no_scan_data",
+              project: params.project,
+              hint: "Run /arcanon:map first in that project",
+            }),
+          },
+        ],
+      };
+    }
+    const rows = qe.getEnrichmentLog(params.scan_version_id, {
+      enricher: params.enricher,
+    });
+    return { content: [{ type: "text", text: JSON.stringify(rows) }] };
+  } catch (err) {
+    logger.error('impact_audit_log failed', { error: err.message, stack: err.stack });
+    return { content: [{ type: "text", text: JSON.stringify({ error: err.message }) }] };
+  }
+}
+
+server.tool(
+  "impact_audit_log",
+  "Return the enrichment audit log for a given scan version. Each row records a post-scan reconciliation or enrichment field change (e.g., crossing reclassified from external to cross-service). Use to audit how a scan's data was modified after the agent emitted it.",
+  {
+    scan_version_id: z
+      .number()
+      .int()
+      .positive()
+      .describe("Scan version ID to retrieve audit log for"),
+    enricher: z
+      .string()
+      .optional()
+      .describe(
+        "Filter to a specific enricher (e.g., 'reconciliation', 'codeowners')",
+      ),
+    project: z
+      .string()
+      .optional()
+      .describe(
+        "Absolute path to project root, 12-char project hash, or repo name. Defaults to ARCANON_PROJECT_ROOT or cwd.",
+      ),
+  },
+  handleImpactAuditLog,
+);
+
 // Skip stdio-transport startup when this module is imported by the Node test
 // runner. NODE_TEST_CONTEXT is set by `node --test` (and its --test-isolation
 // subprocesses) so we can detect that path reliably without affecting the

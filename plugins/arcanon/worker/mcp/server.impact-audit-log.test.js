@@ -14,13 +14,18 @@
  *
  * Setup: ARCANON_DATA_DIR is set to a tmp dir BEFORE importing server.js so
  * the module-level dataDir constant in server.js, pool.js, and database.js
- * all see the same fixture root. We seed a fixture project DB at the correct
- * sha256-12 hashed path.
+ * all see the same fixture root.
+ *
+ * Test isolation strategy: a single fixture project root is used for all tests
+ * (the module-level _db singleton in database.js caches the first opened db,
+ * so we share one db). Each test seeds its own `scan_version_id` via
+ * beginScan, and the `getEnrichmentLog(scanVersionId, ...)` query is naturally
+ * scoped — different scan_version_ids carry independent audit rows.
  *
  * Run: node --test plugins/arcanon/worker/mcp/server.impact-audit-log.test.js
  */
 
-import { test } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
@@ -54,40 +59,55 @@ function projectDir(projectRoot) {
   return path.join(TMP_DATA_DIR, 'projects', hash);
 }
 
-/**
- * Seed a fixture project DB at <TMP_DATA_DIR>/projects/<hash>/impact-map.db.
- * Calls openDb(projectRoot) which mkdir's the dir and runs all migrations
- * (001..016). Returns { projectRoot, qe, scanVersionId } where the scan
- * version has 2 audit rows (1 reconciliation, 1 codeowners) attached.
- *
- * Each call uses a unique projectRoot so test cases get isolated DBs.
- */
-function seedFixture(projectName, withRows = true) {
-  const projectRoot = path.join(TMP_DATA_DIR, 'fixtures', projectName);
-  fs.mkdirSync(projectRoot, { recursive: true });
-  // Pre-create the hashed dir so openDb() finds it
-  fs.mkdirSync(projectDir(projectRoot), { recursive: true });
-  const db = openDb(projectRoot);
-  const qe = new QueryEngine(db);
-  // Seed a repos row + scan_versions row directly (pre-bracket — simplest).
+// Single shared fixture project — we share one DB across all tests because
+// database.js's _db singleton is module-level and caches the first openDb()
+// call. Each test isolates via its own scan_version_id.
+//
+// IMPORTANT: server.js resolveDb() rejects absolute paths that escape
+// <dataDir>/projects/ as a security guard. We therefore place the fixture
+// "project root" inside <dataDir>/projects/ so the security check passes.
+// This still tests the absolute-path resolution path end-to-end — getQueryEngine
+// hashes this projectRoot and creates its DB at a deeper hashed sub-path.
+const FIXTURE_PROJECT_ROOT = path.join(
+  TMP_DATA_DIR,
+  'projects',
+  'fixture-project',
+);
+
+let qe = null;
+let svWithTwoRows = null;
+let svEmpty = null;
+
+before(() => {
+  fs.mkdirSync(FIXTURE_PROJECT_ROOT, { recursive: true });
+  // Pre-create the hashed projects dir so the resolveDb absolute-path
+  // security check (must resolve within <dataDir>/projects/) is satisfied
+  // and openDb() can mkdir + create the file inside it.
+  fs.mkdirSync(projectDir(FIXTURE_PROJECT_ROOT), { recursive: true });
+  const db = openDb(FIXTURE_PROJECT_ROOT);
+  qe = new QueryEngine(db);
+
+  // Seed scan_versions row with 2 audit rows for tests 2/3/4.
   const repoId = db
     .prepare("INSERT INTO repos (path, name, type) VALUES (?, ?, 'single')")
-    .run(projectRoot, projectName).lastInsertRowid;
-  const scanVersionId = qe.beginScan(repoId);
+    .run(FIXTURE_PROJECT_ROOT, 'fixture-project').lastInsertRowid;
+  svWithTwoRows = qe.beginScan(repoId);
+  qe.logEnrichment(
+    svWithTwoRows, 'reconciliation', 'connection', 1, 'crossing',
+    'external', 'cross-service', 'target matches known service: auth',
+  );
+  qe.logEnrichment(
+    svWithTwoRows, 'codeowners', 'service', 1, 'owner',
+    null, '@team-a', 'codeowners file',
+  );
 
-  if (withRows) {
-    qe.logEnrichment(
-      scanVersionId, 'reconciliation', 'connection', 1, 'crossing',
-      'external', 'cross-service', 'target matches known service: auth',
-    );
-    qe.logEnrichment(
-      scanVersionId, 'codeowners', 'service', 1, 'owner',
-      null, '@team-a', 'codeowners file',
-    );
-  }
+  // Seed an EMPTY scan_versions row (no audit rows) for test 6.
+  svEmpty = qe.beginScan(repoId);
+});
 
-  return { projectRoot, scanVersionId };
-}
+after(() => {
+  fs.rmSync(TMP_DATA_DIR, { recursive: true, force: true });
+});
 
 /** Pull the JSON-decoded payload out of an MCP envelope response. */
 function unwrap(envelope) {
@@ -110,10 +130,9 @@ test('Test 1 — handleImpactAuditLog is exported from server.js', () => {
 });
 
 test('Test 2 — returns the 2 audit rows wrapped in the standard MCP envelope', async () => {
-  const { projectRoot, scanVersionId } = seedFixture('test2-returns-rows');
   const envelope = await handleImpactAuditLog({
-    scan_version_id: scanVersionId,
-    project: projectRoot,
+    scan_version_id: svWithTwoRows,
+    project: FIXTURE_PROJECT_ROOT,
   });
   const rows = unwrap(envelope);
   assert.ok(Array.isArray(rows), 'unwrapped payload is an array');
@@ -131,11 +150,10 @@ test('Test 2 — returns the 2 audit rows wrapped in the standard MCP envelope',
 });
 
 test('Test 3 — enricher filter returns only matching rows', async () => {
-  const { projectRoot, scanVersionId } = seedFixture('test3-filter');
   const envelope = await handleImpactAuditLog({
-    scan_version_id: scanVersionId,
+    scan_version_id: svWithTwoRows,
     enricher: 'reconciliation',
-    project: projectRoot,
+    project: FIXTURE_PROJECT_ROOT,
   });
   const rows = unwrap(envelope);
   assert.equal(rows.length, 1);
@@ -146,19 +164,18 @@ test('Test 3 — enricher filter returns only matching rows', async () => {
 });
 
 test('Test 4 — project resolution by absolute path returns that DB rows', async () => {
-  const { projectRoot, scanVersionId } = seedFixture('test4-project-by-path');
   const envelope = await handleImpactAuditLog({
-    scan_version_id: scanVersionId,
-    project: projectRoot,
+    scan_version_id: svWithTwoRows,
+    project: FIXTURE_PROJECT_ROOT,
   });
   const rows = unwrap(envelope);
   // Both rows belong to the resolved DB — resolution worked.
   assert.equal(rows.length, 2);
-  assert.ok(rows.every((r) => r.scan_version_id === scanVersionId));
+  assert.ok(rows.every((r) => r.scan_version_id === svWithTwoRows));
 });
 
 test('Test 5 — no_scan_data error envelope when project is not resolvable', async () => {
-  // An absolute path that does not exist in the projects/ tree → resolveDb
+  // An absolute path that does not exist under the projects/ tree → resolveDb
   // returns null (security check in server.js rejects paths outside dataDir/projects).
   const envelope = await handleImpactAuditLog({
     scan_version_id: 1,
@@ -171,28 +188,21 @@ test('Test 5 — no_scan_data error envelope when project is not resolvable', as
 });
 
 test('Test 6 — empty array when scan_version_id has no audit rows', async () => {
-  const { projectRoot, scanVersionId } = seedFixture(
-    'test6-empty',
-    /* withRows */ false,
-  );
+  // Test 6a — existing scan_version_id but no audit rows attached.
   const envelope = await handleImpactAuditLog({
-    scan_version_id: scanVersionId,
-    project: projectRoot,
+    scan_version_id: svEmpty,
+    project: FIXTURE_PROJECT_ROOT,
   });
   const rows = unwrap(envelope);
   assert.ok(Array.isArray(rows));
   assert.equal(rows.length, 0);
 
-  // Also test with a known DB but completely unknown scan_version_id.
+  // Test 6b — completely unknown scan_version_id.
   const envelope2 = await handleImpactAuditLog({
     scan_version_id: 99999,
-    project: projectRoot,
+    project: FIXTURE_PROJECT_ROOT,
   });
   const rows2 = unwrap(envelope2);
   assert.ok(Array.isArray(rows2));
   assert.equal(rows2.length, 0);
-});
-
-test('cleanup — remove tmp data dir', () => {
-  fs.rmSync(TMP_DATA_DIR, { recursive: true, force: true });
 });
