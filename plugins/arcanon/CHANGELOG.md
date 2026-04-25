@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### BREAKING
+
+- Removed `/arcanon:upload` deprecated stub. Use `/arcanon:sync` (canonical since v0.1.1). CI scripts hardcoded to `/arcanon:upload` will fail with "command not found"; migrate to `/arcanon:sync`.
+
+### Removed
+
+- `plugins/arcanon/commands/upload.md` deprecated stub command file.
+- 5 bats tests in `tests/commands-surface.bats` asserting the deprecated stub's presence (replaced with a single regression-guard test asserting absence).
+- `/arcanon:upload` references from `README.md` Quick start block and Commands table.
+
 ## [0.1.2] - 2026-04-24
 
 ### Fixed

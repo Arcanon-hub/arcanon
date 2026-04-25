@@ -37,7 +37,6 @@ claude plugin install arcanon@arcanon --scope user
 
 # 3. (Optional) Connect to Arcanon Hub
 /arcanon:login            # paste your arc_... API key
-/arcanon:upload           # push the latest scan
 /arcanon:status           # check sync state + queue
 ```
 
@@ -51,7 +50,6 @@ Full walkthroughs live in [docs/getting-started.md](./docs/getting-started.md).
 | `/arcanon:drift` | Diff the live scan against the last uploaded hub snapshot. |
 | `/arcanon:impact` | Query cross-repo consumers of a service/endpoint. |
 | `/arcanon:login` | Store your Arcanon Hub API key. |
-| `/arcanon:upload` | Upload the latest scan to the hub. |
 | `/arcanon:sync` | Drain the offline upload queue. |
 | `/arcanon:status` | One-line health: worker + hub + queue. |
 | `/arcanon:export` | Emit Mermaid / DOT / self-contained HTML graph from the latest scan. |
