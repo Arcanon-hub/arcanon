@@ -1268,6 +1268,16 @@ async function cmdDoctor(flags) {
  * output, mirroring /arcanon:list and /arcanon:doctor.
  */
 async function cmdDiff(flags, positional) {
+  // SHADOW-02 (Plan 119-02) — handle --shadow before the positional/HEAD/ISO
+  // resolver. --shadow compares live vs shadow LATEST scans (no positional
+  // args needed) and reuses Phase 115's diffScanVersions(dbA, dbB, idA, idB)
+  // engine — passing the live DB handle and the shadow DB handle as the two
+  // sources. Engine is pool-agnostic and read-only (see scan-version-diff.js
+  // module docs), so opening fresh better-sqlite3 readonly handles is safe.
+  if (flags.shadow) {
+    return cmdDiffShadow(flags);
+  }
+
   const cwd = process.cwd();
   const dbPath = path.join(projectHashDir(cwd), "impact-map.db");
   if (!fs.existsSync(dbPath)) {
@@ -1394,6 +1404,175 @@ async function cmdDiff(flags, positional) {
     process.stdout.write(lines.join("\n") + "\n");
   } finally {
     db.close();
+  }
+}
+
+/**
+ * cmdDiffShadow — SHADOW-02 (Phase 119-02).
+ *
+ * Compares the LATEST completed scan in the live impact-map.db against the
+ * LATEST completed scan in the impact-map-shadow.db, reusing Phase 115's
+ * `diffScanVersions(dbA, dbB, scanIdA, scanIdB)` engine.
+ *
+ * Engine reuse rationale: 115's engine takes two raw `better-sqlite3`
+ * Database handles (NOT projectRoot strings, NOT pool keys) — see the
+ * load-bearing contract documented at scan-version-diff.js:8-31. We open
+ * both DBs READ-ONLY here (the engine itself is read-only — test 15 in
+ * scan-version-diff.test.js asserts this), so neither file is mutated.
+ *
+ * Both DBs are opened with `{readonly: true}`, which means SQLite never
+ * writes pragma headers back — preserves the byte-identity invariant
+ * established by 119-01 Test 8 for the live DB.
+ *
+ * Latest-scan resolution: `SELECT MAX(id) FROM scan_versions WHERE
+ * completed_at IS NOT NULL`. Mirrors the in-progress-scan exclusion that
+ * Phase 115's resolveScanSelector uses for HEAD.
+ *
+ * Exit codes:
+ *   0 — diff completed (with or without changes)
+ *   2 — no live DB, no shadow DB, OR no completed scan in either side
+ */
+async function cmdDiffShadow(flags) {
+  const cwd = process.cwd();
+  const dir = projectHashDir(cwd);
+  const livePath = path.join(dir, "impact-map.db");
+  const shadowPath = path.join(dir, "impact-map-shadow.db");
+
+  // Silent in non-Arcanon dir (mirrors NAV-01 / SHADOW-01 / SHADOW-03).
+  if (!fs.existsSync(livePath) && !fs.existsSync(shadowPath)) {
+    process.exit(0);
+  }
+  if (!fs.existsSync(livePath)) {
+    process.stderr.write("error: no live DB to diff against (run /arcanon:map first)\n");
+    process.exit(2);
+  }
+  if (!fs.existsSync(shadowPath)) {
+    process.stderr.write("error: no shadow DB to diff against (run /arcanon:shadow-scan first)\n");
+    process.exit(2);
+  }
+
+  // Open both DBs READ-ONLY. Phase 115's engine is pool-agnostic — see
+  // scan-version-diff.js:18-25 for the load-bearing contract.
+  const liveDb = new Database(livePath, { readonly: true, fileMustExist: true });
+  const shadowDb = new Database(shadowPath, { readonly: true, fileMustExist: true });
+
+  try {
+    const liveLatestRow = liveDb
+      .prepare("SELECT MAX(id) AS id FROM scan_versions WHERE completed_at IS NOT NULL")
+      .get();
+    const shadowLatestRow = shadowDb
+      .prepare("SELECT MAX(id) AS id FROM scan_versions WHERE completed_at IS NOT NULL")
+      .get();
+    const liveLatest = liveLatestRow ? liveLatestRow.id : null;
+    const shadowLatest = shadowLatestRow ? shadowLatestRow.id : null;
+
+    if (!liveLatest || !shadowLatest) {
+      process.stderr.write(
+        "error: no completed scan in " +
+          (!liveLatest ? "live" : "shadow") +
+          " DB\n",
+      );
+      process.exit(2);
+    }
+
+    const { diffScanVersions } = await import("../diff/scan-version-diff.js");
+    const result = diffScanVersions(liveDb, shadowDb, liveLatest, shadowLatest);
+
+    if (flags.json) {
+      emit(
+        {
+          project_root: cwd,
+          mode: "shadow",
+          live_path: livePath,
+          shadow_path: shadowPath,
+          scanA: { scanId: liveLatest, source: "live" },
+          scanB: { scanId: shadowLatest, source: "shadow" },
+          ...result,
+        },
+        flags,
+      );
+      return;
+    }
+
+    if (result.same_scan) {
+      // Cross-DB diff cannot truly short-circuit, but if the engine reports
+      // it (different DBs but identical content) — surface the same line as
+      // /arcanon:diff <id> <id>.
+      process.stdout.write(
+        "Diff (live vs shadow): scan #" + liveLatest + " vs scan #" + shadowLatest + " — identical\n",
+      );
+      return;
+    }
+
+    const lines = [];
+    lines.push(
+      "Diff (live vs shadow): live #" + liveLatest + " -> shadow #" + shadowLatest,
+    );
+    lines.push("");
+
+    // Services
+    lines.push("Services");
+    lines.push("  Added (" + result.services.added.length + "):");
+    for (const s of result.services.added) {
+      lines.push("    + " + s.repo_id + "/" + s.name + " (" + s.type + ")");
+    }
+    lines.push("  Removed (" + result.services.removed.length + "):");
+    for (const s of result.services.removed) {
+      lines.push("    - " + s.repo_id + "/" + s.name + " (" + s.type + ")");
+    }
+    lines.push("  Modified (" + result.services.modified.length + "):");
+    for (const s of result.services.modified) {
+      const fieldStrs = (s.changed_fields || []).map((f) => {
+        if (f.field === "evidence") return "evidence changed";
+        return f.field + " " + (f.before == null ? "null" : f.before) +
+          " -> " + (f.after == null ? "null" : f.after);
+      });
+      lines.push("    ~ " + s.repo_id + "/" + s.name + ": " + fieldStrs.join(", "));
+    }
+    lines.push("");
+
+    // Connections
+    const connStr = (c) =>
+      c.source_name + " -> " + c.target_name + " " + c.protocol +
+      (c.method ? " " + c.method : "") + (c.path ? " " + c.path : "");
+    lines.push("Connections");
+    lines.push("  Added (" + result.connections.added.length + "):");
+    for (const c of result.connections.added) lines.push("    + " + connStr(c));
+    lines.push("  Removed (" + result.connections.removed.length + "):");
+    for (const c of result.connections.removed) lines.push("    - " + connStr(c));
+    lines.push("  Modified (" + result.connections.modified.length + "):");
+    for (const c of result.connections.modified) {
+      const fieldStrs = (c.changed_fields || []).map((f) => {
+        if (f.field === "evidence") return "evidence changed";
+        return f.field + " " + (f.before == null ? "null" : f.before) +
+          " -> " + (f.after == null ? "null" : f.after);
+      });
+      lines.push("    ~ " + connStr(c) + ": " + fieldStrs.join(", "));
+    }
+    lines.push("");
+
+    // Summary
+    const sv = result.summary.services;
+    const cn = result.summary.connections;
+    const svParts = [];
+    if (sv.added) svParts.push(sv.added + " added");
+    if (sv.removed) svParts.push(sv.removed + " removed");
+    if (sv.modified) svParts.push(sv.modified + " modified");
+    const cnParts = [];
+    if (cn.added) cnParts.push(cn.added + " added");
+    if (cn.removed) cnParts.push(cn.removed + " removed");
+    if (cn.modified) cnParts.push(cn.modified + " modified");
+    const summaryLine =
+      "Summary: " +
+      (svParts.length ? svParts.join(", ") + " services" : "0 service changes") +
+      "; " +
+      (cnParts.length ? cnParts.join(", ") + " connections" : "0 connection changes");
+    lines.push(summaryLine);
+
+    process.stdout.write(lines.join("\n") + "\n");
+  } finally {
+    try { liveDb.close(); } catch { /* ignore */ }
+    try { shadowDb.close(); } catch { /* ignore */ }
   }
 }
 

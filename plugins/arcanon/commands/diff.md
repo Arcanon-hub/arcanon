@@ -1,6 +1,6 @@
 ---
-description: Compare two scan versions and show services/connections added, removed, or modified between them.
-argument-hint: "<scanA> <scanB> [--json]"
+description: Compare two scan versions (NAV-04) or live vs shadow (--shadow, SHADOW-02). Shows services/connections added, removed, or modified.
+argument-hint: "<scanA> <scanB> | --shadow [--json]"
 allowed-tools: Bash
 ---
 
@@ -12,6 +12,7 @@ Compare two scan versions of the current project's impact map. Selectors accepte
 - **HEAD shorthand** — `/arcanon:diff HEAD HEAD~1`
 - **ISO date** — `/arcanon:diff 2026-04-20 2026-04-25` (resolves to most recent scan ≤ each cutoff)
 - **Branch name** — `/arcanon:diff main feature-x` (resolves via `repo_state.last_scanned_commit`)
+- **`--shadow`** — `/arcanon:diff --shadow` compares live LATEST vs shadow LATEST (Phase 119, SHADOW-02). Requires both `impact-map.db` and `impact-map-shadow.db` to exist; run `/arcanon:shadow-scan` first if shadow is missing.
 
 Read-only via direct SQLite access — does not require the worker to be running.
 
@@ -33,12 +34,14 @@ Silent (no output, exit 0) when run from a directory without an `impact-map.db`.
 ## Help
 
 **Usage:** `/arcanon:diff <scanA> <scanB> [--json]`
+**Usage:** `/arcanon:diff --shadow [--json]` (Phase 119, SHADOW-02)
 
 Compare two scan versions and show services/connections added, removed, or
 modified between them.
 
 **Options:**
 - `--json` — single JSON object with engine result + `project_root`/`scanA`/`scanB` metadata
+- `--shadow` — compare live LATEST vs shadow LATEST instead of accepting positional scan selectors. Requires both `impact-map.db` and `impact-map-shadow.db` under `${ARCANON_DATA_DIR}/projects/<hash>/`.
 - `--help`, `-h`, `help` — print this help and exit
 
 **Examples:**
@@ -47,6 +50,24 @@ modified between them.
 - `/arcanon:diff 2026-04-20 2026-04-25` — ISO date cutoffs
 - `/arcanon:diff main feature-x` — branch heuristic
 - `/arcanon:diff HEAD HEAD~1 --json` — machine-readable
+- `/arcanon:diff --shadow` — live vs shadow comparison (after `/arcanon:shadow-scan`)
+- `/arcanon:diff --shadow --json` — machine-readable live-vs-shadow
+
+## --shadow flag (SHADOW-02 / Phase 119)
+
+`/arcanon:diff --shadow` compares the LATEST completed scan in the live
+`impact-map.db` against the LATEST completed scan in the
+`impact-map-shadow.db`. Reuses the same `diffScanVersions` engine that
+positional `/arcanon:diff` uses — passing the live DB handle and the shadow
+DB handle as the two sources. Both DBs are opened READ-ONLY so neither file
+is mutated.
+
+**Exit codes (--shadow):**
+- `0` — diff completed (with or without changes)
+- `2` — no live DB, no shadow DB, or no completed scan in either side
+
+**Workflow:** `/arcanon:shadow-scan` → `/arcanon:diff --shadow` → optionally
+`/arcanon:promote-shadow`.
 
 ## Step 1 — Run the diff
 
