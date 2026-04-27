@@ -13,9 +13,10 @@ setup() {
   # Iteration list extended (114-01 / NIT 8) to cover the full v0.1.4-WIP
   # command surface. The original CLN-09 list was the seven v0.1.1 survivors;
   # `verify` and `update` shipped in v0.1.3, `list` ships in v0.1.4 (NAV-01),
-  # `view` ships in v0.1.4 (NAV-02), and `doctor` ships in v0.1.4 (NAV-03 —
-  # this plan, 114-03).
-  for cmd in map drift impact sync login status export verify update list view doctor diff correct; do
+  # `view` ships in v0.1.4 (NAV-02), `doctor` ships in v0.1.4 (NAV-03 — Plan
+  # 114-03), `correct` ships in v0.1.4 (CORRECT-02 — Plan 118-01), and
+  # `rescan` ships in v0.1.4 (CORRECT-04 — Plan 118-02).
+  for cmd in map drift impact sync login status export verify update list view doctor diff correct rescan; do
     [ -f "$PLUGIN_DIR/commands/$cmd.md" ] || {
       echo "MISSING: commands/$cmd.md"
       return 1
@@ -24,7 +25,7 @@ setup() {
 }
 
 @test "CLN-09: all surviving commands have description frontmatter" {
-  for cmd in map drift impact sync login status export verify update list view doctor diff correct; do
+  for cmd in map drift impact sync login status export verify update list view doctor diff correct rescan; do
     run grep -c '^description:' "$PLUGIN_DIR/commands/$cmd.md"
     [ "$status" -eq 0 ]
     [ "$output" -ge 1 ]
@@ -152,4 +153,19 @@ setup() {
 
 @test "CORRECT-04: worker/cli/hub.js registers correct: cmdCorrect" {
   grep -q 'correct: cmdCorrect' "$PLUGIN_DIR/worker/cli/hub.js"
+}
+
+# CORRECT-05 (118-02): /arcanon:rescan must declare allowed-tools: Bash and
+# the Node-side handler must be registered in HANDLERS.
+@test "CORRECT-05: /arcanon:rescan declares allowed-tools: Bash" {
+  [ -f "$PLUGIN_DIR/commands/rescan.md" ]
+  run grep -E '^description:' "$PLUGIN_DIR/commands/rescan.md"
+  [ "$status" -eq 0 ]
+  run grep -E '^allowed-tools:' "$PLUGIN_DIR/commands/rescan.md"
+  [ "$status" -eq 0 ]
+  grep -q 'Bash' "$PLUGIN_DIR/commands/rescan.md"
+}
+
+@test "CORRECT-05: worker/cli/hub.js registers rescan: cmdRescan" {
+  grep -q 'rescan: cmdRescan' "$PLUGIN_DIR/worker/cli/hub.js"
 }
