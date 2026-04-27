@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import { listProjects, getQueryEngineByHash, getShadowQueryEngine } from "../db/pool.js";
 import { resolveConfigPath } from "../lib/config-path.js";
 import { getCommitsSince } from "../scan/git-state.js";
+import { extractEvidenceLocation } from "../hub-sync/evidence-location.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -88,21 +89,24 @@ function computeVerdict(conn, projectRoot) {
     };
   }
 
-  // 5. Search for literal evidence substring anywhere in the file.
-  const matchIdx = content.indexOf(evidence);
-  if (matchIdx === -1) {
+  // 5/6. Delegate hash + line-range derivation to the shared helper
+  //      (single source of truth for evidence-line semantics — Phase 120-01
+  //      INT-01). The helper does its own file-read; we accept the small
+  //      redundancy (one extra readFileSync per verify call) in exchange for
+  //      keeping the moved-vs-missing distinction the verify command needs:
+  //      the helper conflates "file unreadable" and "snippet not in file"
+  //      as evidence_present=false, so we keep the existsSync/readFileSync
+  //      blocks above to surface the moved verdict separately.
+  const loc = extractEvidenceLocation(evidence, conn.source_file, projectRoot);
+  if (!loc.evidence_present) {
     return {
       ...base,
       verdict: "missing",
       message: "evidence snippet not found in file",
     };
   }
-
-  // 6. Found — compute 1-indexed line_start by counting newlines before
-  //    the match index, line_end by adding newlines inside the snippet.
-  const lineStart = (content.slice(0, matchIdx).match(/\n/g) || []).length + 1;
-  const newlinesInSnippet = (evidence.match(/\n/g) || []).length;
-  const lineEnd = lineStart + newlinesInSnippet;
+  const lineStart = loc.start_line;
+  const lineEnd = loc.end_line;
   const truncatedSnippet =
     evidence.length > 80 ? evidence.slice(0, 80) + "…" : evidence;
 
