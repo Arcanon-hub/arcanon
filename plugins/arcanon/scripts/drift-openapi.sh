@@ -113,14 +113,32 @@ compare_openapi() {
 repos_with_specs=()
 spec_paths=()
 
-for repo in $LINKED_REPOS; do
-  repo_name=$(basename "$repo")
-  spec_path=$(find_openapi_spec "$repo" 2>/dev/null || true)
-  if [[ -n "$spec_path" ]]; then
-    repos_with_specs+=("$repo_name")
-    spec_paths+=("$spec_path")
+if [[ ${#EXPLICIT_SPECS[@]} -gt 0 ]]; then
+  # Explicit mode (--spec) — bypass discovery entirely.
+  for spec in "${EXPLICIT_SPECS[@]}"; do
+    if [[ ! -f "$spec" ]]; then
+      echo "arcanon:drift openapi: spec not found: $spec" >&2
+      exit 2
+    fi
+    spec_paths+=("$spec")
+    repos_with_specs+=("$(basename "$spec" | sed 's/\.\(yaml\|yml\|json\)$//')")
+  done
+
+  if [[ ${#spec_paths[@]} -lt 2 ]]; then
+    echo "arcanon:drift openapi: --spec requires at least 2 paths to compare (got ${#spec_paths[@]})" >&2
+    exit 2
   fi
-done
+else
+  # Discovery mode — preserves existing behavior bit-for-bit when --spec is absent.
+  for repo in $LINKED_REPOS; do
+    repo_name=$(basename "$repo")
+    spec_path=$(find_openapi_spec "$repo" 2>/dev/null || true)
+    if [[ -n "$spec_path" ]]; then
+      repos_with_specs+=("$repo_name")
+      spec_paths+=("$spec_path")
+    fi
+  done
+fi
 
 spec_count=${#repos_with_specs[@]}
 

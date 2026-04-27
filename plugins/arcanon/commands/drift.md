@@ -1,7 +1,7 @@
 ---
 description: Detect drift — service-graph changes across scans + version/type/OpenAPI drift across linked repos.
 allowed-tools: Bash
-argument-hint: "[graph|versions|types|openapi|--all]"
+argument-hint: "[graph|versions|types|openapi|--all] [--spec <path>]..."
 ---
 
 Check cross-repo drift for linked repositories.
@@ -50,6 +50,7 @@ arcanon_print_help_if_requested "$ARGUMENTS" "${CLAUDE_PLUGIN_ROOT}/commands/dri
 - Run `drift versions` alone for fastest check (pure bash + jq, no optional tools required)
 - `drift types` is best-effort heuristic (grep-based interface/struct name matching, same-language only)
 - `drift openapi` uses `oasdiff` when available; falls back to structural yq comparison
+- `/arcanon:drift openapi --spec <path-A> --spec <path-B>` compares explicit spec paths instead of auto-discovering. Useful for non-conventional spec locations. Repeatable; requires at least 2 paths.
 - If no sibling repos are found, the command exits with a helpful message
 - Expected runtime: versions <5s, types <15s, openapi <10s for typical repo sets
 

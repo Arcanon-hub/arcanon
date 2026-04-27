@@ -10,6 +10,10 @@ PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && p
 # SHOW_INFO: default false; set true when --all is in args (set by parse_drift_args)
 SHOW_INFO=false
 
+# EXPLICIT_SPECS: bash array of explicit OpenAPI spec paths supplied via --spec.
+# Populated by parse_drift_args; consumed by drift-openapi.sh to bypass discovery.
+EXPLICIT_SPECS=()
+
 # emit_finding LEVEL ITEM REPOS DETAILS
 # LEVEL = CRITICAL | WARN | INFO
 # INFO findings are suppressed unless SHOW_INFO=true
@@ -35,12 +39,28 @@ emit_finding() {
 }
 
 # parse_drift_args "$@"
-# Sets SHOW_INFO=true if --all is present in args
+# Sets SHOW_INFO=true if --all is present in args.
+# Accumulates explicit OpenAPI spec paths (--spec <path>, repeatable) into EXPLICIT_SPECS.
 parse_drift_args() {
-  for arg in "$@"; do
-    if [[ "$arg" == "--all" ]]; then
-      SHOW_INFO=true
-    fi
+  EXPLICIT_SPECS=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --all)
+        SHOW_INFO=true
+        shift
+        ;;
+      --spec)
+        if [[ -z "${2:-}" ]]; then
+          echo "arcanon:drift: --spec requires a path argument" >&2
+          exit 2
+        fi
+        EXPLICIT_SPECS+=("$2")
+        shift 2
+        ;;
+      *)
+        shift
+        ;;
+    esac
   done
 }
 
@@ -63,3 +83,6 @@ if [[ -z "${LINKED_REPOS:-}" ]]; then
 fi
 
 export PLUGIN_ROOT SHOW_INFO LINKED_REPOS
+# EXPLICIT_SPECS is a bash array; arrays do not truly export across processes,
+# but drift-openapi.sh sources this file in the same shell process so the value
+# is visible without `export`.
