@@ -5,7 +5,7 @@ import { createHttpServer } from "./server/http.js";
 import { getQueryEngine } from "./db/pool.js";
 import { initChromaSync } from "./server/chroma.js";
 import { createLogger } from "./lib/logger.js";
-import { setScanLogger } from "./scan/manager.js";
+import { setScanLogger, setAgentRunner } from "./scan/manager.js";
 import { setExtractorLogger } from "./scan/enrichment/auth-db-extractor.js";
 import { resolveDataDir } from "./lib/data-dir.js";
 
@@ -55,6 +55,38 @@ fs.writeFileSync(PID_FILE, String(process.pid));
 const logger = createLogger({ dataDir, port, logLevel, component: 'worker' });
 setScanLogger(logger);
 setExtractorLogger(logger);
+
+// ---------------------------------------------------------------------------
+// 5b. Test-only agentRunner stub (Plan 118-02 / CORRECT-04)
+// ---------------------------------------------------------------------------
+// Production scans are orchestrated from the host (Claude Code Task tool) and
+// then POSTed to /scan; the worker process never invokes the agent itself.
+// However, /api/rescan needs scanRepos to actually run end-to-end inside the
+// worker for the rescan trigger to be testable. When ARCANON_TEST_AGENT_RUNNER
+// is truthy, install a minimal stub that returns valid empty scan output so
+// tests can drive /api/rescan without a real Claude agent.
+//
+// The stub is gated by env var — production worker startups never wire it.
+if (process.env.ARCANON_TEST_AGENT_RUNNER) {
+  setAgentRunner(async (_prompt, _repoPath) => {
+    // Stub returns the minimal-valid agent output: a fenced ```json block
+    // wrapping an object with empty services/connections arrays. Both the
+    // discovery pass and the deep scan share the same runner; both accept
+    // this shape (parseAgentOutput tolerates empty arrays).
+    return [
+      "```json",
+      JSON.stringify({
+        languages: [],
+        frameworks: [],
+        service_hints: [],
+        services: [],
+        connections: [],
+      }),
+      "```",
+    ].join("\n");
+  });
+  logger.log("INFO", "test agent runner installed (ARCANON_TEST_AGENT_RUNNER=1)");
+}
 
 // ---------------------------------------------------------------------------
 // 6. Initialize ChromaDB (optional — non-blocking)

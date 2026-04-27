@@ -653,6 +653,114 @@ async function createHttpServer(queryEngine, options = {}) {
     }
   });
 
+  // 6b. POST /api/rescan — re-scan exactly one repo (CORRECT-04, Plan 118-02)
+  //
+  //   Query: project=<absolute-root>&repo=<path-or-name>
+  //   Body:  none
+  //
+  //   200 { ok: true, repo_id, repo_path, repo_name, scan_version_id, mode: "full" }
+  //   400 { error: "missing repo query param" }
+  //   404 { error: "repo '<id>' not found", available: [{name, path}, ...] }
+  //   409 { error: "name '<id>' matches multiple repos", matches: [{id, path}, ...] }
+  //   503 { error: "..." } — no DB or worker bootstrap incomplete
+  //   500 { error: "..." } — scan threw
+  //
+  //   Bypasses the incremental skip path by forcing options.full=true via
+  //   scanSingleRepo (manager.js).
+  fastify.post("/api/rescan", async (request, reply) => {
+    const qe = getQE(request);
+    if (!qe) {
+      return reply
+        .code(503)
+        .send({ error: "No map data yet — run /arcanon:map first" });
+    }
+    const repoArg = request.query?.repo;
+    if (typeof repoArg !== "string" || repoArg.length === 0) {
+      return reply
+        .code(400)
+        .send({ error: "missing 'repo' query param (path or name)" });
+    }
+    const projectRoot = request.query?.project;
+    if (typeof projectRoot !== "string" || projectRoot.length === 0) {
+      return reply
+        .code(400)
+        .send({ error: "missing 'project' query param (absolute root)" });
+    }
+
+    // 1. Resolve repo identifier → row.
+    let repoRow;
+    try {
+      const { resolveRepoIdentifier } = await import(
+        "../lib/repo-resolver.js"
+      );
+      repoRow = resolveRepoIdentifier(repoArg, qe._db, projectRoot);
+    } catch (err) {
+      // Resolver throws { code, message, exitCode, available?, matches? }.
+      if (err && err.code === "NOT_FOUND") {
+        return reply
+          .code(404)
+          .send({ error: err.message, available: err.available || [] });
+      }
+      if (err && err.code === "AMBIGUOUS") {
+        return reply
+          .code(409)
+          .send({ error: err.message, matches: err.matches || [] });
+      }
+      if (err && err.code === "INVALID") {
+        return reply.code(400).send({ error: err.message });
+      }
+      // Unknown shape — re-throw to outer catch.
+      throw err;
+    }
+
+    // 2. Trigger the rescan via the scan manager. agentRunner must be wired.
+    try {
+      const { scanSingleRepo } = await import("../scan/manager.js");
+      await scanSingleRepo(repoRow.path, qe, {});
+    } catch (err) {
+      // Common failure: agentRunner not initialized (production worker has
+      // no built-in runner; scans are normally orchestrated from the host
+      // via the /scan POST). Surface clearly so the operator can see what
+      // happened — not a 500 because it's a known bootstrap gap, not a
+      // server error.
+      if (err && /agentRunner not initialized/i.test(String(err.message))) {
+        return reply.code(503).send({
+          error:
+            "worker bootstrap incomplete: agentRunner not initialized — rescan requires an agent runner injection (use ARCANON_TEST_AGENT_RUNNER=1 for tests, or run /arcanon:map from the host)",
+        });
+      }
+      httpLog('ERROR', err.message, { route: '/api/rescan', stack: err.stack });
+      return reply.code(500).send({ error: err.message });
+    }
+
+    // 3. Read back the freshest scan_version_id for this repo.
+    //    Order DESC LIMIT 1 — the row scanSingleRepo just created.
+    let scanVersionId = null;
+    try {
+      const row = qe._db
+        .prepare(
+          "SELECT id FROM scan_versions WHERE repo_id = ? ORDER BY id DESC LIMIT 1",
+        )
+        .get(repoRow.id);
+      if (row && typeof row.id === "number") scanVersionId = row.id;
+    } catch (err) {
+      // Non-fatal — scan succeeded, only the readback failed. Surface 200
+      // with scan_version_id=null so the operator knows.
+      httpLog('WARN', `scan_version readback failed: ${err.message}`, {
+        route: '/api/rescan',
+      });
+    }
+
+    return reply.code(200).send({
+      ok: true,
+      repo_id: repoRow.id,
+      repo_path: repoRow.path,
+      repo_name: repoRow.name,
+      scan_version_id: scanVersionId,
+      mode: "full",
+    });
+  });
+
   // 7. GET /versions?project=/path — map version history
   fastify.get("/versions", async (request, reply) => {
     const qe = getQE(request);
