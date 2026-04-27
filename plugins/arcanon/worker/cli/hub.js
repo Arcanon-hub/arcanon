@@ -38,7 +38,7 @@ import {
 } from "../hub-sync/index.js";
 import { resolveConfigPath } from "../lib/config-path.js";
 import { resolveDataDir } from "../lib/data-dir.js";
-import { projectHashDir } from "../db/pool.js";
+import { projectHashDir, evictLiveQueryEngine } from "../db/pool.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1818,6 +1818,188 @@ async function cmdShadowScan(flags) {
   );
 }
 
+/**
+ * Detect whether a live scan is in progress for any repo under the project's
+ * working directory (T-119-02-04, RESEARCH §3 cross-reference).
+ *
+ * Scans `${dataDir}/scan-*.lock` lock files (written by manager.js
+ * acquireScanLock — see manager.js:535-566) and returns the matching lock
+ * path when ALL three conditions hold:
+ *
+ *   1. The lock JSON parses cleanly with `pid` + `repoPaths` fields.
+ *   2. The recorded PID is still alive (process.kill(pid, 0) doesn't throw).
+ *   3. At least one entry in `repoPaths` lives under `projectRoot` (prefix
+ *      match against `${projectRoot}/`, plus exact-match for the bare cwd).
+ *
+ * Stale locks (dead PID) are LEFT IN PLACE here — manager.js's own
+ * acquireScanLock cleans them up on the next live scan attempt. Promote
+ * is a passive consumer; it does not own lock-cleanup.
+ *
+ * Returns null when no matching active lock is found (the common case).
+ *
+ * @param {string} projectRoot
+ * @returns {string|null} absolute lock path, or null if no active lock blocks promote.
+ */
+function _findActiveScanLockForProject(projectRoot) {
+  const dataDir = resolveDataDir();
+  let entries;
+  try {
+    entries = fs.readdirSync(dataDir);
+  } catch {
+    return null; // data dir absent — no locks possible
+  }
+  const projectPrefix = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
+  for (const entry of entries) {
+    if (!entry.startsWith("scan-") || !entry.endsWith(".lock")) continue;
+    const lockPath = path.join(dataDir, entry);
+    let lock;
+    try {
+      lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+    } catch {
+      continue; // corrupted lock — let manager.js clean it up
+    }
+    if (!lock || typeof lock.pid !== "number" || !Array.isArray(lock.repoPaths)) continue;
+    // Check PID is alive (process.kill(pid, 0) returns true when alive).
+    try {
+      process.kill(lock.pid, 0);
+    } catch {
+      continue; // dead PID — stale lock; manager.js will clean it up next scan
+    }
+    // Active scan — check if any repo path is under projectRoot.
+    for (const rp of lock.repoPaths) {
+      if (typeof rp !== "string") continue;
+      if (rp === projectRoot || rp.startsWith(projectPrefix)) {
+        return lockPath;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * cmdPromoteShadow — SHADOW-03 (Phase 119-02).
+ *
+ * Atomically swaps `impact-map-shadow.db` over `impact-map.db` with a
+ * timestamped backup of the prior live DB. WAL sidecars (-wal, -shm) are
+ * renamed alongside the main file in BOTH the backup step and the promote
+ * step so SQLite never sees a stale log on next open (RESEARCH §3).
+ *
+ * Sequence (exact order — DO NOT reorder):
+ *   1. Silent no-op when neither live nor shadow exists (NAV-01 contract).
+ *   2. Exit 2 if shadow DB is missing (nothing to promote).
+ *   3. Exit 2 if a live scan is in progress for any repo under cwd
+ *      (T-119-02-04 — promote during scan would write to renamed-out fd).
+ *   4. Evict cached LIVE QueryEngine from the worker pool (T-119-02-01).
+ *      Idempotent — returns false when no entry was cached.
+ *   5. Backup live: rename(live → live.pre-promote-<ts>) + sidecars.
+ *   6. Promote shadow: rename(shadow → live) + sidecars.
+ *   7. Print backup path on stdout (or full JSON object with --json).
+ *
+ * Atomic-rename guarantee (RESEARCH §3): both DBs sit as siblings under
+ * `projectHashDir(cwd)` → same filesystem → fs.renameSync is atomic per
+ * POSIX rename(2). No observable intermediate state on success. On
+ * mid-flight failure (e.g., disk full), best-effort rollback restores
+ * live from the backup and exits 1.
+ *
+ * Backups are NEVER auto-deleted (operator cleanup — documented in
+ * commands/promote-shadow.md and in the human stdout message).
+ *
+ * Exit codes:
+ *   0 — promoted; backup printed (or first-promote: shadow → live, no backup)
+ *   1 — rename failed mid-flight; rollback attempted
+ *   2 — no shadow DB to promote, OR active live scan blocks promote
+ */
+async function cmdPromoteShadow(flags) {
+  const projectRoot = process.cwd();
+  const dir = projectHashDir(projectRoot);
+  const livePath = path.join(dir, "impact-map.db");
+  const shadowPath = path.join(dir, "impact-map-shadow.db");
+
+  // Step 1 — silent no-op in non-Arcanon dir (mirrors NAV-01 / SHADOW-01).
+  if (!fs.existsSync(livePath) && !fs.existsSync(shadowPath)) {
+    process.exit(0);
+  }
+
+  // Step 2 — shadow MUST exist (nothing to promote otherwise).
+  if (!fs.existsSync(shadowPath)) {
+    process.stderr.write(
+      "error: no shadow DB to promote (looked for " + shadowPath + ")\n",
+    );
+    process.exit(2);
+  }
+
+  // Step 3 — active-scan-lock guard (T-119-02-04).
+  const activeLock = _findActiveScanLockForProject(projectRoot);
+  if (activeLock) {
+    process.stderr.write(
+      "error: scan in progress for this project (lock: " + activeLock +
+        "). Wait for the scan to finish, then re-run /arcanon:promote-shadow.\n",
+    );
+    process.exit(2);
+  }
+
+  // Step 4 — evict cached live QE BEFORE any rename (T-119-02-01).
+  const evicted = evictLiveQueryEngine(projectRoot);
+
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  let backupPath = null;
+  let backupSidecarsRenamed = [];
+
+  try {
+    if (fs.existsSync(livePath)) {
+      // Step 5 — backup live (main + sidecars).
+      backupPath = livePath + ".pre-promote-" + ts;
+      fs.renameSync(livePath, backupPath);
+      for (const sfx of ["-wal", "-shm"]) {
+        if (fs.existsSync(livePath + sfx)) {
+          fs.renameSync(livePath + sfx, backupPath + sfx);
+          backupSidecarsRenamed.push(sfx);
+        }
+      }
+    }
+
+    // Step 6 — promote shadow → live (main + sidecars).
+    fs.renameSync(shadowPath, livePath);
+    for (const sfx of ["-wal", "-shm"]) {
+      if (fs.existsSync(shadowPath + sfx)) {
+        fs.renameSync(shadowPath + sfx, livePath + sfx);
+      }
+    }
+  } catch (err) {
+    // Best-effort rollback: if the live → backup rename succeeded but
+    // the shadow → live rename failed, restore live from the backup so
+    // the project isn't left in a half-promoted state.
+    if (backupPath && fs.existsSync(backupPath) && !fs.existsSync(livePath)) {
+      try {
+        fs.renameSync(backupPath, livePath);
+        for (const sfx of backupSidecarsRenamed) {
+          if (fs.existsSync(backupPath + sfx)) {
+            fs.renameSync(backupPath + sfx, livePath + sfx);
+          }
+        }
+      } catch { /* ignore — surfaced via thrown error below */ }
+    }
+    process.stderr.write("error: promote failed: " + err.message + "\n");
+    process.exit(1);
+  }
+
+  // Step 7 — report.
+  const human = backupPath
+    ? "Promoted shadow -> live.\nBackup: " + backupPath +
+      "\nDelete backup manually when no longer needed (rollback: mv " + backupPath + " " + livePath + ")."
+    : "No live DB to back up; shadow promoted to live.\nLive: " + livePath;
+  emit(
+    {
+      ok: true,
+      backup_path: backupPath,
+      live_path: livePath,
+      evicted_cached_qe: evicted,
+    },
+    flags,
+    human,
+  );
+}
+
 const HANDLERS = {
   version: cmdVersion,
   login: cmdLogin,
@@ -1832,6 +2014,7 @@ const HANDLERS = {
   correct: cmdCorrect, // CORRECT-02 stage path (Phase 118-01)
   rescan: cmdRescan,   // CORRECT-04 / CORRECT-05 (Phase 118-02)
   "shadow-scan": cmdShadowScan, // SHADOW-01 (Phase 119-01) — hyphenated key matches the slash-command name
+  "promote-shadow": cmdPromoteShadow, // SHADOW-03 (Phase 119-02) — hyphenated key matches the slash-command name
 };
 
 async function main() {

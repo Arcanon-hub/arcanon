@@ -11,7 +11,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import Database from "better-sqlite3";
-import { openDb, runMigrations } from "./database.js";
+import { openDb, runMigrations, _resetDbSingleton } from "./database.js";
 import { QueryEngine } from "./query-engine.js";
 import { resolveDataDir } from "../lib/data-dir.js";
 
@@ -277,6 +277,45 @@ export function getShadowQueryEngine(projectRoot, opts = {}) {
     );
     return null;
   }
+}
+
+/**
+ * Drop the cached LIVE QueryEngine for a project, closing its DB handle first.
+ *
+ * REQUIRED before /arcanon:promote-shadow renames the live DB out from under
+ * the worker — otherwise the cached `pool.get(projectRoot)._db` holds an fd
+ * to a renamed-out inode and subsequent live-DB operations write to the
+ * wrong file (RESEARCH §3, threat T-119-02-01).
+ *
+ * Implementation note (Plan 119-02 deviation Rule 1 — see SUMMARY): the
+ * pool's QueryEngine wraps the same Database instance that `openDb` cached
+ * in its module-level `_db` slot (database.js:30). If we only delete the
+ * pool entry and close the QE's handle, the next `getQueryEngine` call
+ * routes through `openDb` which short-circuits on the still-set `_db`
+ * pointing at the now-CLOSED handle — and the caller crashes at first
+ * statement prepare. So we ALSO call `_resetDbSingleton()` to clear the
+ * database.js cache, ensuring the next `getQueryEngine` opens a fresh
+ * handle pointed at whatever file lives at the live path post-promote.
+ *
+ * Idempotent — safe to call when no entry is cached. Returns false in that
+ * case (caller can use the return value to populate the `evicted_cached_qe`
+ * field of the promote `--json` output). NOTE: returns true ONLY when the
+ * pool had a cached entry — the database.js singleton reset is a side
+ * effect, not the return-value gate.
+ *
+ * @param {string} projectRoot - Absolute path to the project root.
+ * @returns {boolean} true if a cached pool entry was evicted, false if none cached.
+ */
+export function evictLiveQueryEngine(projectRoot) {
+  if (!projectRoot) return false;
+  if (!pool.has(projectRoot)) return false;
+  const qe = pool.get(projectRoot);
+  try { qe._db.close(); } catch { /* already closed — still drop the entry */ }
+  pool.delete(projectRoot);
+  // Also clear the database.js process-singleton (see comment above) so the
+  // next getQueryEngine call opens a fresh handle. Idempotent in database.js.
+  _resetDbSingleton();
+  return true;
 }
 
 /**

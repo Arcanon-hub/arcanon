@@ -112,6 +112,28 @@ export function openDb(projectRoot = process.cwd()) {
 }
 
 /**
+ * Reset the module-level _db singleton.
+ *
+ * Required by Phase 119-02's `evictLiveQueryEngine` (pool.js) — the pool's
+ * cached QueryEngine wraps the same Database instance that `openDb` cached
+ * in the module-level `_db` slot. If we close the QE's handle but leave
+ * `_db` pointing at the now-closed instance, the next `openDb()` call
+ * returns the closed handle and `getQueryEngine` blows up at next-statement
+ * time. This helper closes `_db` (best-effort) and clears the slot so the
+ * next `openDb()` opens a fresh handle.
+ *
+ * Idempotent. Returns true if a slot was cleared, false if already null.
+ *
+ * @returns {boolean}
+ */
+export function _resetDbSingleton() {
+  if (!_db) return false;
+  try { _db.close(); } catch { /* already closed */ }
+  _db = null;
+  return true;
+}
+
+/**
  * Returns the already-opened database instance.
  * @throws {Error} If openDb() has not been called yet.
  * @returns {import('better-sqlite3').Database}
