@@ -1397,6 +1397,195 @@ async function cmdDiff(flags, positional) {
   }
 }
 
+/**
+ * cmdCorrect — Stage a scan-overrides row (CORRECT-02, plan 118-01).
+ *
+ * Inserts ONE row into the scan_overrides table per invocation. Does NOT
+ * apply the override — Phase 117-02's `applyPendingOverrides` consumes the
+ * pending row on the next scan run.
+ *
+ * Subcommand grammar: `correct <kind> --action <action> [target-flags] [payload-flags]`
+ *
+ *   kind      : connection | service        (positional[0])
+ *   action    : delete | update | rename | set-base-path
+ *   matrix    : connection allows {delete, update}
+ *               service    allows {rename, set-base-path}
+ *
+ * Target flags:
+ *   connection  --connection <id>           (positive integer; FK on connections.id)
+ *   service     --service <name>            (resolved to services.id; ambiguous → exit 2)
+ *
+ * Payload flags (per action):
+ *   delete           none — payload null
+ *   update           --source <svc> --target <svc>            payload {source, target}
+ *   rename           --new-name <name>                        payload {new_name}
+ *   set-base-path    --base-path <path>                       payload {base_path}
+ *
+ * Output (NAV-04 emit() pattern):
+ *   human  "correct: queued (override_id=<id>) — kind=<k>, target_id=<t>, action=<a>"
+ *          + hint "Apply on next /arcanon:map or /arcanon:rescan run."
+ *   json   { ok: true, override_id, kind, target_id, action, payload }
+ *
+ * Exit codes:
+ *   0 — override staged
+ *   2 — usage error: bad kind, bad action, action/kind mismatch, missing
+ *       required flag, target not found, service name ambiguous
+ *
+ * Silent in non-Arcanon directories (no impact-map.db) — exits 0 with no
+ * output, mirroring /arcanon:list, /arcanon:doctor, /arcanon:diff.
+ */
+async function cmdCorrect(flags, positional) {
+  const cwd = process.cwd();
+  const dbPath = path.join(projectHashDir(cwd), "impact-map.db");
+  if (!fs.existsSync(dbPath)) {
+    process.exit(0); // silent contract
+  }
+
+  // ----- 1. Validate kind (positional[0]) -----
+  const kind = positional && positional[0];
+  if (kind !== "connection" && kind !== "service") {
+    process.stderr.write(
+      `error: kind '${kind ?? ""}' is not valid — expected 'connection' or 'service'\n` +
+        "usage: arcanon-hub correct <connection|service> --action <action> [flags]\n",
+    );
+    process.exit(2);
+  }
+
+  // ----- 2. Validate --action and cross-validate against kind -----
+  const action = flags.action;
+  const VALID_ACTIONS = new Set(["delete", "update", "rename", "set-base-path"]);
+  if (typeof action !== "string" || !VALID_ACTIONS.has(action)) {
+    process.stderr.write(
+      `error: --action '${action ?? ""}' is not valid — expected one of: delete, update, rename, set-base-path\n`,
+    );
+    process.exit(2);
+  }
+  const ALLOWED = {
+    connection: new Set(["delete", "update"]),
+    service: new Set(["rename", "set-base-path"]),
+  };
+  if (!ALLOWED[kind].has(action)) {
+    const validKindForAction = action === "delete" || action === "update" ? "connection" : "service";
+    process.stderr.write(
+      `error: action '${action}' is only valid for kind '${validKindForAction}' (you passed kind '${kind}')\n`,
+    );
+    process.exit(2);
+  }
+
+  // ----- 3. Resolve target_id -----
+  const db = new Database(dbPath);
+  let targetId;
+  try {
+    if (kind === "connection") {
+      const idStr = flags.connection !== undefined && flags.connection !== true
+        ? String(flags.connection)
+        : "";
+      if (!/^\d+$/.test(idStr) || Number(idStr) <= 0) {
+        process.stderr.write("error: --connection requires a positive integer ID\n");
+        process.exit(2);
+      }
+      targetId = Number(idStr);
+      const row = db
+        .prepare("SELECT id FROM connections WHERE id = ?")
+        .get(targetId);
+      if (!row) {
+        process.stderr.write(`error: connection ID ${targetId} not found\n`);
+        process.exit(2);
+      }
+    } else {
+      const name = flags.service !== undefined && flags.service !== true
+        ? String(flags.service)
+        : "";
+      if (name.length === 0) {
+        process.stderr.write("error: --service requires a non-empty name\n");
+        process.exit(2);
+      }
+      const { resolveServiceTarget } = await import("./correct-resolver.js");
+      try {
+        targetId = resolveServiceTarget(name, db);
+      } catch (err) {
+        process.stderr.write(`error: ${err.message}\n`);
+        process.exit(err.exitCode ?? 2);
+      }
+    }
+  } finally {
+    db.close();
+  }
+
+  // ----- 4. Construct payload per action -----
+  let payload;
+  const missing = [];
+  if (action === "delete") {
+    payload = null;
+  } else if (action === "update") {
+    const source = flags.source !== undefined && flags.source !== true ? String(flags.source) : "";
+    const target = flags.target !== undefined && flags.target !== true ? String(flags.target) : "";
+    if (!source) missing.push("--source");
+    if (!target) missing.push("--target");
+    if (missing.length === 0) payload = { source, target };
+  } else if (action === "rename") {
+    const newName = flags["new-name"] !== undefined && flags["new-name"] !== true
+      ? String(flags["new-name"])
+      : "";
+    if (!newName) missing.push("--new-name");
+    if (missing.length === 0) payload = { new_name: newName };
+  } else if (action === "set-base-path") {
+    const basePath = flags["base-path"] !== undefined && flags["base-path"] !== true
+      ? String(flags["base-path"])
+      : "";
+    if (!basePath) missing.push("--base-path");
+    if (missing.length === 0) payload = { base_path: basePath };
+  }
+  if (missing.length > 0) {
+    process.stderr.write(
+      `error: --action ${action} requires ${missing.join(" and ")}\n`,
+    );
+    process.exit(2);
+  }
+
+  // ----- 5. Insert via QueryEngine (Phase 117-01's helper) -----
+  const { getQueryEngine } = await import("../db/pool.js");
+  const qe = getQueryEngine(cwd);
+  if (!qe) {
+    // Pool returns null only when projectRoot is falsy or the DB file
+    // disappeared between our existsSync check and now. Defensive — the
+    // earlier silent-contract guard should have caught this.
+    process.stderr.write(`error: project DB not available at ${dbPath}\n`);
+    process.exit(2);
+  }
+  const overrideId = qe.upsertOverride({
+    kind,
+    target_id: targetId,
+    action,
+    // Plan 117-01's helper JSON-stringifies internally. Pass the object
+    // when we have one; pass null/{} when the action carries no payload.
+    payload: payload ?? {},
+    created_by: "cli",
+  });
+  if (overrideId === null) {
+    // Pre-mig-017 db. Phase 117-01's downgrade contract returns null when
+    // the prepared statement could not arm. Surface clearly.
+    process.stderr.write(
+      "error: scan_overrides table missing — run migrations (start the worker once via /arcanon:map) and retry\n",
+    );
+    process.exit(2);
+  }
+
+  emit(
+    {
+      ok: true,
+      override_id: overrideId,
+      kind,
+      target_id: targetId,
+      action,
+      payload: payload ?? null,
+    },
+    flags,
+    `correct: queued (override_id=${overrideId}) — kind=${kind}, target_id=${targetId}, action=${action}\n` +
+      "Apply on next /arcanon:map or /arcanon:rescan run.",
+  );
+}
+
 const HANDLERS = {
   version: cmdVersion,
   login: cmdLogin,
@@ -1408,6 +1597,7 @@ const HANDLERS = {
   list: cmdList,     // NAV-01
   doctor: cmdDoctor, // NAV-03
   diff: cmdDiff,     // NAV-04
+  correct: cmdCorrect, // CORRECT-02 stage path (Phase 118-01)
 };
 
 async function main() {
