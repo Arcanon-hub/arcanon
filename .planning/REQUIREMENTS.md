@@ -169,9 +169,11 @@ Three sub-items: offline mode, explicit specs, externals catalog.
 - [x] **INT-06
 **: Scan enrichment pass loads `known-externals.yaml` and matches actor URLs/host patterns against the catalog. Matched actors get a friendly `label` field added to their record.
 
-- [ ] **INT-07**: User extension via `arcanon.config.json` `external_labels` key — same shape as the catalog; merged with the shipped catalog (user takes precedence on key collision).
+- [x] **INT-07
+**: User extension via `arcanon.config.json` `external_labels` key — same shape as the catalog; merged with the shipped catalog (user takes precedence on key collision).
 
-- [ ] **INT-08**: `/arcanon:list` (NAV-01) and graph UI show catalog-labeled external names instead of raw URLs.
+- [x] **INT-08
+**: `/arcanon:list` (NAV-01) and graph UI show catalog-labeled external names instead of raw URLs.
 
 - [x] **INT-09
 **: Node tests — known-externals loader, catalog match logic, user-extension merge.

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.1.4
 milestone_name: Operator Surface
 status: executing
-stopped_at: Completed 121-01-PLAN.md
-last_updated: "2026-04-27T06:40:57.058Z"
+stopped_at: Completed 121-02-PLAN.md (INT-07/08/09)
+last_updated: "2026-04-27T06:55:24.153Z"
 last_activity: 2026-04-27
 progress:
   total_phases: 9
   completed_phases: 7
   total_plans: 21
-  completed_plans: 17
-  percent: 81
+  completed_plans: 18
+  percent: 86
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 ## Current Position
 
 Phase: 121 (Integration Consumption Layer) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-04-27
 
@@ -66,6 +66,8 @@ Last activity: 2026-04-27
 - 121-01: self-healing UPDATE-with-NULL on non-match — removing a catalog entry clears stale labels on next scan
 - 121-01: loader accepts both 'entries:' (plan-assumed) and 'externals:' (Phase 120 actual) top-level keys; both map and list forms — single point of adaptation
 - 121-01: leading '*.foo.com' wildcard matches one-OR-MORE leading DNS labels (excluding bare suffix); mid-string '*' matches exactly one label
+- 121-02: loadMergedCatalog single-call seam at scanRepos head — manager.js swap is one line; future catalog merges only touch this point
+- 121-02: User-extension re-read every scan, shipped portion module-cached — asymmetric caching matches asymmetric edit cadence
 
 ### Pending Todos
 
@@ -78,6 +80,6 @@ None. Awaiting requirements definition + roadmap.
 
 ## Session Continuity
 
-Last session: 2026-04-27T06:40:57.049Z
-Stopped at: Completed 121-01-PLAN.md
+Last session: 2026-04-27T06:55:24.145Z
+Stopped at: Completed 121-02-PLAN.md (INT-07/08/09)
 Resume file: None
