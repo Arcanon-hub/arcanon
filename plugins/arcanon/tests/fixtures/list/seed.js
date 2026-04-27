@@ -105,6 +105,10 @@ export function seedListFixture({
   withLabels = false,
   withManyLabels = false,
   noActors = false,
+  // Phase 121-02 INT-09 / Test 5.x: seed N bare actors (label NULL) by name,
+  // so the labeling pass can populate label end-to-end via the merged catalog.
+  // Pass an array of strings, e.g. ['custom.example.com', 'api.stripe.com'].
+  actorsNamed = null,
 }) {
   applyAllMigrations(db);
 
@@ -230,6 +234,10 @@ export function seedListFixture({
 
   if (noActors) {
     // Skip — empty actors table.
+  } else if (Array.isArray(actorsNamed) && actorsNamed.length > 0) {
+    // INT-09 Test 5.x: bare actors (label NULL). The actor-labeling pass +
+    // merged catalog populates label end-to-end.
+    seedActorRows(actorsNamed.map((name) => ({ name, label: null })));
   } else if (withManyLabels) {
     seedActorRows([
       { name: 'api.stripe.com', label: 'Stripe API' },
@@ -299,6 +307,14 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const Database = (await import('better-sqlite3')).default;
   const db = new Database(args.db);
   db.pragma('foreign_keys = ON');
+  // INT-09: --actors-named-csv accepts a comma-separated list of bare actor
+  // names (label NULL). Used by tests/externals-labels.bats to seed actors
+  // whose label is filled by the labeling pass against the merged catalog.
+  const actorsNamed =
+    typeof args['actors-named-csv'] === 'string'
+      ? args['actors-named-csv'].split(',').map((s) => s.trim()).filter(Boolean)
+      : null;
+
   const result = seedListFixture({
     db,
     projectRoot: args.project,
@@ -306,6 +322,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     withLabels: Boolean(args['with-labels']),
     withManyLabels: Boolean(args['with-many-labels']),
     noActors: Boolean(args['no-actors']),
+    actorsNamed,
   });
   db.close();
   process.stdout.write(JSON.stringify(result) + '\n');
