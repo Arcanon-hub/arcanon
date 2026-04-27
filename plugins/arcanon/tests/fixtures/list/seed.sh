@@ -17,20 +17,19 @@
 
 set -euo pipefail
 
-if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
-  echo "usage: seed.sh <project-root> <db-path> [--no-scan]" >&2
+if [ "$#" -lt 2 ]; then
+  echo "usage: seed.sh <project-root> <db-path> [--no-scan|--with-labels|--with-many-labels|--no-actors]" >&2
   exit 2
 fi
 
 PROJECT_ROOT="$1"
 DB_PATH="$2"
-NO_SCAN="${3:-}"
+shift 2
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 mkdir -p "$(dirname "$DB_PATH")"
 
-if [ "$NO_SCAN" = "--no-scan" ]; then
-  exec node "$SCRIPT_DIR/seed.js" --project "$PROJECT_ROOT" --db "$DB_PATH" --no-scan
-else
-  exec node "$SCRIPT_DIR/seed.js" --project "$PROJECT_ROOT" --db "$DB_PATH"
-fi
+# Forward all remaining flags untouched. seed.js's parser accepts
+# --no-scan, --with-labels, --with-many-labels, --no-actors as boolean flags
+# (no value follows). Phase 121-02 INT-08.
+exec node "$SCRIPT_DIR/seed.js" --project "$PROJECT_ROOT" --db "$DB_PATH" "$@"

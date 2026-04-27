@@ -38,6 +38,8 @@ import { up as up013 } from '../../../worker/db/migrations/013_connections_path_
 import { up as up014 } from '../../../worker/db/migrations/014_services_base_path.js';
 import { up as up015 } from '../../../worker/db/migrations/015_scan_versions_quality_score.js';
 import { up as up016 } from '../../../worker/db/migrations/016_enrichment_log.js';
+import { up as up017 } from '../../../worker/db/migrations/017_scan_overrides.js';
+import { up as up018 } from '../../../worker/db/migrations/018_actors_label.js';
 
 /**
  * Apply every migration in order on the given Database. Mirrors the pattern
@@ -62,6 +64,8 @@ function applyAllMigrations(db) {
   wrap(up014, 14);
   wrap(up015, 15);
   wrap(up016, 16);
+  wrap(up017, 17);
+  wrap(up018, 18);
 
   // Mirror what runMigrations() in database.js does after each up() so the
   // worker's idempotent runMigrations() call (triggered when openDb() runs
@@ -94,7 +98,14 @@ function applyAllMigrations(db) {
  *   actorIds: number[],
  * }}
  */
-export function seedListFixture({ db, projectRoot, noScan = false }) {
+export function seedListFixture({
+  db,
+  projectRoot,
+  noScan = false,
+  withLabels = false,
+  withManyLabels = false,
+  noActors = false,
+}) {
   applyAllMigrations(db);
 
   // 1. repos — 3 rows. Names exactly match the Test 5 narrative.
@@ -184,10 +195,15 @@ export function seedListFixture({ db, projectRoot, noScan = false }) {
     );
   }
 
-  // 5. actors — 4 rows + matching actor_connections.
-  const insertActor = db.prepare(
-    `INSERT INTO actors (name, kind, direction, source)
-     VALUES (?, 'system', 'outbound', 'scan')`,
+  // 5. actors — pluggable based on mode flags. Default = 4 unlabeled actors
+  // (the original Phase 114-01 fixture). The Phase 121 Plan 02 INT-08 modes:
+  //   --with-labels        4 actors: 2 labeled (Stripe API, GitHub API),
+  //                                   2 raw (raw1.example.com, raw2.example.com)
+  //   --with-many-labels   8 actors all labeled (proves +N more truncation)
+  //   --no-actors          0 actors (proves bare "0 external" line)
+  const insertActorWithLabel = db.prepare(
+    `INSERT INTO actors (name, kind, direction, source, label)
+     VALUES (?, 'system', 'outbound', 'scan', ?)`,
   );
   const insertActorConn = db.prepare(
     `INSERT INTO actor_connections
@@ -195,10 +211,50 @@ export function seedListFixture({ db, projectRoot, noScan = false }) {
      VALUES (?, ?, 'outbound', 'http', ?)`,
   );
   const actorIds = [];
-  for (let i = 1; i <= 4; i++) {
-    const actorId = insertActor.run(`external-actor-${i}`).lastInsertRowid;
-    actorIds.push(actorId);
-    insertActorConn.run(actorId, serviceIds[i % 5], `/external/${i}`);
+
+  /**
+   * Seed `actors` rows + the matching `actor_connections` link to a service.
+   * @param {Array<{name: string, label: string|null}>} specs
+   */
+  function seedActorRows(specs) {
+    for (let i = 0; i < specs.length; i++) {
+      const { name, label } = specs[i];
+      const actorId = insertActorWithLabel.run(name, label).lastInsertRowid;
+      actorIds.push(actorId);
+      // Link each actor to one of the seeded services so the per-repo
+      // actor-labeling JOIN (services.repo_id -> actors via actor_connections)
+      // visits this actor.
+      insertActorConn.run(actorId, serviceIds[i % serviceIds.length], `/external/${i + 1}`);
+    }
+  }
+
+  if (noActors) {
+    // Skip — empty actors table.
+  } else if (withManyLabels) {
+    seedActorRows([
+      { name: 'api.stripe.com', label: 'Stripe API' },
+      { name: 'api.github.com', label: 'GitHub API' },
+      { name: 'hooks.slack.com', label: 'Slack' },
+      { name: '*.datadoghq.com', label: 'Datadog' },
+      { name: 'sentry.io', label: 'Sentry' },
+      { name: 'auth.example.com', label: 'Auth0' },
+      { name: 'cloudflare.example.com', label: 'Cloudflare' },
+      { name: 'aws.example.com', label: 'AWS Lambda' },
+    ]);
+  } else if (withLabels) {
+    seedActorRows([
+      { name: 'api.stripe.com', label: 'Stripe API' },
+      { name: 'api.github.com', label: 'GitHub API' },
+      { name: 'raw1.example.com', label: null },
+      { name: 'raw2.example.com', label: null },
+    ]);
+  } else {
+    seedActorRows([
+      { name: 'external-actor-1', label: null },
+      { name: 'external-actor-2', label: null },
+      { name: 'external-actor-3', label: null },
+      { name: 'external-actor-4', label: null },
+    ]);
   }
 
   return {
@@ -247,6 +303,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     db,
     projectRoot: args.project,
     noScan: Boolean(args['no-scan']),
+    withLabels: Boolean(args['with-labels']),
+    withManyLabels: Boolean(args['with-many-labels']),
+    noActors: Boolean(args['no-actors']),
   });
   db.close();
   process.stdout.write(JSON.stringify(result) + '\n');

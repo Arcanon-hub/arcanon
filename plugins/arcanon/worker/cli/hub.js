@@ -722,6 +722,11 @@ async function cmdList(flags) {
     by_type: { service: null, library: null, infra: null },
   };
   let actorsCount = null;
+  // INT-08: capture {name,label} per actor so the human formatter can render
+  // the inline label list and the JSON formatter can emit a structured array.
+  // null label is preserved (surfaced as JSON null; human mode falls back to
+  // the bare name).
+  let actorsArr = [];
   if (graphResult.ok) {
     const services = Array.isArray(graphResult.body?.services)
       ? graphResult.body.services
@@ -738,6 +743,10 @@ async function cmdList(flags) {
       ? graphResult.body.actors
       : [];
     actorsCount = actors.length;
+    actorsArr = actors.map((a) => ({
+      name: typeof a?.name === "string" ? a.name : "",
+      label: typeof a?.label === "string" ? a.label : null,
+    }));
   }
 
   // ----- Connection breakdown from /api/scan-quality -----
@@ -806,6 +815,9 @@ async function cmdList(flags) {
       services: serviceCounts,
       connections: connectionsCounts,
       actors_count: actorsCount,
+      // INT-08: structured per-actor array — {name, label} per row. label is
+      // null when the catalog has no match. Stable shape for CI/scripts.
+      actors: actorsArr,
       hub: hubReport,
     };
     emit(json, flags);
@@ -838,10 +850,25 @@ async function cmdList(flags) {
   }
 
   // Actors line — graceful degradation when /graph failed.
+  // INT-08: when actors are present, append a parenthetical inline label list.
+  // Use label when populated; fall back to the raw name. Cap inline labels at
+  // 5 with a "+N more" tail for the remainder.
   if (actorsCount === null) {
     lines.push(`  Actors:       unknown`);
+  } else if (actorsCount === 0) {
+    lines.push(`  Actors:       0 external`);
   } else {
-    lines.push(`  Actors:       ${actorsCount} external`);
+    const display = actorsArr.map((a) => a.label || a.name);
+    const MAX_INLINE = 5;
+    let inline;
+    if (display.length <= MAX_INLINE) {
+      inline = display.join(", ");
+    } else {
+      inline =
+        display.slice(0, MAX_INLINE).join(", ") +
+        `, +${display.length - MAX_INLINE} more`;
+    }
+    lines.push(`  Actors:       ${actorsCount} external (${inline})`);
   }
 
   // Hub line.
