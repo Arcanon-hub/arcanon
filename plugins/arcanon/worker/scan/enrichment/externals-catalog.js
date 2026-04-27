@@ -39,6 +39,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
+import { resolveConfigPath } from '../../lib/config-path.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -258,4 +259,72 @@ function matchHost(hostname, pattern) {
       .join('[^.]+');
   }
   return new RegExp('^' + body + '$').test(hostname);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 121 / INT-07 — User extension via arcanon.config.json#external_labels
+// ---------------------------------------------------------------------------
+
+/**
+ * Load user-defined external_labels from $projectRoot/arcanon.config.json.
+ *
+ * Returns an empty NormalizedCatalog when:
+ *   - the config file does not exist
+ *   - the file exists but is invalid JSON (logs WARN; never throws)
+ *   - the file exists but has no `external_labels` key
+ *
+ * Valid entries are normalized via the same `normalizeCatalog` pipeline used
+ * for the shipped YAML — so user entries get the same shape, the same label
+ * validation, and the same hosts/ports type-checks. Malformed entries are
+ * skipped with a WARN log; valid entries still load.
+ *
+ * @param {string} projectRoot
+ * @param {{ warn?: Function } | null} [logger]
+ * @returns {NormalizedCatalog}
+ */
+export function loadUserExtensions(projectRoot, logger = null) {
+  const configPath = resolveConfigPath(projectRoot);
+  if (!fs.existsSync(configPath)) return { entries: new Map() };
+
+  let cfg;
+  try {
+    const text = fs.readFileSync(configPath, 'utf8');
+    cfg = JSON.parse(text);
+  } catch (err) {
+    logger?.warn?.(
+      `externals-catalog: arcanon.config.json parse error: ${err.message}`,
+    );
+    return { entries: new Map() };
+  }
+
+  const externalLabels =
+    cfg && typeof cfg === 'object' ? cfg.external_labels : null;
+  if (!externalLabels || typeof externalLabels !== 'object') {
+    return { entries: new Map() };
+  }
+
+  // Reuse normalizeCatalog by wrapping the user map under the `entries` key
+  // (the normalizer accepts both `entries` and `externals` top-level keys).
+  return normalizeCatalog({ entries: externalLabels }, logger);
+}
+
+/**
+ * Load the shipped catalog and merge user external_labels on top.
+ * User keys override shipped keys on collision. The shipped YAML file is
+ * NEVER mutated — the merge is in-memory only (Map.set on a fresh Map).
+ *
+ * @param {string} projectRoot
+ * @param {{ warn?: Function } | null} [logger]
+ * @returns {NormalizedCatalog}
+ */
+export function loadMergedCatalog(projectRoot, logger = null) {
+  const shipped = loadShippedCatalog(undefined, logger);
+  const user = loadUserExtensions(projectRoot, logger);
+
+  // Build a fresh Map so we never touch the cached shipped Map.
+  const merged = new Map(shipped.entries);
+  for (const [slug, entry] of user.entries) {
+    merged.set(slug, entry); // user wins on collision
+  }
+  return { entries: merged };
 }
