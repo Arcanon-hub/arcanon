@@ -178,7 +178,8 @@ Three sub-items: offline mode, explicit specs, externals catalog.
 - [x] **INT-09
 **: Node tests — known-externals loader, catalog match logic, user-extension merge.
 
-- [ ] **INT-10**: bats test — `/arcanon:drift openapi --spec X --spec Y` happy path with two real OpenAPI fixtures.
+- [x] **INT-10
+**: bats test — `/arcanon:drift openapi --spec X --spec Y` happy path with two real OpenAPI fixtures.
 
 ### Verification Gate (VER)
 

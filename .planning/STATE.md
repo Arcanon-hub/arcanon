@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.1.4
 milestone_name: Operator Surface
-status: executing
-stopped_at: Completed 121-02-PLAN.md (INT-07/08/09)
-last_updated: "2026-04-27T06:55:24.153Z"
+status: verifying
+stopped_at: Completed 121-03-PLAN.md (INT-10)
+last_updated: "2026-04-27T07:02:32.534Z"
 last_activity: 2026-04-27
 progress:
   total_phases: 9
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 21
-  completed_plans: 18
-  percent: 86
+  completed_plans: 19
+  percent: 90
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-04-25)
 
 Phase: 121 (Integration Consumption Layer) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-04-27
 
 ## Performance Metrics
@@ -68,6 +68,9 @@ Last activity: 2026-04-27
 - 121-01: leading '*.foo.com' wildcard matches one-OR-MORE leading DNS labels (excluding bare suffix); mid-string '*' matches exactly one label
 - 121-02: loadMergedCatalog single-call seam at scanRepos head — manager.js swap is one line; future catalog merges only touch this point
 - 121-02: User-extension re-read every scan, shipped portion module-cached — asymmetric caching matches asymmetric edit cadence
+- INT-10 bats: tolerant substring match for oasdiff vs yq fallback wording
+- INT-10 bats: control test pinned in to prove tests exercise the explicit-spec path not auto-discovery
+- INT-10 bats: append (don't replace) the existing tests/drift-openapi-explicit-spec.bats from Phase 120 — preserves 5 INT-04 negative-path tests
 
 ### Pending Todos
 
@@ -80,6 +83,6 @@ None. Awaiting requirements definition + roadmap.
 
 ## Session Continuity
 
-Last session: 2026-04-27T06:55:24.145Z
-Stopped at: Completed 121-02-PLAN.md (INT-07/08/09)
+Last session: 2026-04-27T07:02:32.526Z
+Stopped at: Completed 121-03-PLAN.md (INT-10)
 Resume file: None
