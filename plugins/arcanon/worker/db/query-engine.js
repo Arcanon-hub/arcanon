@@ -696,6 +696,44 @@ export class QueryEngine {
       this._stmtSelectEnrichmentLog = null;
       this._stmtSelectEnrichmentLogByEnricher = null;
     }
+
+    // --- scan_overrides statements (migration 017 / CORRECT-01) ---
+    // Wrapped in try/catch so a pre-migration-017 db (no scan_overrides table)
+    // cleanly disables the writers/readers — upsertOverride returns null,
+    // getPendingOverrides returns [], markOverrideApplied returns null.
+    // Mirrors the enrichment_log fallback pattern above.
+    //
+    // Decision (Plan 117-01): the SQL CHECK constraints on `kind` and `action`
+    // are the source of truth. Helpers do NOT pre-validate in JS - the apply-
+    // hook (Plan 117-02) is the single point that validates payload SHAPE at
+    // apply time. Same rationale as logEnrichment (query-engine.js:1106-1108).
+    this._stmtInsertOverride = null;
+    this._stmtSelectPendingOverrides = null;
+    this._stmtMarkOverrideApplied = null;
+    try {
+      this._stmtInsertOverride = db.prepare(`
+        INSERT INTO scan_overrides
+          (kind, target_id, action, payload, created_by)
+        VALUES
+          (@kind, @target_id, @action, @payload, @created_by)
+      `);
+      this._stmtSelectPendingOverrides = db.prepare(`
+        SELECT override_id, kind, target_id, action, payload, created_at, created_by
+        FROM scan_overrides
+        WHERE applied_in_scan_version_id IS NULL
+        ORDER BY created_at ASC, override_id ASC
+      `);
+      this._stmtMarkOverrideApplied = db.prepare(`
+        UPDATE scan_overrides
+        SET applied_in_scan_version_id = ?
+        WHERE override_id = ?
+      `);
+    } catch {
+      // scan_overrides table absent (pre-migration-017 db) — cleanly disable.
+      this._stmtInsertOverride = null;
+      this._stmtSelectPendingOverrides = null;
+      this._stmtMarkOverrideApplied = null;
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -1167,6 +1205,74 @@ export class QueryEngine {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * Insert a pending override row. (CORRECT-01 / CORRECT-02 — migration 017.)
+   *
+   * No-op (returns null) when migration 017 is not applied — the table is
+   * absent and the prepared statement could not arm in the constructor.
+   *
+   * MUST NOT call beginScan/endScan — overrides are persisted by the
+   * /arcanon:correct command (Phase 118), which runs OUTSIDE any scan bracket.
+   *
+   * `payload` is JSON-stringified here. Caller passes a plain object; the
+   * apply-hook (Plan 117-02) calls JSON.parse on read.
+   *
+   * Throws SqliteError when the SQL CHECK on `kind` or `action` fails — JS
+   * does NOT pre-validate (matches the `logEnrichment` decision documented
+   * at query-engine.js:1106-1108).
+   *
+   * @param {{ kind: 'connection'|'service', target_id: number,
+   *           action: 'delete'|'update'|'rename'|'set-base-path',
+   *           payload?: object, created_by?: string }} row
+   * @returns {number|null} override_id (lastInsertRowid), or null on pre-017 db
+   */
+  upsertOverride(row) {
+    if (!this._stmtInsertOverride) return null;
+    const result = this._stmtInsertOverride.run({
+      kind: row.kind,
+      target_id: row.target_id,
+      action: row.action,
+      payload: JSON.stringify(row.payload ?? {}),
+      created_by: row.created_by ?? 'system',
+    });
+    return Number(result.lastInsertRowid);
+  }
+
+  /**
+   * Read all overrides where applied_in_scan_version_id IS NULL.
+   * Sort: created_at ASC, override_id ASC (stable — id breaks the
+   * datetime('now') 1-second granularity tie).
+   *
+   * Returns [] on pre-017 db, on read error, or when no pending rows exist.
+   * Caller is responsible for JSON.parse on each row.payload.
+   *
+   * @returns {Array<{override_id:number, kind:string, target_id:number,
+   *   action:string, payload:string, created_at:string, created_by:string}>}
+   */
+  getPendingOverrides() {
+    if (!this._stmtSelectPendingOverrides) return [];
+    try { return this._stmtSelectPendingOverrides.all(); }
+    catch { return []; }
+  }
+
+  /**
+   * Stamp applied_in_scan_version_id on a single override row. Per-override
+   * granularity (RESEARCH section 6 D-03) — called once per applied override
+   * by the apply-hook in Plan 117-02.
+   *
+   * No-op (returns null) on pre-017 db. Returns 0 changes (not an error) if
+   * the override_id does not exist.
+   *
+   * @param {number} overrideId
+   * @param {number} scanVersionId
+   * @returns {number|null} rows-affected count (0 or 1), or null on pre-017
+   */
+  markOverrideApplied(overrideId, scanVersionId) {
+    if (!this._stmtMarkOverrideApplied) return null;
+    const result = this._stmtMarkOverrideApplied.run(scanVersionId, overrideId);
+    return result.changes;
   }
 
   /**
