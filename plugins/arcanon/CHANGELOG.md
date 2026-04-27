@@ -65,20 +65,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`/arcanon:rescan <repo>` command** (CORRECT-04, CORRECT-05, CORRECT-07).
   Re-scans exactly one linked repo, bypassing the incremental change-detection
   skip. Other repos in the project are not touched. Resolves the repo by path
-  or name with friendly disambiguation on multi-match. Pending `scan_overrides`
-  for the rescanned repo are applied automatically via the Phase 117-02
-  apply-hook during the rescan. New worker endpoint `POST
-  /api/rescan?project=<root>&repo=<id>` and `scanSingleRepo` wrapper in the
-  scan manager. Silent in non-Arcanon directories.
+  or name with friendly disambiguation on multi-match (`worker/lib/repo-resolver.js`).
+  Pending `scan_overrides` for the rescanned repo are applied automatically
+  via the Phase 117-02 `applyPendingOverrides` hook between `persistFindings`
+  and `endScan`. **Markdown-orchestrated** — the slash command itself drives
+  the two-phase Claude agent workflow (discovery → deep scan) and persists
+  via `openDb` + `QueryEngine` inline, mirroring `/arcanon:map`'s pattern.
+  No worker HTTP route. Cross-repo reconciliation is preserved by reading
+  the existing `services.name` set from the live DB before downgrading
+  `external` connections to `cross-service`. Silent in non-Arcanon
+  directories.
 - **`/arcanon:shadow-scan` command** (SHADOW-01). Runs a scan into
   `${ARCANON_DATA_DIR}/projects/<hash>/impact-map-shadow.db`, leaving the live
-  `impact-map.db` byte-untouched. Same scan code path, different DB target via
-  the new `getShadowQueryEngine` pool helper (always-fresh, never cached —
-  bypasses the `openDb` process-singleton problem). New worker endpoint `POST
-  /scan-shadow?project=<root>` and `options.skipHubSync` flag in `scanRepos`
-  so synthetic shadow data NEVER uploads to the Arcanon Hub. Existing shadow
-  DB triggers a one-line warning and is overwritten in place
-  (non-interactive). Silent in non-Arcanon directories.
+  `impact-map.db` byte-untouched. Persistence routes through the new
+  `getShadowQueryEngine` pool helper (always-fresh, never cached — bypasses
+  the `openDb` process-singleton problem). **Markdown-orchestrated** — same
+  agent recipe as `/arcanon:map`, but the persistence step swaps `openDb`
+  for `getShadowQueryEngine`. No worker HTTP route. Shadow data NEVER
+  uploads to the Hub by construction (`/arcanon:sync` reads from the live
+  DB only). The repos to scan are derived from a read-only open of the
+  live `impact-map.db` (no WAL pragma write) so the byte-identity contract
+  on the live file is enforced structurally. Existing shadow DB triggers a
+  one-line warning and is overwritten in place (non-interactive). Silent
+  in non-Arcanon directories.
 - **`/arcanon:diff --shadow` mode** (SHADOW-02). Compares the LATEST completed
   scan in the live `impact-map.db` against the LATEST completed scan in the
   `impact-map-shadow.db`. Reuses Phase 115's `diffScanVersions(dbA, dbB,

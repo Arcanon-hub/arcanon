@@ -156,33 +156,68 @@ setup() {
 }
 
 # CORRECT-05 (118-02): /arcanon:rescan must declare allowed-tools: Bash and
-# the Node-side handler must be registered in HANDLERS.
-@test "CORRECT-05: /arcanon:rescan declares allowed-tools: Bash" {
+# the markdown body must orchestrate the scan directly via the Agent tool +
+# QueryEngine — NOT by POSTing to a worker HTTP route. The earlier 118-02
+# shape (cmdRescan POSTing to /api/rescan and a worker-side ARCANON_TEST_AGENT_RUNNER
+# stub) was reverted because the worker has no agent runtime in production;
+# Claude agents only run from markdown commands. See plan 118-02 SUMMARY.
+@test "CORRECT-05: /arcanon:rescan declares allowed-tools: Bash, Read, AskUserQuestion, Agent" {
   [ -f "$PLUGIN_DIR/commands/rescan.md" ]
   run grep -E '^description:' "$PLUGIN_DIR/commands/rescan.md"
   [ "$status" -eq 0 ]
   run grep -E '^allowed-tools:' "$PLUGIN_DIR/commands/rescan.md"
   [ "$status" -eq 0 ]
-  grep -q 'Bash' "$PLUGIN_DIR/commands/rescan.md"
+  # Must allow Agent invocations — markdown command drives scan agents directly.
+  grep -q 'Agent' "$PLUGIN_DIR/commands/rescan.md"
 }
 
-@test "CORRECT-05: worker/cli/hub.js registers rescan: cmdRescan" {
-  grep -q 'rescan: cmdRescan' "$PLUGIN_DIR/worker/cli/hub.js"
+@test "CORRECT-05: /arcanon:rescan body invokes Agent + applyPendingOverrides directly (no worker HTTP)" {
+  # The markdown command must call the discovery + deep prompts as Agents
+  # (mirrors map.md). Prove the prompt-template paths are referenced.
+  grep -q 'agent-prompt-discovery.md' "$PLUGIN_DIR/commands/rescan.md"
+  grep -q 'agent-prompt-deep.md' "$PLUGIN_DIR/commands/rescan.md"
+  # Phase 117's apply-hook must fire between persistFindings and endScan.
+  grep -q 'applyPendingOverrides' "$PLUGIN_DIR/commands/rescan.md"
+  # Regression guard: must NOT shell out to hub.sh rescan and must NOT POST
+  # to /api/rescan — both routes have been deleted.
+  ! grep -q 'hub.sh rescan' "$PLUGIN_DIR/commands/rescan.md"
+  ! grep -q '/api/rescan' "$PLUGIN_DIR/commands/rescan.md"
 }
 
-# SHADOW-01 (119-01): /arcanon:shadow-scan must declare allowed-tools: Bash and
-# the Node-side handler must be registered in HANDLERS under the hyphenated key.
-@test "SHADOW-01: /arcanon:shadow-scan declares allowed-tools: Bash" {
+@test "CORRECT-05: worker/cli/hub.js does NOT register a rescan handler" {
+  # cmdRescan + the HANDLERS["rescan"] entry were deleted along with /api/rescan.
+  # Future regressions would re-introduce them; this guard catches that.
+  ! grep -q 'rescan: cmdRescan' "$PLUGIN_DIR/worker/cli/hub.js"
+  ! grep -q 'fastify.post.*"/api/rescan"' "$PLUGIN_DIR/worker/server/http.js"
+}
+
+# SHADOW-01 (119-01): /arcanon:shadow-scan must declare allowed-tools: Bash
+# and the markdown body must orchestrate the scan via Agent + getShadowQueryEngine
+# — NOT via the worker. Same architectural reversal as /arcanon:rescan above.
+@test "SHADOW-01: /arcanon:shadow-scan declares allowed-tools: Bash, Read, AskUserQuestion, Agent" {
   [ -f "$PLUGIN_DIR/commands/shadow-scan.md" ]
   run grep -E '^description:' "$PLUGIN_DIR/commands/shadow-scan.md"
   [ "$status" -eq 0 ]
   run grep -E '^allowed-tools:' "$PLUGIN_DIR/commands/shadow-scan.md"
   [ "$status" -eq 0 ]
-  grep -q 'Bash' "$PLUGIN_DIR/commands/shadow-scan.md"
+  grep -q 'Agent' "$PLUGIN_DIR/commands/shadow-scan.md"
 }
 
-@test "SHADOW-01: worker/cli/hub.js registers \"shadow-scan\": cmdShadowScan" {
-  grep -q '"shadow-scan": cmdShadowScan' "$PLUGIN_DIR/worker/cli/hub.js"
+@test "SHADOW-01: /arcanon:shadow-scan body uses getShadowQueryEngine + Agent (no worker HTTP)" {
+  grep -q 'agent-prompt-discovery.md' "$PLUGIN_DIR/commands/shadow-scan.md"
+  grep -q 'agent-prompt-deep.md' "$PLUGIN_DIR/commands/shadow-scan.md"
+  # Persistence routes through the SHADOW pool helper, not openDb.
+  grep -q 'getShadowQueryEngine' "$PLUGIN_DIR/commands/shadow-scan.md"
+  # Apply-hook still fires (Phase 117 — shadow overrides honoured).
+  grep -q 'applyPendingOverrides' "$PLUGIN_DIR/commands/shadow-scan.md"
+  # Regression guard: no hub.sh shadow-scan, no /scan-shadow POST.
+  ! grep -q 'hub.sh shadow-scan' "$PLUGIN_DIR/commands/shadow-scan.md"
+  ! grep -q '/scan-shadow' "$PLUGIN_DIR/commands/shadow-scan.md"
+}
+
+@test "SHADOW-01: worker/cli/hub.js does NOT register a shadow-scan handler" {
+  ! grep -q '"shadow-scan": cmdShadowScan' "$PLUGIN_DIR/worker/cli/hub.js"
+  ! grep -q 'fastify.post.*"/scan-shadow"' "$PLUGIN_DIR/worker/server/http.js"
 }
 
 # SHADOW-03 (119-02): /arcanon:promote-shadow must declare allowed-tools: Bash

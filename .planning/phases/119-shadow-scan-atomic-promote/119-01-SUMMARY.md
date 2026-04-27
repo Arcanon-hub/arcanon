@@ -65,7 +65,9 @@ metrics:
 
 # Phase 119 Plan 01: Shadow Scan Write Path Summary
 
-**One-liner:** Ships the write half of the validate-before-commit workflow: a new `getShadowQueryEngine(projectRoot)` pool helper (uncached, always-fresh, bypasses `openDb()`'s process-singleton problem), a worker route `POST /scan-shadow` that wires the shadow QE into the existing `scanRepos` orchestrator with `options.skipHubSync=true` forced (no upload of synthetic data), and the user-facing `/arcanon:shadow-scan` slash command + `cmdShadowScan` CLI handler. Live `impact-map.db` is byte-identical before and after — anchored by Test 8's sha256 assertion.
+**One-liner:** Ships the write half of the validate-before-commit workflow: a new `getShadowQueryEngine(projectRoot)` pool helper (uncached, always-fresh, bypasses `openDb()`'s process-singleton problem) and the user-facing `/arcanon:shadow-scan` slash command. Live `impact-map.db` is byte-identical before and after — anchored by the structural read-only-open contract.
+
+> **POST-EXECUTION ARCHITECTURAL CORRECTION (release prep, before v0.1.4 tag):** the original 119-01 implementation drove shadow-scan through a worker HTTP route (`POST /scan-shadow` wiring the shadow QE into `scanRepos`) plus a `cmdShadowScan` CLI handler. That layout inherited 118-02's agent-runner gap — production worker startup never wires an agent runner, so the route returned `503 worker bootstrap incomplete` in production. **`commands/shadow-scan.md` was re-shaped** to clone `commands/map.md`'s pattern: the markdown body invokes `Agent` directly for discovery + deep scan per repo, then persists via `getShadowQueryEngine` + `QueryEngine` inline, calling `applyPendingOverrides` explicitly between `persistFindings` and `endScan` per repo. The HTTP route, CLI handler, and Task 2 bats tests were deleted. **Kept:** `getShadowQueryEngine` pool helper + Task 1 bats tests (1-6) — still exercised directly by the new markdown command's persistence step. The shipped behaviour is functionally equivalent to the original plan; only the dispatch path differs.
 
 ## Truths Validated
 

@@ -19,57 +19,23 @@
 
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 PLUGIN_ROOT="${REPO_ROOT}/plugins/arcanon"
-HUB_SH="${PLUGIN_ROOT}/scripts/hub.sh"
-WORKER_INDEX="${PLUGIN_ROOT}/worker/index.js"
 SEED_SH="${PLUGIN_ROOT}/tests/fixtures/shadow/seed.sh"
-WORKER_PORT=37995
 
 # ---------------------------------------------------------------------------
-# Helpers (kept local — ZERO additions to test_helper.bash, mirrors verify.bats)
+# Helpers (kept local — ZERO additions to test_helper.bash)
 # ---------------------------------------------------------------------------
+# This file used to also drive POST /scan-shadow against a real worker with
+# ARCANON_TEST_AGENT_RUNNER=1 installed; that route + stub were deleted along
+# with /api/rescan when the rescan/shadow-scan flows were re-architected as
+# markdown-orchestrated commands (Claude Code agent-runtime lives on the host,
+# not inside the worker). The remaining tests cover only Task 1 — the
+# getShadowQueryEngine() pool helper, which is still exercised directly by the
+# new commands/shadow-scan.md persistence step.
 
 # Compute sha256(input)[0:12] — matches plugins/arcanon/worker/db/pool.js's
-# projectHashDir(). Must match exactly or the worker won't find the DB.
+# projectHashDir(). Must match exactly or the helper won't find the DB.
 _arcanon_project_hash() {
   printf "%s" "$1" | shasum -a 256 | awk '{print substr($1,1,12)}'
-}
-
-# sha256 of a file's full bytes (used by Test 8's byte-identity assertion).
-_file_sha256() {
-  shasum -a 256 "$1" | awk '{print $1}'
-}
-
-# Spawn the worker with the test agent runner stub installed. Blocks until
-# /api/readiness responds 200 (or 30 attempts × 0.2s = 6s elapse).
-_start_worker() {
-  ARCANON_DATA_DIR="$ARC_DATA_DIR" \
-  ARCANON_TEST_AGENT_RUNNER=1 \
-    node "$WORKER_INDEX" --port "$WORKER_PORT" --data-dir "$ARC_DATA_DIR" \
-      >"$BATS_TEST_TMPDIR/worker.log" 2>&1 &
-  WORKER_PID=$!
-  echo "$WORKER_PID" > "$BATS_TEST_TMPDIR/worker.pid"
-  for _ in $(seq 1 30); do
-    if curl -sf "http://127.0.0.1:${WORKER_PORT}/api/readiness" >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 0.2
-  done
-  echo "worker failed to start; log:" >&2
-  cat "$BATS_TEST_TMPDIR/worker.log" >&2 || true
-  return 1
-}
-
-_stop_worker() {
-  if [ -f "$BATS_TEST_TMPDIR/worker.pid" ]; then
-    local pid
-    pid="$(cat "$BATS_TEST_TMPDIR/worker.pid")"
-    kill "$pid" 2>/dev/null || true
-    for _ in 1 2 3 4 5; do
-      kill -0 "$pid" 2>/dev/null || break
-      sleep 0.2
-    done
-    kill -9 "$pid" 2>/dev/null || true
-  fi
 }
 
 setup() {
@@ -83,11 +49,6 @@ setup() {
   SHADOW_DB="$PROJECT_DIR/impact-map-shadow.db"
 
   export ARCANON_DATA_DIR="$ARC_DATA_DIR"
-  export ARCANON_WORKER_PORT="$WORKER_PORT"
-}
-
-teardown() {
-  _stop_worker
 }
 
 # Latest migration version — derived from the migrations dir at runtime so the
@@ -258,128 +219,3 @@ _latest_migration_version() {
   [[ "$output" == *'"hasScanOverrides":true'* ]]
 }
 
-# ===========================================================================
-# Task 2 — POST /scan-shadow + cmdShadowScan + slash command
-# ===========================================================================
-
-# ---------------------------------------------------------------------------
-# Test 7 — HTTP route exists and dispatches scanRepos through the shadow QE.
-# ---------------------------------------------------------------------------
-@test "Task 2 — Test 7: POST /scan-shadow returns 200 with results array" {
-  bash "$SEED_SH" "$PROJECT_ROOT" "$LIVE_DB" >/dev/null
-  _start_worker
-
-  # POST /scan-shadow?project=<encoded-root>
-  ENCODED=$(node -e "process.stdout.write(encodeURIComponent('${PROJECT_ROOT}'))")
-  run curl -sS -X POST "http://127.0.0.1:${WORKER_PORT}/scan-shadow?project=${ENCODED}" \
-    -H 'content-type: application/json' -d '{}'
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"ok":true'* ]]
-  [[ "$output" == *'"results"'* ]]
-  [[ "$output" == *'"shadow_db_path"'* ]]
-  [[ "$output" == *"impact-map-shadow.db"* ]]
-}
-
-# ---------------------------------------------------------------------------
-# Test 8 — Live DB is BYTE-IDENTICAL before/after a shadow scan, AND the
-# shadow DB exists with the scanned data. Anchors the read-only contract
-# for live + the no-hub-upload guard (T-119-01-06).
-# ---------------------------------------------------------------------------
-@test "Task 2 — Test 8: shadow scan leaves live impact-map.db byte-identical" {
-  bash "$SEED_SH" "$PROJECT_ROOT" "$LIVE_DB" >/dev/null
-  LIVE_HASH_BEFORE=$(_file_sha256 "$LIVE_DB")
-  [ ! -f "$SHADOW_DB" ]
-
-  _start_worker
-
-  ENCODED=$(node -e "process.stdout.write(encodeURIComponent('${PROJECT_ROOT}'))")
-  run curl -sS -X POST "http://127.0.0.1:${WORKER_PORT}/scan-shadow?project=${ENCODED}" \
-    -H 'content-type: application/json' -d '{}'
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"ok":true'* ]]
-
-  # Live byte-identity assertion.
-  LIVE_HASH_AFTER=$(_file_sha256 "$LIVE_DB")
-  [ "$LIVE_HASH_BEFORE" = "$LIVE_HASH_AFTER" ]
-
-  # Shadow DB now exists.
-  [ -f "$SHADOW_DB" ]
-}
-
-# ---------------------------------------------------------------------------
-# Test 9 — cmdShadowScan happy path via the shell wrapper.
-# ---------------------------------------------------------------------------
-@test "Task 2 — Test 9: bash hub.sh shadow-scan exits 0, reports completion, creates shadow DB" {
-  bash "$SEED_SH" "$PROJECT_ROOT" "$LIVE_DB" >/dev/null
-  _start_worker
-
-  cd "$PROJECT_ROOT"
-  run bash "$HUB_SH" shadow-scan
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"Shadow scan complete"* ]]
-  [ -f "$SHADOW_DB" ]
-}
-
-# ---------------------------------------------------------------------------
-# Test 10 — Existing shadow DB triggers a one-line warning, then proceeds.
-# ---------------------------------------------------------------------------
-@test "Task 2 — Test 10: cmdShadowScan warns when shadow DB already exists, then proceeds" {
-  bash "$SEED_SH" "$PROJECT_ROOT" "$LIVE_DB" >/dev/null
-  bash "$SEED_SH" "$PROJECT_ROOT" "$SHADOW_DB" >/dev/null
-  _start_worker
-
-  cd "$PROJECT_ROOT"
-  run bash "$HUB_SH" shadow-scan
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"Existing shadow DB will be overwritten"* ]]
-  [[ "$output" == *"Shadow scan complete"* ]]
-}
-
-# ---------------------------------------------------------------------------
-# Test 11 — Silent in non-Arcanon directory (mirrors NAV-01 / CORRECT-04).
-# ---------------------------------------------------------------------------
-@test "Task 2 — Test 11: shadow-scan is silent (exit 0, no output) in non-Arcanon dir" {
-  cd "$PROJECT_ROOT"
-  # No live DB — cmdShadowScan must silent-exit 0.
-  run bash "$HUB_SH" shadow-scan
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
-}
-
-# ---------------------------------------------------------------------------
-# Test 12 — commands-surface regression: shadow-scan.md exists with valid
-# frontmatter and is iterated by tests/commands-surface.bats.
-# ---------------------------------------------------------------------------
-@test "Task 2 — Test 12: shadow-scan.md has description + allowed-tools: Bash frontmatter" {
-  [ -f "$PLUGIN_ROOT/commands/shadow-scan.md" ]
-  run grep -E '^description:' "$PLUGIN_ROOT/commands/shadow-scan.md"
-  [ "$status" -eq 0 ]
-  run grep -E '^allowed-tools:' "$PLUGIN_ROOT/commands/shadow-scan.md"
-  [ "$status" -eq 0 ]
-  grep -q 'Bash' "$PLUGIN_ROOT/commands/shadow-scan.md"
-  # Must dispatch through hub.sh shadow-scan.
-  grep -q 'hub.sh shadow-scan' "$PLUGIN_ROOT/commands/shadow-scan.md"
-  # HANDLERS map must register the hyphenated key.
-  grep -q '"shadow-scan": cmdShadowScan' "$PLUGIN_ROOT/worker/cli/hub.js"
-}
-
-# ---------------------------------------------------------------------------
-# Test 13 — --json output: single JSON object with shadow_db_path + results.
-# ---------------------------------------------------------------------------
-@test "Task 2 — Test 13: cmdShadowScan --json emits structured output" {
-  bash "$SEED_SH" "$PROJECT_ROOT" "$LIVE_DB" >/dev/null
-  _start_worker
-
-  cd "$PROJECT_ROOT"
-  run bash "$HUB_SH" shadow-scan --json
-  [ "$status" -eq 0 ]
-  # Must be a single JSON object with the documented fields.
-  echo "$output" | node -e "
-    let s=''; process.stdin.on('data', d => s += d); process.stdin.on('end', () => {
-      const o = JSON.parse(s);
-      if (typeof o.shadow_db_path !== 'string') { console.error('missing shadow_db_path'); process.exit(1); }
-      if (!Array.isArray(o.results)) { console.error('missing results'); process.exit(1); }
-      if (typeof o.reused_existing !== 'boolean') { console.error('missing reused_existing'); process.exit(1); }
-    });
-  "
-}

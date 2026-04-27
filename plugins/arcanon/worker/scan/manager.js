@@ -925,7 +925,7 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     results.push({ repoPath: r.repoPath, mode: r.mode, findings: r.findings });
   }
 
-  // SHADOW-01 (T-119-01-06): when called from /scan-shadow, callers set
+  // SHADOW-01 (T-119-01-06): callers using a shadow QE set
   // options.skipHubSync=true to suppress upload of synthetic shadow data.
   // Default behaviour for live scans (no flag) is unchanged.
   // HUB-01: Optional Arcanon Hub sync — opt-in via ARCANON_API_KEY or config.hub.auto-sync.
@@ -1008,31 +1008,6 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
   } finally {
     releaseScanLock(lockPath);
   }
-}
-
-/**
- * scanSingleRepo — re-scan exactly one repo, bypassing the incremental skip.
- *
- * Used by /arcanon:rescan (CORRECT-04, Phase 118-02). Always invokes
- * scanRepos with options.full = true, which short-circuits buildScanContext's
- * "mode: skip" branch (manager.js:393-396) and forces the full scan path.
- * Other repos registered in the project's linked-repos config are NOT scanned.
- *
- * Phase 117 note: applyPendingOverrides is wired into scanRepos between
- * persistFindings and endScan (Plan 117-02). Rescanning therefore also
- * applies any pending scan_overrides rows for this repo as a side-effect —
- * which is the intended /arcanon:correct → /arcanon:rescan workflow.
- *
- * @param {string} repoPath - Absolute path to the repo (must already be
- *   registered in the repos table; caller resolves identifier → path).
- * @param {object} queryEngine - Same shape as scanRepos's queryEngine arg.
- * @param {object} [options] - Forwarded to scanRepos (full is force-set true).
- * @returns {Promise<object>} The single ScanResult — caller does not need the array shape.
- */
-export async function scanSingleRepo(repoPath, queryEngine, options = {}) {
-  // CORRECT-04: bypass incremental skip — always full-scan a single repo.
-  const results = await scanRepos([repoPath], { ...options, full: true }, queryEngine);
-  return results[0];
 }
 
 // Exported for test access only (_-prefixed = internal helper, not public surface).
