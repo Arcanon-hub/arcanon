@@ -119,7 +119,7 @@ Differentiates intentional offline (clean exit `0`) from hub-unreachable.
 
 ### `/arcanon:status`
 
-Single-screen health: plugin version, config file path, project slug, credential presence, auto-upload flag, queue stats, data dir. Now also includes per-repo git-commits-since-scan (driven by `git rev-list --count <last_scanned_sha>..HEAD`) and per-repo scan freshness via the `/api/scan-freshness` worker endpoint.
+Single-screen health: plugin version, config file path, project slug, credential presence, auto-sync flag, queue stats, data dir. Now also includes per-repo git-commits-since-scan (driven by `git rev-list --count <last_scanned_sha>..HEAD`) and per-repo scan freshness via the `/api/scan-freshness` worker endpoint.
 
 ---
 

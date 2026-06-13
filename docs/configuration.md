@@ -82,7 +82,7 @@ After your first `/arcanon:map` scan, Arcanon adds an `impact-map` key to your c
 
 ## Disabling Features
 
-Set these environment variables to turn off specific automatic behaviors. The `ARCANON_*` names are canonical; the `LIGAMEN_*` spellings are still honored for back-compat.
+Set these environment variables to turn off specific automatic behaviors.
 
 | Variable | Effect |
 |----------|--------|

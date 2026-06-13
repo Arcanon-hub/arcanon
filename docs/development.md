@@ -21,7 +21,7 @@ cd plugins/arcanon && npm install
 
 ```bash
 make help        # show all targets
-make test        # run all bats tests (245+)
+make test        # run all bats tests (460+)
 make lint        # shellcheck scripts and libs
 make check       # validate plugin.json and hooks.json
 make install     # register marketplace and install plugin

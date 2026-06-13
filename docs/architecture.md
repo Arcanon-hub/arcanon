@@ -99,12 +99,16 @@ Vanilla JavaScript single-page app served by the worker. Canvas-based, no build 
 
 ## Scan Pipeline
 
-Two-phase agent-based scanning:
+Scanning is performed by the host AI agent (Claude Code's LLM), orchestrated by the
+`/arcanon:map` command — not by the worker. The command drives a two-phase pass:
 
-1. **Discovery** (fast) — reads manifests and directory structure, returns language/framework hints
-2. **Deep scan** (targeted) — reads source files guided by discovery, extracts services, connections, schemas
+1. **Discovery** (fast) — the agent reads manifests and directory structure, returning language/framework hints
+2. **Deep scan** (targeted) — the agent reads source files guided by discovery, extracting services, connections, and schemas
 
-Type-specific prompts for services, libraries, and infrastructure. Scan bracket pattern (`beginScan`/`endScan`) ensures atomic stale-row cleanup — failed scans leave prior data intact.
+The worker's role is persistence, not scanning: it receives the agent's findings and writes
+them to SQLite. Type-specific prompts steer the service, library, and infrastructure passes.
+The scan bracket pattern (`beginScan`/`endScan`) ensures atomic stale-row cleanup — a failed
+scan leaves prior data intact.
 
 ## Hook Architecture
 

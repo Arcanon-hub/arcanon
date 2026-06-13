@@ -62,7 +62,7 @@ In addition to hooks, Arcanon includes two skills that Claude automatically invo
 
 | Variable | Effect |
 |----------|--------|
-| `LIGAMEN_DISABLE_FORMAT=1` | Skip auto-formatting |
-| `LIGAMEN_DISABLE_LINT=1` | Skip auto-linting |
-| `LIGAMEN_DISABLE_GUARD=1` | Skip file guard |
-| `LIGAMEN_DISABLE_SESSION_START=1` | Skip session context |
+| `ARCANON_DISABLE_FORMAT=1` | Skip auto-formatting |
+| `ARCANON_DISABLE_LINT=1` | Skip auto-linting |
+| `ARCANON_DISABLE_GUARD=1` | Skip file guard |
+| `ARCANON_DISABLE_SESSION_START=1` | Skip session context |
