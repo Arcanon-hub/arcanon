@@ -1,12 +1,17 @@
-# Ligamen
+# Arcanon
+
+> Arcanon was previously developed under the name **Ligamen** (v1.0–v5.8.0), which
+> itself was renamed from an earlier **allclear**. It was renamed to Arcanon and
+> reset to v0.1.0 for public release. Pre-rename milestone archives below retain the
+> historical names intentionally — they are accurate records of those eras.
 
 ## What This Is
 
-An open-source Claude Code plugin that provides automated quality gates, cross-repo service dependency intelligence, and continuous formatting/linting hooks for multi-repository development workflows. Includes an interactive graph UI for visualizing service dependencies with real-time log observability. Designed for teams managing multiple repos across Python, Rust, TypeScript, and Go — detects project type automatically and runs the right tools without configuration.
+An open-source Claude Code plugin that maps cross-repo service dependencies. It scans your linked repositories with Claude's agents to discover services, API endpoints, and the connections between them, stores the resulting graph in a local SQLite database, and visualizes it in an interactive graph UI. It also detects drift (dependency versions, shared types, OpenAPI contracts) across repos, runs automatic formatting/linting and sensitive-file guards on edit, and can optionally sync findings to Arcanon Hub. Supports TypeScript/JavaScript, Python, Go, Rust, Java, C#, and Ruby — with automatic project-type detection.
 
 ## Core Value
 
-Every edit is automatically formatted and linted, every quality check runs with one command, and breaking changes across repos are caught before they ship.
+Understand and protect your architecture across repositories — see how services connect, catch breaking changes before they ship, and keep the map current automatically. Findings stay local and private by default; cloud sync is opt-in.
 
 ## Requirements
 
