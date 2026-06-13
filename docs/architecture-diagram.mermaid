@@ -1,6 +1,18 @@
+---
+title: "Arcanon — Target Architecture (v0.2+) · depicts planned components not yet built"
+---
 graph TB
     %% ─────────────────────────────────────────────
-    %% ARCANON — System Architecture
+    %% ARCANON — TARGET ARCHITECTURE (v0.2+)
+    %%
+    %% This is a forward-looking diagram. It depicts the planned end-state,
+    %% including components that DO NOT exist as of v0.1.x:
+    %%   - @arcanon/vscode and @arcanon/copilot-cli clients (v0.2, in design)
+    %%   - the full Kubernetes Hub backend (NATS, reconcilers, read replicas,
+    %%     standalone MCP server) — lives in the separate arcanon-hub repo
+    %%
+    %% For the CURRENT shipped architecture, see architecture.md. Scanning is
+    %% performed by the host AI agent (not the worker); the worker persists.
     %% ─────────────────────────────────────────────
 
     %% ============ LOCAL / DEVELOPER SIDE ============
