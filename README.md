@@ -98,7 +98,7 @@ Arcanon reads `arcanon.config.json` from the repo root.
   "project-name": "my-project",
   "linked-repos": ["../sibling-service", "../shared-lib"],
   "hub": {
-    "auto-upload": true,
+    "auto-sync": true,
     "url": "https://api.arcanon.dev"
   }
 }

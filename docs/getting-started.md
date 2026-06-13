@@ -17,7 +17,7 @@ Confirm it's live in a new Claude Code session — you should see:
 > `Arcanon active. Detected: <your project types>. Commands: /arcanon:map, …`
 
 **Supported languages:** TypeScript / JavaScript, Python, Go, Rust, Java,
-C#, Ruby — for project-type detection, version drift (7 ecosystems
+C#, Ruby — for project-type detection, version drift (8 ecosystems
 including Maven, NuGet, Bundler), type drift, and auth / database
 enrichment. Other languages still scan (agents are language-agnostic);
 the support infrastructure — drift output, CODEOWNERS, auth/db columns —
