@@ -44,7 +44,7 @@ import { syncFindings, hasCredentials } from "../hub-sync/index.js";
 import { loadMergedCatalog } from "./enrichment/externals-catalog.js";
 import { runActorLabeling } from "./enrichment/actor-labeler.js";
 
-// Register CODEOWNERS enricher once at module load (OWN-01).
+// Register CODEOWNERS enricher once at module load.
 // Module-level registration runs before the first scan.
 registerEnricher("codeowners", createCodeownersEnricher());
 
@@ -110,7 +110,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Check if a repo has any service entry-point indicator.
- * Used to exempt docker-compose repos from infra classification (SBUG-02).
+ * Used to exempt docker-compose repos from infra classification.
  * @param {string} repoPath
  * @returns {boolean}
  */
@@ -192,7 +192,7 @@ export function detectRepoType(repoPath) {
     return "infra";
   }
 
-  // SBUG-02: docker-compose is infra ONLY when no service entry-point exists
+  // docker-compose is infra ONLY when no service entry-point exists
   const hasDockerCompose = existsSync(join(repoPath, "docker-compose.yml"))
     || existsSync(join(repoPath, "docker-compose.yaml"));
   if (hasDockerCompose) {
@@ -386,7 +386,7 @@ export function buildScanContext(repoPath, repoId, queryEngine, options = {}) {
     return { mode: "full", files: null };
   }
 
-  // First scan — no repo_state entry → always full (SCAN-06)
+  // First scan — no repo_state entry → always full
   const repoState = queryEngine.getRepoState(repoId);
   if (repoState === null) {
     return { mode: "full", files: null };
@@ -432,7 +432,7 @@ export function buildIncrementalConstraint(changedFiles) {
 }
 
 // ---------------------------------------------------------------------------
-// runDiscoveryPass (SARC-01)
+// runDiscoveryPass
 // ---------------------------------------------------------------------------
 
 /**
@@ -484,7 +484,7 @@ export async function runDiscoveryPass(repoPath, discoveryPromptTemplate, agentR
  */
 
 // ---------------------------------------------------------------------------
-// Scan lock helpers (SEC-03) — prevent concurrent scan corruption
+// Scan lock helpers — prevent concurrent scan corruption
 // ---------------------------------------------------------------------------
 
 const LOCK_DIR = resolveDataDir();
@@ -600,12 +600,12 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     if (_logger) _logger.log(level, msg, extra);
   }
 
-  // Acquire per-project filesystem lock (SEC-03) — rejects concurrent scans
+  // Acquire per-project filesystem lock — rejects concurrent scans
   const lockPath = acquireScanLock(repoPaths, slog);
 
   try {
 
-  // SCAN-01: Record start time and emit BEGIN event
+  // Record start time and emit BEGIN event
   const scanStart = Date.now();
   const scanMode = options.full === true ? 'full' : 'incremental';
   slog('INFO', 'scan BEGIN', { repoCount: repoPaths.length, mode: scanMode });
@@ -625,7 +625,7 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
   const promptService = readFileSync(join(__dirname, "agent-prompt-service.md"), "utf8");
   const promptLibrary = readFileSync(join(__dirname, "agent-prompt-library.md"), "utf8");
   const promptInfra = readFileSync(join(__dirname, "agent-prompt-infra.md"), "utf8");
-  // Discovery prompt for  structure analysis (SARC-01)
+  // Discovery prompt for structure analysis
   const promptDiscovery = readFileSync(join(__dirname, "agent-prompt-discovery.md"), "utf8");
 
   const promptComponents = { commonRules, schemaJson, promptService, promptLibrary, promptInfra, promptDiscovery };
@@ -662,11 +662,11 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       return { repoPath, mode: "incremental-noop", findings: null };
     }
 
-    // 4. Discovery pass — : structure analysis (SARC-01)
+    // 4. Discovery pass: structure analysis
     // Runs BEFORE beginScan — does not open a scan bracket.
     const discoveryContext = await runDiscoveryPass(repoPath, promptComponents.promptDiscovery, agentRunner, slog);
 
-    // SCAN-02: Log discovery done with detected languages/frameworks
+    // Log discovery done with detected languages/frameworks
     slog('INFO', 'discovery done', {
       repoPath,
       languages: Array.isArray(discoveryContext.languages) ? discoveryContext.languages : [],
@@ -676,11 +676,11 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     // 5. Open scan version bracket — records scan start in scan_versions table
     const scanVersionId = queryEngine.beginScan(repoId);
 
-    // 6. Detect repo type and select type-specific prompt (SARC-03)
+    // 6. Detect repo type and select type-specific prompt
     const repoType = detectRepoType(repoPath);
     slog('DEBUG', 'repo type detected', { repoPath, repoType });
 
-    // Deep scan — : use type-specific prompt with discovery context (SARC-03)
+    // Deep scan: use type-specific prompt with discovery context
     const discoveryJson = JSON.stringify(discoveryContext, null, 2);
     const typePrompt = repoType === "library" ? promptComponents.promptLibrary
       : repoType === "infra" ? promptComponents.promptInfra
@@ -734,14 +734,14 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       };
     }
 
-    // SCAN-02: Log deep scan done with service/connection counts
+    // Log deep scan done with service/connection counts
     slog('INFO', 'deep scan done', {
       repoPath,
       services: Array.isArray(result.findings?.services) ? result.findings.services.length : 0,
       connections: Array.isArray(result.findings?.connections) ? result.findings.connections.length : 0,
     });
 
-    // 9b. Log validation warnings (e.g., skipped services from SVAL-01)
+    // 9b. Log validation warnings (e.g., skipped services)
     for (const w of result.warnings) {
       slog('WARN', 'findings validation warning', { repoPath, warning: w });
     }
@@ -821,7 +821,7 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     }
 
     // 11. Run enrichment pass per service — post-scan, after bracket closes
-    // ENRICH-01: enrichment runs after core scan. Bracket is already closed above.
+    // Enrichment runs after core scan. Bracket is already closed above.
     // Enrichment MUST NOT call beginScan/endScan — never opens a new bracket.
     try {
       const services = queryEngine._db
@@ -894,7 +894,7 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
         });
       }
 
-      // SCAN-02: Log enrichment done with number of services enriched
+      // Log enrichment done with number of services enriched
       slog('INFO', 'enrichment done', { repoPath: r.repoPath, enricherCount: services.length });
       // Log dep-scan coverage — ecosystems_scanned makes gaps visible
       slog('INFO', 'dep-scan done', {
@@ -951,7 +951,7 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
             repoPath: r.repoPath,
             projectSlug,
             hubUrl,
-            // per-repo override into  precedence chain
+            // per-repo override into the precedence chain
             // (opts.orgId beats ARCANON_ORG_ID env beats ~/.arcanon/config.json
             // default_org_id). When undefined here, the resolver falls through
             // to env / home-config; if all three are missing, resolveCredentials
@@ -992,7 +992,7 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
   }
   } // end else (options.skipHubSync) —
 
-  // SCAN-01: Emit END event with totals and wall-clock duration
+  // Emit END event with totals and wall-clock duration
   const totalServices = results.reduce((n, r) => n + (Array.isArray(r.findings?.services) ? r.findings.services.length : 0), 0);
   const totalConnections = results.reduce((n, r) => n + (Array.isArray(r.findings?.connections) ? r.findings.connections.length : 0), 0);
   slog('INFO', 'scan END', { totalServices, totalConnections, durationMs: Date.now() - scanStart });
