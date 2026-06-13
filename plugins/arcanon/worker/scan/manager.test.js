@@ -210,7 +210,7 @@ describe("buildScanContext", () => {
     assert.equal(ctx.files, null);
   });
 
-  test("no repo_state entry returns mode:full (first scan auto-full per SCAN-06)", () => {
+  test("no repo_state entry returns mode:full (first scan auto-full)", () => {
     const qe = { getRepoState: () => null };
     const ctx = buildScanContext(repoDir, 1, qe, {});
     assert.equal(ctx.mode, "full");
@@ -767,10 +767,10 @@ describe("scanRepos — incremental prompt constraint", () => {
 });
 
 // ---------------------------------------------------------------------------
-// scanRepos — SARC-02: prompt content (multi-language examples + DISCOVERY_JSON)
+// scanRepos — prompt content (multi-language examples + DISCOVERY_JSON)
 // ---------------------------------------------------------------------------
 
-describe("scanRepos — SARC-02 prompt content", () => {
+describe("scanRepos — prompt content", () => {
   let repoDir;
 
   before(() => {
@@ -813,7 +813,7 @@ describe("scanRepos — SARC-02 prompt content", () => {
     _db: { prepare: () => ({ all: () => [] }) },
   };
 
-  test("SARC-02: service prompt contains multi-language examples and DISCOVERY_JSON", async () => {
+  test("service prompt contains multi-language examples and DISCOVERY_JSON", async () => {
     let capturedPrompt = null;
     setAgentRunner(async (prompt, _repoPath) => {
       // Discovery calls return minimal context; capture deep scan prompt
@@ -828,13 +828,13 @@ describe("scanRepos — SARC-02 prompt content", () => {
 
     assert.ok(capturedPrompt !== null, "prompt was captured");
 
-    // Multi-language examples (SARC-02 criterion 1)
+    // Multi-language examples (criterion 1)
     assert.ok(capturedPrompt.includes("@RestController"), "prompt includes Java Spring Boot example");
     assert.ok(capturedPrompt.includes("[HttpGet"), "prompt includes C# ASP.NET Core example");
     assert.ok(capturedPrompt.includes("get '/users'"), "prompt includes Ruby on Rails example");
     assert.ok(capturedPrompt.includes("fun getUsers()"), "prompt includes Kotlin example");
 
-    // DISCOVERY_JSON placeholder presence (SARC-02 criterion 2)
+    // DISCOVERY_JSON placeholder presence (criterion 2)
     assert.ok(
       capturedPrompt.includes("{{DISCOVERY_JSON}}") || capturedPrompt.includes('"services"'),
       "prompt includes DISCOVERY_JSON placeholder or interpolated discovery context",
@@ -1060,7 +1060,7 @@ describe("scanRepos — enrichment pass wiring", () => {
 });
 
 // ---------------------------------------------------------------------------
-// detectRepoType tests (SBUG-02)
+// detectRepoType tests
 // ---------------------------------------------------------------------------
 
 describe("detectRepoType", () => {
@@ -1074,7 +1074,7 @@ describe("detectRepoType", () => {
     cleanupDir(tmpDir);
   });
 
-  // --- docker-compose exemption (SBUG-02) ---
+  // --- docker-compose exemption ---
 
   test("detectRepoType: repo with only docker-compose.yml (no service entry-point) returns 'infra'", () => {
     writeFileSync(join(tmpDir, "docker-compose.yml"), "version: '3'\nservices:\n  redis:\n    image: redis\n");
@@ -1153,7 +1153,7 @@ describe("detectRepoType", () => {
 });
 
 // ---------------------------------------------------------------------------
-// scanRepos — discovery wiring (76-01 SARC-01)
+// scanRepos — discovery wiring
 // ---------------------------------------------------------------------------
 
 describe("scanRepos — discovery wiring", () => {
@@ -1293,7 +1293,7 @@ describe("scanRepos — discovery wiring", () => {
 });
 
 // ---------------------------------------------------------------------------
-// runDiscoveryPass unit tests (76-01 SARC-01)
+// runDiscoveryPass unit tests
 // ---------------------------------------------------------------------------
 
 describe("runDiscoveryPass", () => {
@@ -1403,10 +1403,10 @@ describe("runDiscoveryPass", () => {
 });
 
 // ---------------------------------------------------------------------------
-// concurrent scan locking (SEC-03)
+// concurrent scan locking
 // ---------------------------------------------------------------------------
 
-describe("concurrent scan locking (SEC-03)", () => {
+describe("concurrent scan locking", () => {
   let repoDir;
   let lockDir;
 
@@ -1568,10 +1568,10 @@ describe("concurrent scan locking (SEC-03)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// scanRepos — scan lifecycle logging (SCAN-01, SCAN-02)
+// scanRepos — scan lifecycle logging
 // ---------------------------------------------------------------------------
 
-describe("scanRepos — scan lifecycle logging (SCAN-01, SCAN-02)", () => {
+describe("scanRepos — scan lifecycle logging", () => {
   let repoDir;
 
   before(() => {
