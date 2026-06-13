@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-06-13
+
+Release-grade hardening: license reconciliation, a clean dependency-security
+audit, and documentation accuracy. No runtime behavior or command surface changed.
+
+### Changed
+
+- **Relicensed from AGPL-3.0 to Apache-2.0.** The shipped plugin `LICENSE` file
+  previously still carried AGPL-3.0 text while every manifest declared Apache-2.0;
+  the bundled `LICENSE` now matches the declared license. See `LICENSE` and `NOTICE`.
+
+### Security
+
+- Cleared all known dependency advisories — `npm audit` now reports **0 vulnerabilities**:
+  - `fast-uri` 3.1.0 → 3.1.2 — two **high**-severity advisories (path traversal via
+    percent-encoded dot segments; host confusion via percent-encoded authority delimiters).
+  - `ip-address` → 10.2.0 (with `express-rate-limit` → 8.5.1) — moderate Address6 XSS.
+  - `hono`, `qs`, `brace-expansion` — remaining moderate advisories.
+  - All are transitive dependencies; no direct dependency or runtime API changed.
+
+### Fixed
+
+- `/arcanon:update` now reads the canonical root `marketplace.json`, and a duplicate
+  inner copy was removed, so version checks no longer drift between the two files.
+- User-facing documentation corrected against the implementation: hook disable toggles
+  are `ARCANON_DISABLE_*` (were mistakenly documented as `LIGAMEN_DISABLE_*`); removed a
+  stale claim that `LIGAMEN_*` env vars are still honored; the hub config example uses
+  `auto-sync`; the version-drift ecosystem count is 8.
+
+### Internal
+
+- Removed leftover internal ticket IDs from shipped source comments.
+- Corrected the planning docs' project identity to Arcanon and documented the
+  allclear → Ligamen → Arcanon rename history for contributors.
+- Labeled the architecture diagram as target-state (v0.2+).
+- Deleted vestigial `v5.x` (Ligamen-era) git tags.
+
 ## [0.1.5] - 2026-04-30
 
 ### BREAKING
