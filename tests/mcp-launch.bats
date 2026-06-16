@@ -91,3 +91,40 @@ setup() {
   assert_output --partial 'results'
   refute_output --partial '"isError"'
 }
+
+# ---------------------------------------------------------------------------
+# Resilient launcher (worker/mcp/launch.js) — what .mcp.json actually invokes
+# ---------------------------------------------------------------------------
+
+@test "LAUNCH: .mcp.json invokes node on worker/mcp/launch.js (node-direct, no bash)" {
+  run jq -r '.mcpServers.arcanon.command' .mcp.json
+  assert_output "node"
+  run jq -r '.mcpServers.arcanon.args[0]' .mcp.json
+  assert_output --partial "worker/mcp/launch.js"
+}
+
+@test "LAUNCH: launcher fast path boots the server and responds to initialize" {
+  # Deps are present in this repo, so the launcher takes the direct-import path.
+  local init='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+  run bash -c "printf '%s\n' '$init' | ARCANON_DB_PATH='.arcanon/nonexistent-test.db' timeout 8 node worker/mcp/launch.js 2>/dev/null"
+  assert_success
+  assert_output --partial '"protocolVersion"'
+}
+
+@test "LAUNCH: launcher degrades gracefully when deps missing (bounded wait, no crash-loop)" {
+  # Mock plugin root with NO node_modules → probe never reports healthy.
+  local mock; mock="$(mktemp -d)"
+  mkdir -p "$mock/worker/mcp"
+  cp worker/mcp/launch.js "$mock/worker/mcp/launch.js"
+  # Stub server imports a third-party dep; with no node_modules the import
+  # throws (ERR_MODULE_NOT_FOUND), mirroring a real missing-deps server and
+  # forcing the launcher into its wait-then-give-up path.
+  printf 'import "better-sqlite3";\n' > "$mock/worker/mcp/server.js"
+
+  # Short wait window so the test is fast; assert it returns within a few sec.
+  run bash -c "ARCANON_MCP_WAIT_MS=800 timeout 10 node '$mock/worker/mcp/launch.js' < /dev/null"
+  assert_failure                                   # exit 1, not a hang/crash-loop
+  assert_output --partial 'dependencies are not ready'
+
+  rm -rf "$mock"
+}
