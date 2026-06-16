@@ -2,6 +2,25 @@
 
 A five-minute walkthrough from a fresh clone to a scan synced to the hub.
 
+## Prerequisites
+
+- **Node.js 20 or newer** and **npm** on your `PATH`. On first activation the plugin
+  installs its own runtime dependencies (including the native `better-sqlite3`
+  binding) into the plugin directory.
+- **git** CLI (you already have it for working with repos).
+- **Windows:** install [Git for Windows](https://git-scm.com/downloads/win),
+  which bundles **Git Bash** — the plugin's hooks and commands run under it.
+  (If you use the `git` CLI on Windows you already have this.) PowerShell-only
+  setups are not yet supported. If a machine has *both* Git Bash and WSL,
+  Claude Code's `bash` may route to WSL ([#26006](https://github.com/anthropics/claude-code/issues/26006));
+  pin Git Bash in your settings if scans run in the wrong environment.
+
+> **First session after install/upgrade:** the dependency install runs in the
+> background while your session starts, so the `impact_*` MCP tools may not be
+> ready for the very first prompt. Slash commands like `/arcanon:map` work
+> regardless; if an impact tool reports "not connected," run `/mcp` to
+> reconnect, or just continue — it's ready from the next session on.
+
 ## 1. Install the plugin
 
 ```bash

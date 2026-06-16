@@ -2,8 +2,8 @@
   "mcpServers": {
     "arcanon": {
       "type": "stdio",
-      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/mcp-wrapper.sh",
-      "args": []
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/worker/mcp/launch.js"]
     }
   }
 }

@@ -7,12 +7,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/format.sh",
+            "command": "bash",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/format.sh"],
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/lint.sh",
+            "command": "bash",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/lint.sh"],
             "timeout": 10
           }
         ]
@@ -24,12 +26,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/file-guard.sh",
+            "command": "bash",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/file-guard.sh"],
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/impact-hook.sh",
+            "command": "bash",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/impact-hook.sh"],
             "timeout": 10
           }
         ]
@@ -40,12 +44,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/install-deps.sh",
+            "command": "bash",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/install-deps.sh"],
             "timeout": 120
           },
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh",
+            "command": "bash",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh"],
             "timeout": 10
           }
         ]
@@ -56,7 +62,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh",
+            "command": "bash",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/session-start.sh"],
             "timeout": 10
           }
         ]

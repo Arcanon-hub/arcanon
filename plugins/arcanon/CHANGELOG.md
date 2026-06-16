@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-06-16
+
+Reliability fix for dependency installation and MCP startup, plus Windows support.
+
+### Fixed
+
+- **Dependency install no longer desyncs across upgrades.** `install-deps.sh`
+  previously trusted a hash sentinel file that could outlive `node_modules`: when
+  a version upgrade left the dependency tree missing but the sentinel matched, the
+  hook skipped `npm install` and only ran a no-op rebuild, leaving the plugin
+  permanently without its runtime. The hook now reads real state — required
+  dependencies present **and** the `better-sqlite3` native binding actually loads —
+  and heals additively (`npm install`), falling back to `npm rebuild` only on a
+  genuine ABI mismatch (Node upgraded). No marker file can desync from the tree.
+
+### Changed
+
+- **MCP server now survives the startup race.** Claude Code does not wait for the
+  dependency-install hook to finish before launching the MCP server, and stdio MCP
+  servers do not auto-reconnect — so a first-session import of a not-yet-installed
+  dependency would leave the impact tools dead until the session was restarted. The
+  server is now launched through a resilient Node launcher (`worker/mcp/launch.js`)
+  that waits for dependency health before starting the real server.
+- **Windows compatibility.** Plugin hooks are invoked in exec-form
+  (`"command": "bash", "args": [...]`) and the MCP server is launched via `node`
+  directly, avoiding the Windows `.sh` file-association bug. Windows requires Git
+  for Windows (Git Bash); see the getting-started prerequisites.
+- Removed the now-unused `scripts/mcp-wrapper.sh` (replaced by the Node launcher).
+
 ## [0.1.6] - 2026-06-13
 
 Release-grade hardening: license reconciliation, a clean dependency-security
