@@ -107,12 +107,18 @@ fi
 # older than 10 min is treated as stale (a crashed prior run) and taken over.
 # ---------------------------------------------------------------------------
 LOCK_DIR="${PLUGIN_ROOT}/.arcanon-install.lock"
-lock_mtime() { stat -f %m "$1" 2>/dev/null || stat -c %Y "$1" 2>/dev/null; }
+# GNU first (`stat -c %Y`), then BSD (`stat -f %m`). Order matters: GNU's `-f`
+# means --file-system and emits garbage with exit 0 instead of failing, so a
+# BSD-first probe would never fall through on Linux. BSD errors on `-c`, so it
+# falls through correctly on macOS.
+lock_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
 
 if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
   now="$(date +%s)"
   mtime="$(lock_mtime "${LOCK_DIR}")"
-  if [[ -n "${mtime}" ]] && (( now - mtime < 600 )); then
+  # Numeric guard: a non-epoch value (stat unavailable / unexpected output) is
+  # treated as stale rather than fed to arithmetic (which would crash under set -u).
+  if [[ "${mtime}" =~ ^[0-9]+$ ]] && (( now - mtime < 600 )); then
     exit 0  # another session is installing — let it finish
   fi
   rmdir "${LOCK_DIR}" 2>/dev/null || true
