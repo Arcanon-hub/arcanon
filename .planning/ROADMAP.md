@@ -26,7 +26,7 @@
 - ✅ **v0.1.4 Operator Surface** — Phases 114-122 (shipped 2026-04-27)
 - ✅ **v0.1.5 Identity & Privacy** — Phases 123-127 (shipped 2026-04-30)
 - ✅ **v0.1.6 / v0.1.7 Resilient Dependency Install** — install-deps + MCP launcher hardening (shipped 2026-06-16, outside roadmap)
-- 🔄 **v0.1.8 Native SQLite Migration** — Phase 128 (planning)
+- 🔄 **v0.1.8 Native SQLite Migration** — Phase 128 (verified 2026-06-20, pending merge of `phase-128-native-sqlite`)
 
 ## Phases
 
