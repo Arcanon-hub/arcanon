@@ -8,7 +8,7 @@
  */
 
 import assert from "assert";
-import Database from "better-sqlite3";
+import Database from "./sqlite-adapter.js";
 
 async function buildDb() {
   const db = new Database(":memory:");

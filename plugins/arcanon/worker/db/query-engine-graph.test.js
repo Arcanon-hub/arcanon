@@ -5,7 +5,7 @@
  */
 import assert from "assert";
 import { describe, test } from "node:test";
-import Database from "better-sqlite3";
+import Database from "./sqlite-adapter.js";
 import { QueryEngine } from "./query-engine.js";
 
 // ---------------------------------------------------------------------------

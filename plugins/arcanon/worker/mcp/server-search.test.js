@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import Database from "better-sqlite3";
+import Database from "../db/sqlite-adapter.js";
 
 // Import query functions exported from mcp-server.js
 import { querySearch, queryScan } from "./server.js";

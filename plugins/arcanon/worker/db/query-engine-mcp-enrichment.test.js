@@ -14,7 +14,7 @@
 
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import Database from "better-sqlite3";
+import Database from "./sqlite-adapter.js";
 
 import { enrichImpactResult, enrichAffectedResult } from "./query-engine.js";
 

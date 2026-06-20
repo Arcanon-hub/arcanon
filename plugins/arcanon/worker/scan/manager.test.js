@@ -33,7 +33,7 @@ import {
   registerEnricher,
   clearEnrichers,
 } from "./enrichment.js";
-import Database from "better-sqlite3";
+import Database from "../db/sqlite-adapter.js";
 
 // ---------------------------------------------------------------------------
 // Helpers to build temp git repos

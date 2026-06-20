@@ -14,7 +14,7 @@
  */
 
 import assert from "assert";
-import Database from "better-sqlite3";
+import Database from "./sqlite-adapter.js";
 
 // ---------------------------------------------------------------------------
 // Helper: build a fully-migrated in-memory DB (migrations 001-008)

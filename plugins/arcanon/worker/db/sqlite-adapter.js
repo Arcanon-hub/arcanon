@@ -148,11 +148,28 @@ export default class Database {
 
   /**
    * Prepare a SQL statement and return a StatementWrapper.
+   *
+   * Two compatibility flags are set on every statement to match better-sqlite3
+   * behaviour:
+   *   - setAllowUnknownNamedParameters(true): node:sqlite throws ERR_INVALID_STATE
+   *     when the parameter object passed to run/get/all contains keys that are not
+   *     referenced in the SQL. better-sqlite3 silently ignores extra keys, so the
+   *     worker's upsert helpers (which pass full-row objects to narrow-column SQL)
+   *     would otherwise fail. Enabling this flag restores the expected behaviour.
+   *   - setAllowBareNamedParameters(true): lets callers pass { name: value }
+   *     objects for SQL that uses :name or @name parameters without requiring the
+   *     caller to prefix the key. The worker uses @name-form SQL exclusively, but
+   *     this flag costs nothing and prevents surprises in test utilities that use
+   *     :name SQL with bare-key objects.
+   *
    * @param {string} sql
    * @returns {StatementWrapper}
    */
   prepare(sql) {
-    return new StatementWrapper(this._db.prepare(sql));
+    const stmt = this._db.prepare(sql);
+    stmt.setAllowUnknownNamedParameters(true);
+    stmt.setAllowBareNamedParameters(true);
+    return new StatementWrapper(stmt);
   }
 
   /**

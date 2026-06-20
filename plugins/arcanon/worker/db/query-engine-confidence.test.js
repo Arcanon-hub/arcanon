@@ -12,7 +12,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import Database from "better-sqlite3";
+import Database from "./sqlite-adapter.js";
 
 // ---------------------------------------------------------------------------
 // Helper: build a fully-migrated in-memory DB (migrations 001-009 applied)

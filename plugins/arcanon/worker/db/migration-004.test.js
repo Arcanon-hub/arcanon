@@ -6,7 +6,7 @@
  */
 
 import assert from "assert";
-import Database from "better-sqlite3";
+import Database from "./sqlite-adapter.js";
 
 // Import the migration module under test
 import { version, up } from "./migrations/004_dedup_constraints.js";
