@@ -3,7 +3,7 @@
     "arcanon": {
       "type": "stdio",
       "command": "node",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/worker/mcp/launch.js"]
+      "args": ["--disable-warning=ExperimentalWarning", "${CLAUDE_PLUGIN_ROOT}/worker/mcp/launch.js"]
     }
   }
 }

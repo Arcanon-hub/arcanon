@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Arcanon — install-deps.sh
-# SessionStart hook: ensures the MCP/worker runtime dependencies are installed
-# and the better-sqlite3 native binding actually loads. The single source of
-# truth for runtime deps is plugins/arcanon/package.json.
+# SessionStart hook: ensures the MCP/worker runtime dependencies are installed.
+# All runtime deps are pure-JS (no native bindings, no compile step). The single
+# source of truth for runtime deps is plugins/arcanon/package.json.
 #
 # Design: read REAL state, never a marker. is_healthy() inspects node_modules
-# and loads the native binding directly, so nothing can outlive the tree and
-# desync. Healing is additive (`npm install`); we never rm -rf node_modules.
+# for tree presence only (no native-binding load). Healing is additive
+# (`npm install`); we never rm -rf node_modules.
 #
 # Non-blocking: every path exits 0. Genuine failures log to stderr; the runtime
 # self-surfaces via the worker / MCP server when the user invokes a feature.
@@ -53,9 +53,9 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# is_healthy: returns 0 only if BOTH hold (reads real state, no marker):
-#   1. every key in package.json .dependencies is present in node_modules, and
-#   2. the better-sqlite3 native binding loads (require + open :memory:).
+# is_healthy: returns 0 only if every key in package.json .dependencies has a
+# node_modules/<dep>/package.json present (reads real state, no marker).
+# All runtime deps are pure-JS — no native binding load is needed.
 # optionalDependencies are intentionally NOT required — an absent optional dep
 # (e.g. @chroma-core/default-embed) must not trigger a reinstall loop.
 # ---------------------------------------------------------------------------
@@ -71,8 +71,6 @@ is_healthy() {
         process.exit(1);
       }
     }
-    const Database = (await import("better-sqlite3")).default;
-    new Database(":memory:").close();
   ' ) >/dev/null 2>&1
 }
 
@@ -135,52 +133,13 @@ if ! run_npm npm install --prefix "${PLUGIN_ROOT}" --omit=dev --no-audit --no-fu
   exit 0
 fi
 
-# Step 4 — common case healed (tree was missing or partial).
+# Step 4 — install healed the tree (was missing or partial).
 if is_healthy; then
   exit 0
 fi
 
-# ---------------------------------------------------------------------------
-# Step 5 — tree present but binding still won't load ⇒ ABI mismatch (Node
-# changed since install). Stop a live worker first so the loaded/locked .node
-# can be replaced (mandatory on Windows; harmless elsewhere), then rebuild.
-# worker.pid lives under resolve_arcanon_data_dir() (ARCANON_DATA_DIR or
-# ~/.arcanon) — NOT CLAUDE_PLUGIN_DATA. session-start.sh restarts it after.
-# ---------------------------------------------------------------------------
-if [[ -f "${PLUGIN_ROOT}/lib/data-dir.sh" ]]; then
-  # shellcheck source=../lib/data-dir.sh
-  source "${PLUGIN_ROOT}/lib/data-dir.sh"
-  if declare -f resolve_arcanon_data_dir >/dev/null 2>&1; then
-    WORKER_DATA_DIR="$(resolve_arcanon_data_dir 2>/dev/null || true)"
-    PID_FILE="${WORKER_DATA_DIR}/worker.pid"
-    if [[ -n "${WORKER_DATA_DIR}" && -f "${PID_FILE}" ]]; then
-      WORKER_PID="$(cat "${PID_FILE}" 2>/dev/null || true)"
-      if [[ -n "${WORKER_PID}" ]] && kill -0 "${WORKER_PID}" 2>/dev/null; then
-        kill "${WORKER_PID}" 2>/dev/null || true
-        # Wait for the process to actually exit before rebuilding: on Windows the
-        # loaded better_sqlite3.node stays locked until the worker is gone, so a
-        # rebuild started too early would fail to overwrite it. Bounded (~2s);
-        # if it outlives that, proceed anyway (rebuild may still succeed elsewhere).
-        for _ in 1 2 3 4 5 6 7 8 9 10; do
-          kill -0 "${WORKER_PID}" 2>/dev/null || break
-          sleep 0.2
-        done
-      fi
-    fi
-  fi
-fi
-
-echo "[arcanon] better-sqlite3 binding failed to load — running npm rebuild" >&2
-if ! run_npm npm rebuild better-sqlite3 --prefix "${PLUGIN_ROOT}"; then
-  echo "[arcanon] npm rebuild better-sqlite3 failed — runtime will surface details on first feature use" >&2
-  exit 0
-fi
-
-# Step 6 — rebuild healed the binding.
-if is_healthy; then
-  exit 0
-fi
-
-# Step 7 — out of options: no prebuilt for this Node and rebuild did not help.
-echo "[arcanon] better-sqlite3 won't load on Node $(node -v) — Arcanon requires Node 20 or newer" >&2
+# Step 5 — tree still not healthy after install: something unexpected went wrong.
+# All deps are pure-JS, so there is no native rebuild to attempt. Log and exit;
+# the MCP server will surface the issue when the user invokes a feature.
+echo "[arcanon] dependency tree still incomplete after npm install — runtime will surface details on first feature use" >&2
 exit 0
