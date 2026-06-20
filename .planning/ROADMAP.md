@@ -25,6 +25,8 @@
 - ✅ **v0.1.3 Trust & Foundations** — Phases 107-113 (shipped 2026-04-25)
 - ✅ **v0.1.4 Operator Surface** — Phases 114-122 (shipped 2026-04-27)
 - ✅ **v0.1.5 Identity & Privacy** — Phases 123-127 (shipped 2026-04-30)
+- ✅ **v0.1.6 / v0.1.7 Resilient Dependency Install** — install-deps + MCP launcher hardening (shipped 2026-06-16, outside roadmap)
+- 🔄 **v0.1.8 Native SQLite Migration** — Phase 128 (planning)
 
 ## Phases
 
@@ -803,6 +805,26 @@ Plans:
 **Plans**: TBD (estimate 1 plan — manifest bumps + CHANGELOG + e2e verification)
 
 </details>
+
+---
+
+### Phase 128: Native SQLite Migration (better-sqlite3 → node:sqlite)
+**Milestone**: v0.1.8
+**Goal**: The Arcanon MCP server starts reliably on a fresh install, a remove-and-reinstall, and an update — because the plugin no longer compiles or downloads a native module at runtime. Replace `better-sqlite3` with Node's built-in `node:sqlite` (`DatabaseSync`) behind a thin database adapter, eliminating the runtime native install that races Claude Code's ~30s MCP connection timeout.
+**Depends on**: Phases 59-60 (the v0.1.7 install-deps + MCP launcher this supersedes)
+**Requirements**: SQLITE-01, SQLITE-02, SQLITE-03, SQLITE-04, SQLITE-05, SQLITE-06
+**Why now**: The v0.1.7 fix hardened the install *script* but left the root cause — deps (incl. the `better-sqlite3` native binding) are installed at runtime by a SessionStart hook that does not block MCP spawn, and stdio MCP servers never reconnect after a startup crash. Investigation in `.planning/codebase/DEPS-INSTALL-PIPELINE.md` and `DEPS-NATIVE-SURFACE.md` confirms `better-sqlite3` is the **only** native dependency and that `node:sqlite` supports the full feature set in use (FTS5 `MATCH`, WAL pragma, prepared-statement params; zero custom SQL functions/aggregates = no hard blocker).
+**Success Criteria** (what must be TRUE):
+  1. `plugins/arcanon/package.json` no longer lists `better-sqlite3`; no remaining runtime dependency requires `node-gyp`/`prebuild-install` at install time (optional `@chroma-core/default-embed` stays optional and prebuilt).
+  2. All database access routes through a single adapter (over `node:sqlite` `DatabaseSync`) that preserves the API the worker uses: `prepare/run/get/all/exec`, `pragma`, `transaction()`, and `pluck()`. The ~13 `import ... from "better-sqlite3"` sites import the adapter instead.
+  3. FTS5 (`USING fts5` + `MATCH`) search, WAL + `foreign_keys` + `busy_timeout` pragmas, and the 54 transaction sites behave identically to before (verified by the existing query-engine and migration test suites passing).
+  4. `engines.node` is `>=22.13.0` across `plugins/arcanon/package.json` (and root where applicable); docs/getting-started prerequisites updated to state the Node ≥22.13 requirement.
+  5. `install-deps.sh` and `worker/mcp/launch.js` are simplified — the `better-sqlite3` ABI-rebuild branch and native-binding health probe are removed; a fresh install starts the MCP server without any runtime `npm rebuild`.
+  6. Full `node --test` worker suite and the full bats suite are green; CHANGELOG has a `[0.1.8]` entry. Zero-Node standalone-binary distribution is explicitly **out of scope** (deferred, like Windows).
+**Plans**: 3 plans
+- [ ] 128-01-PLAN.md — Build the node:sqlite adapter (drop-in `Database` over `DatabaseSync`) + parity/property unit tests (pragma, transaction commit+rollback, pluck round-trip, readonly, FTS5 MATCH) — no call-site changes yet (wave 1)
+- [ ] 128-02-PLAN.md — Migrate all worker better-sqlite3 import sites to the adapter, remove better-sqlite3 from package.json, confirm query-engine + migration + pragma suites pass unchanged (wave 2)
+- [ ] 128-03-PLAN.md — Simplify install-deps.sh + launch.js (drop native rebuild/probe), suppress ExperimentalWarning, bump engines >=22.13.0 + docs/CI, version 0.1.8 across manifests (lockfile via npm) + CHANGELOG, full suites green + fresh-install bats assertion (wave 3)
 
 ---
 
