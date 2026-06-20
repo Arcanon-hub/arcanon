@@ -97,7 +97,10 @@ mkdir -p "${DATA_DIR}/logs"
 
 # Spawn worker as background daemon — worker is project-agnostic,
 # resolves DB per-request via ?project= query parameter
-nohup node "${PLUGIN_ROOT}/worker/index.js" \
+# --disable-warning=ExperimentalWarning: stderr is redirected into worker.log
+# (2>&1); node:sqlite's experimental warning (Node < 25.7) would otherwise land
+# in the JSON log and break log parsing. Mirrors hub.sh and .mcp.json.
+nohup node --disable-warning=ExperimentalWarning "${PLUGIN_ROOT}/worker/index.js" \
   --port "$PORT" \
   --data-dir "$DATA_DIR" \
   >>"${DATA_DIR}/logs/worker.log" 2>&1 &

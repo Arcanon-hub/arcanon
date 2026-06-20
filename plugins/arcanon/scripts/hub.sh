@@ -12,4 +12,8 @@ if ! command -v node >/dev/null 2>&1; then
   exit 127
 fi
 
-exec node "$HUB_CLI" "$@"
+# --disable-warning=ExperimentalWarning: node:sqlite is experimental until Node
+# 25.7 and prints a warning to stderr on load; without this it corrupts CLI
+# --json output (callers merge stderr) and the worker JSON log. Available since
+# Node 21.3 (floor is 22.13). Mirrors the flag in .mcp.json and worker-start.sh.
+exec node --disable-warning=ExperimentalWarning "$HUB_CLI" "$@"

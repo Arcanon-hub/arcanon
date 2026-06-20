@@ -26,13 +26,18 @@
  *   stmt.pluck(enabled?)    → this (chainable)
  */
 
-// Must precede the node:sqlite import: installs a process.emitWarning filter so
-// node:sqlite's ExperimentalWarning (Node < 25.7) never reaches stderr and
-// corrupts CLI --json output. ESM evaluates imports in source order, so this
-// side-effect runs before node:sqlite loads.
+// Install the process.emitWarning filter, then load node:sqlite LAZILY via
+// require — not a static `import` — so node:sqlite is loaded during this module's
+// body evaluation (AFTER the suppressor above has run) rather than during the
+// ESM link phase (which happens before ANY module body runs, so a static import
+// would fire node:sqlite's ExperimentalWarning before the suppressor could
+// install). This keeps the warning out of stderr for every entry point that
+// loads the adapter — worker daemon, CLI, MCP server, fixtures — regardless of
+// how node was launched, so no per-invocation --disable-warning flag is needed.
 import "./suppress-sqlite-warning.js";
-import { DatabaseSync } from "node:sqlite";
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
 // node:sqlite throws RangeError [ERR_OUT_OF_RANGE] when reading an INTEGER
 // column whose value exceeds Number.MAX_SAFE_INTEGER unless setReadBigInts(true)
