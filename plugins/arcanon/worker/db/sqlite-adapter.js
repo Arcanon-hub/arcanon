@@ -26,6 +26,11 @@
  *   stmt.pluck(enabled?)    → this (chainable)
  */
 
+// Must precede the node:sqlite import: installs a process.emitWarning filter so
+// node:sqlite's ExperimentalWarning (Node < 25.7) never reaches stderr and
+// corrupts CLI --json output. ESM evaluates imports in source order, so this
+// side-effect runs before node:sqlite loads.
+import "./suppress-sqlite-warning.js";
 import { DatabaseSync } from "node:sqlite";
 import { existsSync } from "node:fs";
 
