@@ -48,8 +48,8 @@ jobs:
       - name: Shellcheck scripts and libs
         run: shellcheck -x --severity=error -e SC1091 plugins/arcanon/scripts/*.sh plugins/arcanon/lib/*.sh
 
-  test-hub-sync:
-    name: Hub-sync tests (Node ${{ matrix.node }})
+  test-worker:
+    name: Worker tests (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -67,9 +67,12 @@ jobs:
       - name: Install plugin dependencies
         working-directory: plugins/arcanon
         run: npm ci --no-audit --no-fund
-      - name: Run hub-sync tests
+      - name: Run full worker test suite
+        # Runs every worker/**/*.test.js (db adapter, migrations, query-engine,
+        # mcp, scan, hub-sync) — previously only worker/hub-sync/ ran in CI, so
+        # the node:sqlite adapter + db suites were never exercised in the pipeline.
         working-directory: plugins/arcanon
-        run: node --test worker/hub-sync/
+        run: npm test
 
   test-bats:
     name: Bats integration tests

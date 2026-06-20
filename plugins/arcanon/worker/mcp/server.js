@@ -74,8 +74,11 @@ export function openDb() {
     return null;
   }
   try {
+    // Do NOT set journal_mode on a read-only connection — it requires write
+    // access and throws "attempt to write a readonly database" (matches the
+    // read-only open path in pool.js). The DB's journal mode is already set by
+    // the writer that created it.
     const db = new Database(dbPath, { readonly: true });
-    db.pragma("journal_mode = WAL");
     return db;
   } catch (err) {
     logger.error('Failed to open database', { error: err.message, stack: err.stack });

@@ -29,6 +29,29 @@
 import { DatabaseSync } from "node:sqlite";
 import { existsSync } from "node:fs";
 
+// node:sqlite throws RangeError [ERR_OUT_OF_RANGE] when reading an INTEGER
+// column whose value exceeds Number.MAX_SAFE_INTEGER unless setReadBigInts(true)
+// is enabled (better-sqlite3 instead returned a silently lossy Number). We enable
+// it on every prepared statement (see prepare()) and normalize results here:
+// values within the safe range are returned as Number (the type every caller
+// expects — exact, identical to before), and only genuinely out-of-range values
+// stay BigInt rather than being silently corrupted.
+const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
+const MIN_SAFE = -MAX_SAFE;
+
+function fromBigInt(v) {
+  return typeof v === "bigint" && v >= MIN_SAFE && v <= MAX_SAFE ? Number(v) : v;
+}
+
+/** Normalize BigInt cells in a result row back to Number when safe. Mutates and returns the row. */
+function coerceRow(row) {
+  if (row === undefined || row === null) return row;
+  for (const k in row) {
+    if (typeof row[k] === "bigint") row[k] = fromBigInt(row[k]);
+  }
+  return row;
+}
+
 // ---------------------------------------------------------------------------
 // Statement wrapper
 // ---------------------------------------------------------------------------
@@ -60,7 +83,13 @@ class StatementWrapper {
    * @returns {{ changes: number, lastInsertRowid: number|bigint }}
    */
   run(...params) {
-    return this._stmt.run(...params);
+    // setReadBigInts(true) (set in prepare()) makes node:sqlite return
+    // lastInsertRowid and changes as BigInt; normalize back to Number when safe
+    // so callers see the same numeric type better-sqlite3 returned.
+    const r = this._stmt.run(...params);
+    if (typeof r.lastInsertRowid === "bigint") r.lastInsertRowid = fromBigInt(r.lastInsertRowid);
+    if (typeof r.changes === "bigint") r.changes = fromBigInt(r.changes);
+    return r;
   }
 
   /**
@@ -70,7 +99,7 @@ class StatementWrapper {
    * @returns {*}
    */
   get(...params) {
-    const row = this._stmt.get(...params);
+    const row = coerceRow(this._stmt.get(...params));
     if (row === undefined || row === null) return undefined;
     if (this._pluck) return Object.values(row)[0];
     return row;
@@ -83,7 +112,7 @@ class StatementWrapper {
    * @returns {Array}
    */
   all(...params) {
-    const rows = this._stmt.all(...params);
+    const rows = this._stmt.all(...params).map(coerceRow);
     if (this._pluck) return rows.map((r) => Object.values(r)[0]);
     return rows;
   }
@@ -93,9 +122,12 @@ class StatementWrapper {
    * @param {...*} params
    * @returns {Iterator}
    */
-  iterate(...params) {
+  *iterate(...params) {
     // node:sqlite StatementSync has an iterate() method returning a JS Iterator.
-    return this._stmt.iterate(...params);
+    // Normalize BigInt cells per row, consistent with get()/all().
+    for (const row of this._stmt.iterate(...params)) {
+      yield coerceRow(row);
+    }
   }
 }
 
@@ -177,6 +209,9 @@ export default class Database {
     const stmt = this._db.prepare(sql);
     stmt.setAllowUnknownNamedParameters(true);
     stmt.setAllowBareNamedParameters(true);
+    // Read INTEGER columns as BigInt so values > 2^53 do not throw
+    // ERR_OUT_OF_RANGE; coerceRow() converts back to Number where safe.
+    stmt.setReadBigInts(true);
     return new StatementWrapper(stmt);
   }
 

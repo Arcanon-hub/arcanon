@@ -533,4 +533,36 @@ describe("FTS5 MATCH", () => {
       rmSync(tmp, { recursive: true, force: true });
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Integer handling (CR-01): node:sqlite throws ERR_OUT_OF_RANGE on INTEGER
+  // values > 2^53 unless setReadBigInts is enabled. The adapter enables it and
+  // normalizes safe values back to Number; only out-of-range values stay BigInt.
+  // -------------------------------------------------------------------------
+  test("safe INTEGER reads are Number; out-of-range stay BigInt without throwing", () => {
+    const db = new Database(":memory:");
+    try {
+      db.exec("CREATE TABLE t(id INTEGER PRIMARY KEY, big INTEGER)");
+      const maxInt64 = "9223372036854775807"; // > Number.MAX_SAFE_INTEGER
+      const info = db.prepare("INSERT INTO t(big) VALUES (?)").run(maxInt64);
+
+      // run() metadata normalized to Number (matches better-sqlite3).
+      assert.equal(typeof info.lastInsertRowid, "number");
+      assert.equal(info.lastInsertRowid, 1);
+      assert.equal(typeof info.changes, "number");
+
+      const row = db.prepare("SELECT id, big FROM t").get();
+      assert.equal(typeof row.id, "number", "safe id → Number");
+      assert.equal(row.id, 1);
+      assert.equal(typeof row.big, "bigint", "value > 2^53 → BigInt (no precision loss, no throw)");
+      assert.equal(row.big, 9223372036854775807n);
+
+      // pluck of a safe integer column yields a Number.
+      const plucked = db.prepare("SELECT id FROM t").pluck().get();
+      assert.equal(typeof plucked, "number");
+      assert.equal(plucked, 1);
+    } finally {
+      db.close();
+    }
+  });
 });
