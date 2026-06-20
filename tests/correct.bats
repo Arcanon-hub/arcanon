@@ -65,11 +65,13 @@ setup() {
 
   run sqlite3 -line "$DB_PATH" "SELECT kind, target_id, action, payload FROM scan_overrides WHERE override_id = 1"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"kind = connection"* ]]
-  [[ "$output" == *"target_id = 1"* ]]
-  [[ "$output" == *"action = delete"* ]]
+  # sqlite3 -line separator differs by CLI version (older builds use " = ",
+  # Apple sqlite3 3.54.0+ uses ": "); accept either via regex.
+  [[ "$output" =~ kind[[:space:]]*[=:][[:space:]]*connection ]]
+  [[ "$output" =~ target_id[[:space:]]*[=:][[:space:]]*1 ]]
+  [[ "$output" =~ action[[:space:]]*[=:][[:space:]]*delete ]]
   # 's helper defaults payload to '{}' when caller passes null/undefined.
-  [[ "$output" == *"payload = {}"* ]]
+  [[ "$output" =~ payload[[:space:]]*[=:][[:space:]]*\{\} ]]
 }
 
 # ---------------------------------------------------------------------------
@@ -110,9 +112,10 @@ setup() {
 
   run sqlite3 -line "$DB_PATH" "SELECT kind, target_id, action, payload FROM scan_overrides WHERE override_id = 1"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"kind = service"* ]]
-  [[ "$output" == *"target_id = ${SVC_A_ID}"* ]]
-  [[ "$output" == *"action = rename"* ]]
+  # sqlite3 -line separator differs by CLI version (" = " vs ": "); accept either.
+  [[ "$output" =~ kind[[:space:]]*[=:][[:space:]]*service ]]
+  [[ "$output" =~ target_id[[:space:]]*[=:][[:space:]]*${SVC_A_ID} ]]
+  [[ "$output" =~ action[[:space:]]*[=:][[:space:]]*rename ]]
   [[ "$output" == *'"new_name":"svc-renamed"'* ]]
 }
 
