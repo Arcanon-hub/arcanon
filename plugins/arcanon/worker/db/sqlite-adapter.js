@@ -142,6 +142,14 @@ export default class Database {
     return this._name;
   }
 
+  // .open accessor — better-sqlite3 exposes a boolean `.open`; node:sqlite's
+  // DatabaseSync exposes a boolean `.isOpen` getter instead (its `.open` is the
+  // open() method). Map to it so callers checking handle liveness work unchanged.
+  /** @returns {boolean} */
+  get open() {
+    return this._db.isOpen;
+  }
+
   // ---------------------------------------------------------------------------
   // Core statement methods
   // ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@
 
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import Database from '../../db/sqlite-adapter.js';
 import { up as up001 } from '../../db/migrations/001_initial_schema.js';
 import { up as up008 } from '../../db/migrations/008_actors_metadata.js';
 import { up as up018 } from '../../db/migrations/018_actors_label.js';

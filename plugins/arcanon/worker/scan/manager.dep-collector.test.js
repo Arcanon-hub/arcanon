@@ -12,7 +12,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
-import Database from 'better-sqlite3';
+import Database from '../db/sqlite-adapter.js';
 import { runMigrations } from '../db/database.js';
 import { QueryEngine } from '../db/query-engine.js';
 import { scanRepos, setAgentRunner, setScanLogger } from './manager.js';

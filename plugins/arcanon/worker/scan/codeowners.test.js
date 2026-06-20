@@ -12,7 +12,7 @@ import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import Database from 'better-sqlite3';
+import Database from '../db/sqlite-adapter.js';
 
 import {
   parseCODEOWNERS,

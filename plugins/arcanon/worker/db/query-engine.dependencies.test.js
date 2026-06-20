@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import Database from './sqlite-adapter.js';
 import { runMigrations } from './database.js';
 import { QueryEngine } from './query-engine.js';
 

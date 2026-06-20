@@ -10,7 +10,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import Database from '../../db/sqlite-adapter.js';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 

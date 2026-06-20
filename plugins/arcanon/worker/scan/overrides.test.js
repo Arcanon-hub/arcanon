@@ -23,7 +23,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import Database from '../db/sqlite-adapter.js';
 
 import { up as up001 } from '../db/migrations/001_initial_schema.js';
 import { up as up002 } from '../db/migrations/002_service_type.js';
