@@ -21,7 +21,7 @@ teardown() {
 
 @test "INTG-E2E-01: transitive query returns B and C for A->B->C chain" {
   run node --input-type=module --eval "
-import Database from '${PROJECT_ROOT}/node_modules/better-sqlite3/lib/index.js';
+import Database from '${PROJECT_ROOT}/worker/db/sqlite-adapter.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { QueryEngine } from '${PROJECT_ROOT}/worker/query-engine.js';
@@ -145,7 +145,7 @@ db.close();
 
 @test "INTG-E2E-01: cyclic graph A->B->C->A does not hang or error" {
   run node --input-type=module --eval "
-import Database from '${PROJECT_ROOT}/node_modules/better-sqlite3/lib/index.js';
+import Database from '${PROJECT_ROOT}/worker/db/sqlite-adapter.js';
 import { QueryEngine } from '${PROJECT_ROOT}/worker/query-engine.js';
 import { _resetForTest } from '${PROJECT_ROOT}/worker/chroma-sync.js';
 
@@ -273,7 +273,7 @@ console.log('PASS: full scan returns all tracked files');
 
 @test "INTG-E2E-03: search with skipChroma returns FTS5 results (tier 2)" {
   run node --input-type=module --eval "
-import Database from '${PROJECT_ROOT}/node_modules/better-sqlite3/lib/index.js';
+import Database from '${PROJECT_ROOT}/worker/db/sqlite-adapter.js';
 import { search, setSearchDb } from '${PROJECT_ROOT}/worker/query-engine.js';
 import { _resetForTest } from '${PROJECT_ROOT}/worker/chroma-sync.js';
 
@@ -327,7 +327,7 @@ db.close();
 
 @test "INTG-E2E-03: search with skipChroma+skipFts5 returns SQL tier results" {
   run node --input-type=module --eval "
-import Database from '${PROJECT_ROOT}/node_modules/better-sqlite3/lib/index.js';
+import Database from '${PROJECT_ROOT}/worker/db/sqlite-adapter.js';
 import { search, setSearchDb } from '${PROJECT_ROOT}/worker/query-engine.js';
 import { _resetForTest } from '${PROJECT_ROOT}/worker/chroma-sync.js';
 
@@ -469,7 +469,7 @@ JSON
 
 @test "INTG-E2E-05: isFirstScan returns false after writeScan; createSnapshot creates file" {
   run node --input-type=module --eval "
-import Database from '${PROJECT_ROOT}/node_modules/better-sqlite3/lib/index.js';
+import Database from '${PROJECT_ROOT}/worker/db/sqlite-adapter.js';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';

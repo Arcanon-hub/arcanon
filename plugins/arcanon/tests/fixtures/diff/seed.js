@@ -215,7 +215,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     process.stderr.write(`unknown mode: ${mode}\n`);
     process.exit(2);
   }
-  const Database = (await import('better-sqlite3')).default;
+  const Database = (await import('../../../worker/db/sqlite-adapter.js')).default;
   const db = new Database(args.db);
   db.pragma('foreign_keys = ON');
   applyAllMigrations(db);

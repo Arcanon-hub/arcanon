@@ -63,7 +63,7 @@ function applyAllMigrations(db) {
 /**
  * Seed the apply-hook E2E fixture into a fresh DB.
  *
- * @param {{ db: import('better-sqlite3').Database, projectRoot: string }} args
+ * @param {{ db: import('../../../worker/db/sqlite-adapter.js').Database, projectRoot: string }} args
  * @returns object with repo/service/connection/override IDs
  */
 export function seedPendingOverridesFixture({ db, projectRoot }) {
@@ -160,7 +160,7 @@ function parseArgs(argv) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const { default: Database } = await import('better-sqlite3');
+  const { default: Database } = await import('../../../worker/db/sqlite-adapter.js');
   const { project, db: dbPath } = parseArgs(process.argv.slice(2));
   const db = new Database(dbPath);
   db.pragma('foreign_keys = ON');

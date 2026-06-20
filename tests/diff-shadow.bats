@@ -46,7 +46,7 @@ _introduce_shadow_drift() {
   # plugins/arcanon/node_modules. Earlier passes worked locally only because
   # a stray repo-root node_modules shadowed the lookup; CI exposed the bug.
   ( cd "$PLUGIN_ROOT" && node --input-type=module -e "
-    import Database from 'better-sqlite3';
+    import Database from '${PLUGIN_ROOT}/worker/db/sqlite-adapter.js';
     const db = new Database('${SHADOW_DB}');
     db.pragma('foreign_keys = ON');
     // Modify api-svc's language js -> ts

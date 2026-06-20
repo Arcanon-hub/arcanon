@@ -39,7 +39,7 @@ setup() {
   # from the manager's Phase B loop; here we pass any positive integer to
   # exercise the same code path.
   run node --input-type=module --eval "
-import Database from '${PLUGIN_ROOT}/node_modules/better-sqlite3/lib/index.js';
+import Database from '${PLUGIN_ROOT}/worker/db/sqlite-adapter.js';
 import { QueryEngine } from '${PLUGIN_ROOT}/worker/db/query-engine.js';
 import { applyPendingOverrides } from '${PLUGIN_ROOT}/worker/scan/overrides.js';
 
@@ -97,7 +97,7 @@ db.close();
 # ---------------------------------------------------------------------------
 @test "re-invoking apply-hook is a no-op (already-applied filtered)" {
   run node --input-type=module --eval "
-import Database from '${PLUGIN_ROOT}/node_modules/better-sqlite3/lib/index.js';
+import Database from '${PLUGIN_ROOT}/worker/db/sqlite-adapter.js';
 import { QueryEngine } from '${PLUGIN_ROOT}/worker/db/query-engine.js';
 import { applyPendingOverrides } from '${PLUGIN_ROOT}/worker/scan/overrides.js';
 

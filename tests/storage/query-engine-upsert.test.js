@@ -14,7 +14,7 @@ import os from "os";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import Database from "better-sqlite3";
+import Database from '../../plugins/arcanon/worker/db/sqlite-adapter.js';
 import { fileURLToPath } from "url";
 
 import { QueryEngine } from "../../worker/db/query-engine.js";

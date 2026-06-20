@@ -121,7 +121,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   gitRun(repoDir, ['commit', '--allow-empty', '-q', '-m', 'c2']);
   gitRun(repoDir, ['commit', '--allow-empty', '-q', '-m', 'c3']);
 
-  const Database = (await import('better-sqlite3')).default;
+  const Database = (await import('../../../worker/db/sqlite-adapter.js')).default;
   const db = new Database(dbPath);
   db.pragma('foreign_keys = ON');
   applyAllMigrations(db);

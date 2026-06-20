@@ -85,7 +85,7 @@ export function applyAllMigrations(db) {
  * three real source files in tests/fixtures/verify/source/.
  *
  * @param {{
- *   db: import('better-sqlite3').Database,
+ *   db: import('../../../worker/db/sqlite-adapter.js').Database,
  *   projectRoot: string,
  * }} args
  * @returns {{ scanVersionId: number, repoId: number, connectionIds: number[] }}
@@ -192,7 +192,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     );
     process.exit(2);
   }
-  const Database = (await import('better-sqlite3')).default;
+  const Database = (await import('../../../worker/db/sqlite-adapter.js')).default;
   const db = new Database(args.db);
   db.pragma('foreign_keys = ON');
   const result = seedFixture({ db, projectRoot: args.project });
