@@ -13,7 +13,7 @@
  * array is populated before any openDb() call can execute.
  */
 
-import Database from "better-sqlite3";
+import Database from "./sqlite-adapter.js";
 import crypto from "crypto";
 import fs from "fs";
 import os from "os";
@@ -87,7 +87,7 @@ function projectHashDir(projectRoot) {
  * multiple times; returns the same instance on subsequent calls.
  *
  * @param {string} [projectRoot] - Project root directory. Defaults to process.cwd().
- * @returns {import('better-sqlite3').Database} The open database instance.
+ * @returns {import('./sqlite-adapter.js').default} The open database instance.
  */
 export function openDb(projectRoot = process.cwd()) {
   if (_db) return _db;
@@ -136,7 +136,7 @@ export function _resetDbSingleton() {
 /**
  * Returns the already-opened database instance.
  * @throws {Error} If openDb() has not been called yet.
- * @returns {import('better-sqlite3').Database}
+ * @returns {import('./sqlite-adapter.js').default}
  */
 export function getDb() {
   if (!_db) {
@@ -150,7 +150,7 @@ export function getDb() {
  * Creates the schema_versions table if absent, then applies any migrations
  * whose version number exceeds the current MAX(version).
  *
- * @param {import('better-sqlite3').Database} db
+ * @param {import('./sqlite-adapter.js').default} db
  */
 export function runMigrations(db) {
   // Ensure migration tracker table exists
@@ -210,7 +210,7 @@ function getHistoryLimit() {
  * @returns {void}
  */
 export function writeScan(findings, queryEngine, repoId) {
-  // Write services to SQLite (synchronous — better-sqlite3)
+  // Write services to SQLite (synchronous)
   for (const svc of findings.services || []) {
     queryEngine.upsertService({
       repo_id: repoId,
@@ -301,7 +301,7 @@ export function createSnapshot(label = "") {
   const db = getDb();
 
   // Determine the DB file path from the open database
-  const dbFilePath = db.name; // better-sqlite3 exposes the DB path as db.name
+  const dbFilePath = db.name; // adapter exposes the DB path as db.name
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const snapshotsDir = path.join(path.dirname(dbFilePath), "snapshots");
   fs.mkdirSync(snapshotsDir, { recursive: true });

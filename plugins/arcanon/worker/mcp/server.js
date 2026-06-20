@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import Database from "better-sqlite3";
+import Database from "../db/sqlite-adapter.js";
 import crypto from "crypto";
 import os from "os";
 import path from "path";
@@ -162,7 +162,7 @@ export async function queryImpact(
     `;
 
     // Interrupt the synchronous SQLite query if it runs over QUERY_TIMEOUT_MS.
-    // better-sqlite3 exposes db.interrupt() which raises SQLITE_INTERRUPT.
+    // db.interrupt() is optional — only invoked if the adapter exposes it.
     let rows;
     const timer = setTimeout(() => {
       try { db.interrupt?.(); } catch { /* ignore if already done */ }
@@ -528,7 +528,7 @@ export async function querySearch(db, { query, limit = 20 }) {
 
 /**
  * Get all scanned repo paths from DB, or empty array if db is null.
- * @param {import('better-sqlite3').Database|null} db
+ * @param {import('../db/sqlite-adapter.js').default|null} db
  * @returns {{ path: string, name: string }[]}
  */
 function getDriftRepos(db) {
@@ -648,7 +648,7 @@ function extractAllVersions(repoPath) {
 /**
  * Query dependency version mismatches across all scanned repos.
  * Port of the main comparison loop in scripts/drift-versions.sh.
- * @param {import('better-sqlite3').Database|null} db
+ * @param {import('../db/sqlite-adapter.js').default|null} db
  * @param {{ severity?: string }} params
  * @returns {{ findings: Array, repos_scanned: number }}
  */
@@ -922,7 +922,7 @@ function extractTypeBody(repoPath, typeName, lang) {
 /**
  * Query shared type/struct/interface mismatches across repos of the same language.
  * Port of the main comparison loop in scripts/drift-types.sh.
- * @param {import('better-sqlite3').Database|null} db
+ * @param {import('../db/sqlite-adapter.js').default|null} db
  * @param {{ severity?: string }} params
  * @returns {{ findings: Array, repos_scanned: number }}
  */
@@ -1121,7 +1121,7 @@ function compareOpenApiSpecs(specA, specB, repoA, repoB) {
  * Query OpenAPI spec breaking changes across all scanned repos.
  * Port of the main comparison loop in scripts/drift-openapi.sh.
  * Uses pairwise comparison for N <= 5 repos; hub-and-spoke for N > 5.
- * @param {import('better-sqlite3').Database|null} db
+ * @param {import('../db/sqlite-adapter.js').default|null} db
  * @param {{ severity?: string }} params
  * @returns {{ findings: Array, repos_scanned: number, tool_available: boolean }}
  */

@@ -10,7 +10,7 @@ import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import Database from "better-sqlite3";
+import Database from "./sqlite-adapter.js";
 import { openDb, runMigrations, _resetDbSingleton } from "./database.js";
 import { QueryEngine } from "./query-engine.js";
 import { resolveDataDir } from "../lib/data-dir.js";

@@ -5,7 +5,7 @@
  * exhaustion) the payload is enqueued and retried later. /arcanon:sync drains
  * the queue on demand; the worker also drains opportunistically on startup.
  *
- * Queue storage: <dataDir>/hub-queue.db (better-sqlite3, WAL).
+ * Queue storage: <dataDir>/hub-queue.db (node:sqlite adapter, WAL).
  *
  * Retry schedule (seconds): 30, 120, 600, 3600, 21600. After MAX_ATTEMPTS
  * failed attempts, the row moves to status='dead' — surfaced by /arcanon:status.
@@ -13,7 +13,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import Database from "better-sqlite3";
+import Database from "../db/sqlite-adapter.js";
 
 import { resolveDataDir } from "../lib/data-dir.js";
 
