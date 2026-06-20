@@ -35,9 +35,6 @@
     "picomatch": "^4.0.4",
     "zod": "^3.25.0"
   },
-  "optionalDependencies": {
-    "@chroma-core/default-embed": "^1.0.0"
-  },
   "scripts": {
     "test": "find worker -name '*.test.js' -not -path '*/node_modules/*' -print0 | xargs -0 node --test",
     "test:storage": "node --test worker/db/query-engine-*.test.js",
