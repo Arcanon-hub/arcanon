@@ -99,7 +99,8 @@ setup() {
 @test "LAUNCH: .mcp.json invokes node on worker/mcp/launch.js (node-direct, no bash)" {
   run jq -r '.mcpServers.arcanon.command' .mcp.json
   assert_output "node"
-  run jq -r '.mcpServers.arcanon.args[0]' .mcp.json
+  # args may include flag(s) before the script path; the last element is launch.js
+  run bash -c "jq -r '.mcpServers.arcanon.args | last' .mcp.json"
   assert_output --partial "worker/mcp/launch.js"
 }
 

@@ -125,7 +125,7 @@ _run_promote() {
   # Run from PLUGIN_ROOT so the bare `better-sqlite3` import resolves via
   # plugins/arcanon/node_modules (CI repo-root has no node_modules).
   ( cd "$PLUGIN_ROOT" && node --input-type=module -e "
-    import Database from 'better-sqlite3';
+    import Database from '${PLUGIN_ROOT}/worker/db/sqlite-adapter.js';
     const db = new Database('${SHADOW_DB}');
     db.prepare(\"INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id) VALUES (1, 'shadow-only-svc', '/', 'js', 'service', 1)\").run();
     db.close();
@@ -319,7 +319,7 @@ _run_promote() {
   # Run from PLUGIN_ROOT so the bare `better-sqlite3` import resolves via
   # plugins/arcanon/node_modules (CI repo-root has no node_modules).
   ( cd "$PLUGIN_ROOT" && node --input-type=module -e "
-    import Database from 'better-sqlite3';
+    import Database from '${PLUGIN_ROOT}/worker/db/sqlite-adapter.js';
     const db = new Database('${SHADOW_DB}');
     db.prepare(\"INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id) VALUES (1, 'shadow-marker', '/', 'js', 'service', 1)\").run();
     db.close();

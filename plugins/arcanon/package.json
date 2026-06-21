@@ -1,12 +1,12 @@
 {
   "name": "@arcanon/plugin",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Arcanon — cross-repo service dependency scanner for Claude Code",
   "license": "Apache-2.0",
   "author": "Arcanon",
   "type": "module",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.13.0"
   },
   "repository": {
     "type": "git",
@@ -29,15 +29,11 @@
     "@fastify/cors": "^10.0.0",
     "@fastify/static": "^9.1.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
-    "better-sqlite3": "^12.9.0",
     "chromadb": "^3.3.3",
     "fastify": "^5.8.5",
     "js-yaml": "^4.1.0",
     "picomatch": "^4.0.4",
     "zod": "^3.25.0"
-  },
-  "optionalDependencies": {
-    "@chroma-core/default-embed": "^1.0.0"
   },
   "scripts": {
     "test": "find worker -name '*.test.js' -not -path '*/node_modules/*' -print0 | xargs -0 node --test",

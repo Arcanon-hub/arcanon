@@ -17,7 +17,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import Database from 'better-sqlite3';
+import Database from './sqlite-adapter.js';
 import { up as up001 } from './migrations/001_initial_schema.js';
 import { up as up002 } from './migrations/002_service_type.js';
 import { up as up003 } from './migrations/003_exposed_endpoints.js';

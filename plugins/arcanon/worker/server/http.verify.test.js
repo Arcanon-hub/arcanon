@@ -29,7 +29,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Database from 'better-sqlite3';
+import Database from '../db/sqlite-adapter.js';
 
 import { createHttpServer, computeVerdict } from './http.js';
 import { seedFixture, applyAllMigrations } from '../../tests/fixtures/verify/seed.js';

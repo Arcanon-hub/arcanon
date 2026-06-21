@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-06-20
+
+Replaced the `better-sqlite3` native module with Node's built-in `node:sqlite`,
+eliminating the runtime native compile/download that raced the MCP connection
+timeout on fresh install.
+
+### Changed
+
+- **Replaced `better-sqlite3` with `node:sqlite` (`DatabaseSync`).** A single
+  thin adapter module (`worker/db/sqlite-adapter.js`) wraps the built-in so all
+  call sites required only an import change. FTS5, WAL mode, foreign keys, and
+  all query/transaction/pluck patterns are preserved through the adapter.
+- **Simplified `install-deps.sh`.** Removed the `better-sqlite3` ABI-rebuild
+  branch and native-binding load from `is_healthy()` — with pure-JS deps there
+  is no native module to rebuild. The health check now verifies only that every
+  required dependency is present in `node_modules`.
+- **Simplified `worker/mcp/launch.js`.** Replaced the native-binding probe with
+  a pure-JS probe (resolves the MCP SDK module). The launcher no longer enters
+  any rebuild branch; with deps present it takes the fast path and boots
+  `server.js` in-process.
+- **Suppressed `node:sqlite`'s `ExperimentalWarning`** (emitted to stderr on
+  Node < 25.7) via `--disable-warning=ExperimentalWarning` — suppresses only
+  that category, leaving genuine deprecation warnings intact.
+- **Raised the Node floor to `>=22.13.0`** (the lowest version where `node:sqlite`
+  is unflagged). This drops Node 20/21 support. CI matrix updated accordingly
+  (Node 20 removed; matrix now runs Node 22 and 24).
+
+### Removed
+
+- **`better-sqlite3` dependency.** The native module is no longer listed in
+  `package.json` and is absent from the regenerated lockfile.
+
+### Notes
+
+- Zero-Node standalone binary (bun --compile / Node-SEA) remains out of scope
+  and is deferred to a later milestone.
+
 ## [0.1.7] - 2026-06-16
 
 Reliability fix for dependency installation and MCP startup, plus Windows support.

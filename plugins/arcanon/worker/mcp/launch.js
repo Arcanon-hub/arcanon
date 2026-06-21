@@ -9,7 +9,15 @@
 // hook was still populating node_modules, the import would throw and the tools
 // would be dead for the entire session. This launcher imports ONLY node:
 // builtins (so it always starts), then gates the real server import on a
-// dependency-health probe — waiting out the concurrent install/rebuild.
+// dependency-health probe — waiting out the concurrent pure-JS install.
+//
+// node:sqlite ExperimentalWarning suppression: node:sqlite emits an
+// ExperimentalWarning to stderr on Node < 25.7. The MCP protocol is on stdout,
+// so this is harmless, but it clutters logs. We suppress ONLY the
+// ExperimentalWarning category (not all warnings) via
+// --disable-warning=ExperimentalWarning on the spawned server child. For the
+// fast-path in-process import, .mcp.json passes the same flag to this launcher
+// process. This is valid from Node 16.19+ and available on 22.13+.
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -22,10 +30,10 @@ const serverPath = path.join(here, "server.js");
 // plain path (node accepts a path argv on every platform).
 const serverUrl = pathToFileURL(serverPath).href;
 
-// Total time to wait for the concurrent install-deps hook to heal node_modules
-// (missing tree) or rebuild the native binding (ABI mismatch). Overridable for
-// tests. If Claude Code's own stdio handshake times out sooner, the wait is
-// harmless — Change 1 (install-deps) guarantees a healthy tree for next session.
+// Total time to wait for the concurrent install-deps hook to populate
+// node_modules with pure-JS deps. Overridable for tests. If Claude Code's own
+// stdio handshake times out sooner, the wait is harmless — install-deps
+// guarantees a healthy tree for next session.
 const _wait = Number(process.env.ARCANON_MCP_WAIT_MS);
 // Guard against a non-numeric override: NaN would make `now < now + NaN` false,
 // skip the wait loop entirely, and give up instantly even when deps are fine.
@@ -34,12 +42,9 @@ const INTERVAL_MS = 1500;
 
 // Fresh-process probe: a new `node` gets a clean module cache, so this reflects
 // current on-disk state (an in-process retry can't — ESM caches a failed module
-// graph as errored and will not re-evaluate it). Healthy iff the SDK resolves
-// AND the better-sqlite3 native binding loads.
-const PROBE =
-  "import D from 'better-sqlite3';" +
-  "await import('@modelcontextprotocol/sdk/server/mcp.js');" +
-  "new D(':memory:').close();";
+// graph as errored and will not re-evaluate it). Healthy iff the MCP SDK module
+// resolves (all pure-JS deps present).
+const PROBE = "await import('@modelcontextprotocol/sdk/server/mcp.js');";
 
 function depsHealthy() {
   const r = spawnSync(
@@ -65,7 +70,13 @@ try {
   const deadline = Date.now() + MAX_WAIT_MS;
   while (Date.now() < deadline) {
     if (depsHealthy()) {
-      const r = spawnSync(process.execPath, [serverPath], { stdio: "inherit" });
+      // Suppress only ExperimentalWarning (node:sqlite on Node < 25.7) on the
+      // spawned child process. Other warnings (deprecation, etc.) still surface.
+      const r = spawnSync(
+        process.execPath,
+        ["--disable-warning=ExperimentalWarning", serverPath],
+        { stdio: "inherit" },
+      );
       process.exit(r.status ?? 0);
     }
     await sleep(INTERVAL_MS);

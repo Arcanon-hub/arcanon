@@ -13,7 +13,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import Database from "better-sqlite3";
+import Database from "./sqlite-adapter.js";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";

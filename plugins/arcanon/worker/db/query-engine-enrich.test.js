@@ -17,7 +17,7 @@
 
 import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import Database from "better-sqlite3";
+import Database from "./sqlite-adapter.js";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

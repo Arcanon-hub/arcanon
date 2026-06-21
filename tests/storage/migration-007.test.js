@@ -14,7 +14,7 @@ import os from "os";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import Database from "better-sqlite3";
+import Database from '../../plugins/arcanon/worker/db/sqlite-adapter.js';
 
 import * as migration001 from "../../worker/db/migrations/001_initial_schema.js";
 import * as migration002 from "../../worker/db/migrations/002_service_type.js";

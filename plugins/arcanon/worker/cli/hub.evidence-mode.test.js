@@ -50,7 +50,7 @@ async function seedFixtureDB({ projectRoot, arcDataDir }) {
   fs.mkdirSync(dir, { recursive: true });
   const dbPath = path.join(dir, "impact-map.db");
 
-  const Database = (await import("better-sqlite3")).default;
+  const Database = (await import("../db/sqlite-adapter.js")).default;
   const db = new Database(dbPath);
   db.pragma("foreign_keys = ON");
 

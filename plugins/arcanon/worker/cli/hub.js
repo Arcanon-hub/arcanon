@@ -25,7 +25,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import Database from "better-sqlite3";
+import Database from "../db/sqlite-adapter.js";
 
 import {
   syncFindings,
@@ -1601,7 +1601,7 @@ async function cmdDoctor(flags) {
 /**
  * cmdDiff — Compare two scan versions (plan 115-02).
  *
- * Read-only: opens the project DB via better-sqlite3 directly (no worker
+ * Read-only: opens the project DB via the sqlite adapter directly (no worker
  * round-trip — diff is a direct SQL read).
  *
  * Selectors accepted by both <scanA> and <scanB>:
@@ -1627,7 +1627,7 @@ async function cmdDiff(flags, positional) {
   // args needed) and reuses 's diffScanVersions(dbA, dbB, idA, idB)
   // engine — passing the live DB handle and the shadow DB handle as the two
   // sources. Engine is pool-agnostic and read-only (see scan-version-diff.js
-  // module docs), so opening fresh better-sqlite3 readonly handles is safe.
+  // module docs), so opening fresh readonly handles via the adapter is safe.
   if (flags.shadow) {
     return cmdDiffShadow(flags);
   }
@@ -1768,8 +1768,8 @@ async function cmdDiff(flags, positional) {
  * LATEST completed scan in the impact-map-shadow.db, reusing 's
  * `diffScanVersions(dbA, dbB, scanIdA, scanIdB)` engine.
  *
- * Engine reuse rationale: 115's engine takes two raw `better-sqlite3`
- * Database handles (NOT projectRoot strings, NOT pool keys) — see the
+ * Engine reuse rationale: 115's engine takes two raw Database
+ * handles (NOT projectRoot strings, NOT pool keys) — see the
  * load-bearing contract documented at scan-version-diff.js:8-31. We open
  * both DBs READ-ONLY here (the engine itself is read-only — test 15 in
  * scan-version-diff.test.js asserts this), so neither file is mutated.

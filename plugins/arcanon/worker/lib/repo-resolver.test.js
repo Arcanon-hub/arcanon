@@ -19,7 +19,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
+import Database from '../db/sqlite-adapter.js';
 
 import { resolveRepoIdentifier } from './repo-resolver.js';
 

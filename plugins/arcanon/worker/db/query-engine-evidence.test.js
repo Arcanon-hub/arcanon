@@ -15,7 +15,7 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import Database from "better-sqlite3";
+import Database from "./sqlite-adapter.js";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";

@@ -4,9 +4,9 @@ A five-minute walkthrough from a fresh clone to a scan synced to the hub.
 
 ## Prerequisites
 
-- **Node.js 20 or newer** and **npm** on your `PATH`. On first activation the plugin
-  installs its own runtime dependencies (including the native `better-sqlite3`
-  binding) into the plugin directory.
+- **Node.js 22.13 or newer** and **npm** on your `PATH`. On first activation the plugin
+  installs its own runtime dependencies (pure-JS — no native compilation required)
+  into the plugin directory.
 - **git** CLI (you already have it for working with repos).
 - **Windows:** install [Git for Windows](https://git-scm.com/downloads/win),
   which bundles **Git Bash** — the plugin's hooks and commands run under it.
