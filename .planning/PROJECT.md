@@ -222,11 +222,32 @@ Understand and protect your architecture across repositories — see how service
 
 ### Active
 
-(none — `/gsd-new-milestone` to start the next cycle)
+- v0.1.9 Shadow Trio Removal & Rescan Repair — see `.planning/REQUIREMENTS.md`
 
-## Current Milestone
+## Current Milestone: v0.1.9 Shadow Trio Removal & Rescan Repair
 
-(none — v0.1.5 archived 2026-04-30. Run `/gsd-new-milestone` to start the next cycle.)
+**Goal:** Remove the redundant shadow-scan workflow and repair the broken
+`/arcanon:rescan` command — shrinking maintenance surface and eliminating
+silent bit-rot in the scan command layer.
+
+**Target features:**
+- Remove the shadow trio — `/arcanon:shadow-scan`, `/arcanon:promote-shadow`,
+  and the `--shadow` mode of `/arcanon:diff` — including worker machinery
+  (`getShadowQueryEngine`, `cmdPromoteShadow` + handler, diff-engine shadow
+  paths) and their bats suites.
+- Fix `/arcanon:rescan` — repoint its inline `node` from the removed
+  `better-sqlite3` to the `node:sqlite` adapter.
+- Update user docs — README (root + plugin), CHANGELOG (BREAKING note),
+  `docs/commands.md`.
+- Close the root cause — add test coverage that exercises command inline-`node`
+  paths so future dependency migrations cannot silently break them.
+
+**Rationale:** The shadow trio duplicates capability already provided by
+`/arcanon:map`'s confirm gate (preview-before-persist) and `/arcanon:diff`'s
+scan-version comparison. It has been broken since the v0.1.8 `node:sqlite`
+migration (stale `better-sqlite3` import) with no user reports — evidence it
+is unused. Removing user-facing commands is a **breaking change** (pre-1.0,
+documented in CHANGELOG).
 
 ## Current State
 
