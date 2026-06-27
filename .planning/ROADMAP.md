@@ -1045,14 +1045,14 @@ Plans:
 
 ### Phase 132: Fix detectMismatches() false endpoint_not_exposed on parameterized routes — canonicalize {...}→{_} on both sides + skip non-HTTP protocols (#43)
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** detectMismatches() stops reporting false `endpoint_not_exposed` for parameterized routes (consumed `{_}` paths compared against exposed named-param paths) and skips non-HTTP protocols — by canonicalizing exposed + consumed paths through the existing `canonicalizePath()` on both sides (literal + base_path-stripped) and restricting the candidate set to `c.protocol IN ('rest','grpc')`, with no persist-layer or helper changes.
+**Requirements**: DM-01 (canonicalize exposed + consumed paths on both compare paths), DM-02 (restrict endpoint-exposure check to rest/grpc at both candidate sites), DM-03 (regression: genuine mismatches still flagged, existing tests + full worker/bats suites green)
 **Depends on:** Phase 131
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 132 to break down)
+- [ ] 132-01-PLAN.md — Canonicalize exposed+consumed paths (reuse canonicalizePath, preserve stripBasePath retry) + rest/grpc protocol allowlist in detectMismatches(); new node:test suite (param match, name drift, events skip, grpc checked, genuine mismatch, base_path+param) + full worker/bats regression gate
 
 ---
 
