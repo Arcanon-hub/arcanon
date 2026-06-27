@@ -1023,7 +1023,11 @@ Plans:
   4. All manifests (`plugins/arcanon/package.json`, `plugins/arcanon/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`) are pinned to `0.1.9` with the lockfile regenerated via npm.
   5. The release gate passes: bats + node suites green, zero shadow references remain (RM-06), and the `CHANGELOG [0.1.9]` section is pinned.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 130-01-PLAN.md — Test cleanup + TST-01 rescan-resolve regression + TST-02 reintroduction guard + TST-03 full-suite-green
+- [ ] 130-02-PLAN.md — VER-01 manifest bump to 0.1.9 + lockfile regen + VER-02 release gate
 
 ---
 
