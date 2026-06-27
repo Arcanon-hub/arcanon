@@ -27,8 +27,14 @@
 - ✅ **v0.1.5 Identity & Privacy** — Phases 123-127 (shipped 2026-04-30)
 - ✅ **v0.1.6 / v0.1.7 Resilient Dependency Install** — install-deps + MCP launcher hardening (shipped 2026-06-16, outside roadmap)
 - 🔄 **v0.1.8 Native SQLite Migration** — Phase 128 (verified 2026-06-20, pending merge of `phase-128-native-sqlite`)
+- 🔄 **v0.1.9 Shadow Trio Removal & Rescan Repair** — Phases 129-130 (planning, started 2026-06-27)
 
 ## Phases
+
+🔄 **v0.1.9 Shadow Trio Removal & Rescan Repair** (Phases 129-130) — IN PLANNING
+
+- [ ] **Phase 129: Shadow Trio Removal, Rescan Repair & Docs** — Delete the shadow trio (commands + worker machinery + shell dispatch) while preserving the shared scan-version diff engine, repoint `/arcanon:rescan` to `node:sqlite`, and scrub all user docs.
+- [ ] **Phase 130: Regression Tests & Release Gate** — Inline-`node` + reintroduction guard tests, full suite green with all removals applied, then pin manifests to 0.1.9 and close the release gate.
 
 <details>
 <summary>✅ v1.0 Plugin Foundation (Phases 1-13) — SHIPPED 2026-03-15</summary>
@@ -828,6 +834,38 @@ Plans:
 
 ---
 
+### Phase 129: Shadow Trio Removal, Rescan Repair & Docs
+**Milestone**: v0.1.9
+**Goal**: The shadow workflow is gone end-to-end — no commands, no worker machinery, no shell dispatch, no dangling references — while live scan-version diffing and the `/arcanon:correct` → `/arcanon:rescan` workflow keep working, and all user-facing docs reflect the reduced command set.
+**Depends on**: Phase 128 (the `node:sqlite` adapter FIX-01 repoints `/arcanon:rescan` onto)
+**Requirements**: RM-01, RM-02, RM-03, RM-04, RM-05, RM-06, FIX-01, DOC-01, DOC-02, DOC-03
+**Why now**: The shadow trio duplicates capability already provided by `/arcanon:map`'s confirm gate (preview-before-persist) and `/arcanon:diff`'s scan-version comparison. It has been broken since the v0.1.8 `node:sqlite` migration (stale `better-sqlite3` import) with no user reports — evidence it is unused. Removal must surgically delete ONLY the shadow branch of the shared diff engine: `diffScanVersions` / scan-version diffing (used by `/arcanon:diff <scanA> <scanB>`) is load-bearing and stays.
+**Success Criteria** (what must be TRUE):
+  1. `/arcanon:shadow-scan` and `/arcanon:promote-shadow` are absent from the command surface (`commands/shadow-scan.md` and `commands/promote-shadow.md` deleted), and `/arcanon:diff` no longer accepts or documents `--shadow` (`cmdDiff` no longer branches on `--shadow`).
+  2. `/arcanon:diff <scanA> <scanB>` still compares two scan versions correctly — the shared `diffScanVersions` / scan-version engine is preserved; only the live-vs-shadow resolution branch is removed.
+  3. `/arcanon:rescan <repo>` runs Step-1 end-to-end without `ERR_MODULE_NOT_FOUND` — its inline `node` imports `worker/db/sqlite-adapter.js` instead of the removed `better-sqlite3`, and resolves the target repo.
+  4. Worker + shell machinery is gone — `getShadowQueryEngine` (`worker/db/pool.js`), `cmdPromoteShadow` + the `"promote-shadow"` HANDLERS entry (`worker/cli/hub.js`), and `scripts/hub.sh`'s `promote-shadow` dispatch are all removed; searching plugin source, scripts, skills, and tests for `shadow-scan`, `promote-shadow`, `--shadow`, `impact-map-shadow.db`, and `getShadowQueryEngine` returns nothing (CSS `box-shadow` excluded).
+  5. Root + plugin READMEs, `docs/commands.md`, and a `CHANGELOG [0.1.9] ### BREAKING` block all reflect the removal, name the three removed commands, and document the migration path (`/arcanon:map` confirm gate to preview, `/arcanon:diff <scanA> <scanB>` to compare); the `/arcanon:correct` → `/arcanon:rescan` workflow remains documented and accurate.
+**Plans**: TBD
+
+---
+
+### Phase 130: Regression Tests & Release Gate
+**Milestone**: v0.1.9
+**Goal**: The codebase proves — via automated tests — that the removals are clean and cannot silently regress, then ships as a pinned, gate-passing 0.1.9 release.
+**Depends on**: Phase 129
+**Requirements**: TST-01, TST-02, TST-03, VER-01, VER-02
+**Why now**: TST-01 closes the root cause behind both the `deep.md` and `better-sqlite3` silent breakages — inline-`node` command blocks had no test coverage, so a dependency rename broke `/arcanon:rescan` with zero CI signal. The guard test (TST-02) prevents reintroduction of the removed commands. VER-01/02 are the release gate and naturally land last.
+**Success Criteria** (what must be TRUE):
+  1. A regression test executes the `/arcanon:rescan` Step-1 inline-`node` path against a fixture DB, so a future dependency rename fails CI instead of breaking silently.
+  2. A guard test fails if `commands/shadow-scan.md` or `commands/promote-shadow.md` reappear, or if `diff.md` mentions `--shadow` again.
+  3. The full bats suite and worker test suite pass with all removals applied — no orphaned tests, no broken assertions.
+  4. All manifests (`plugins/arcanon/package.json`, `plugins/arcanon/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json`) are pinned to `0.1.9` with the lockfile regenerated via npm.
+  5. The release gate passes: bats + node suites green, zero shadow references remain (RM-06), and the `CHANGELOG [0.1.9]` section is pinned.
+**Plans**: TBD
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -855,3 +893,4 @@ Plans:
 | 107-113 | v0.1.3 | 14/14 | Complete | 2026-04-25 |
 | 114-122 | v0.1.4 | 21/21 | Complete | 2026-04-27 |
 | 123-127 | v0.1.5 | 5/5 | Complete | 2026-04-30 |
+| 129-130 | v0.1.9 | 0/? | Planning | - |
