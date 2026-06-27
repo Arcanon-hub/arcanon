@@ -23,7 +23,7 @@
       "items": {
         "source": "string — name of calling service/library/infra",
         "target": "string — name of called service/library (can be external)",
-        "protocol": "rest | grpc | kafka | rabbitmq | internal | sdk | k8s | tf | helm",
+        "protocol": "rest | grpc | events | db | internal | sdk | k8s | tf | helm | import — canonical buckets (kafka/rabbitmq/nats/sqs/pubsub/sse -> events; postgres/mysql/mongodb/redis/sql -> db; graphql/http -> rest); unrecognized values are accepted and bucketed to 'other' (fallback, not reject)",
         "crossing": "external | sdk | internal",
         "method": "string — GET/POST/etc, produce, consume, import, call, deploy, configure",
         "path": "string — format depends on protocol (see prompt)",

@@ -139,21 +139,82 @@ test("validateFindings returns valid:false when schemas is not an array", () => 
 // validateFindings — connection validation
 // ---------------------------------------------------------------------------
 
-test("validateFindings returns valid:false for unknown protocol", () => {
+// #42 FALLBACK-NOT-REJECT: an unknown protocol must NOT fail the parse. The
+// connection is kept and a warning is recorded; canonicalization happens at
+// persist-time (query-engine), not here.
+test("validateFindings keeps unknown protocol (fallback, not reject) + warns", () => {
   const obj = minimalValid();
   obj.connections = [validConnection({ protocol: "websocket" })];
   const result = validateFindings(obj);
-  assert.equal(result.valid, false);
+  assert.equal(result.valid, true);
+  assert.equal(result.findings.connections.length, 1);
+  assert.equal(result.findings.connections[0].protocol, "websocket");
   assert.ok(
-    result.error.includes("connection[0].protocol must be one of:"),
-    `Expected protocol error, got: ${result.error}`,
+    result.warnings.some((w) => w.includes("protocol") && w.includes("websocket")),
+    `Expected a normalization warning, got: ${JSON.stringify(result.warnings)}`,
   );
-  assert.ok(result.error.includes("rest"));
-  assert.ok(result.error.includes("grpc"));
-  assert.ok(result.error.includes("kafka"));
-  assert.ok(result.error.includes("rabbitmq"));
-  assert.ok(result.error.includes("internal"));
-  assert.ok(result.error.includes("sdk"));
+});
+
+test("validateFindings keeps a nats connection (was rejected before #42)", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ protocol: "nats" })];
+  const result = validateFindings(obj);
+  assert.equal(result.valid, true);
+  assert.equal(result.findings.connections.length, 1);
+});
+
+test("validateFindings keeps a sql connection (was rejected before #42)", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ protocol: "sql" })];
+  const result = validateFindings(obj);
+  assert.equal(result.valid, true);
+  assert.equal(result.findings.connections.length, 1);
+});
+
+test("validateFindings keeps a totally-unknown protocol without throwing", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ protocol: "zzz-totally-unknown" })];
+  let result;
+  assert.doesNotThrow(() => {
+    result = validateFindings(obj);
+  });
+  assert.equal(result.valid, true);
+  assert.equal(result.findings.connections.length, 1);
+});
+
+// #42 LOW: a LITERAL canonical "other" token is intentional, not drift — it must
+// NOT trigger the "not a known protocol" warning. A genuinely unrecognized token
+// that merely FALLS BACK to "other" still warns. Both are kept (fallback-not-reject).
+test("validateFindings does NOT warn for a literal canonical 'other' protocol", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ protocol: "other" })];
+  const result = validateFindings(obj);
+  assert.equal(result.valid, true);
+  assert.equal(result.findings.connections.length, 1, "connection is kept");
+  assert.ok(
+    !result.warnings.some((w) => w.includes("not a known protocol")),
+    `literal 'other' must not warn as unknown, got: ${JSON.stringify(result.warnings)}`,
+  );
+});
+
+test("validateFindings STILL warns for an unrecognized token that falls back to 'other'", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ protocol: "zzz-bogus" })];
+  const result = validateFindings(obj);
+  assert.equal(result.valid, true);
+  assert.equal(result.findings.connections.length, 1, "connection is kept");
+  assert.ok(
+    result.warnings.some((w) => w.includes("zzz-bogus") && w.includes("not a known protocol")),
+    `unrecognized token must still warn, got: ${JSON.stringify(result.warnings)}`,
+  );
+});
+
+test("validateFindings still rejects a non-string protocol (structural error)", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ protocol: 42 })];
+  const result = validateFindings(obj);
+  assert.equal(result.valid, false);
+  assert.ok(result.error.includes("protocol"));
 });
 
 test("validateFindings returns valid:false for invalid connection confidence", () => {

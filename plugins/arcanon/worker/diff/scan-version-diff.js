@@ -59,9 +59,22 @@
  *   services fields: root_path, language, type, owner, auth_mechanism,
  *                    db_backend, boundary_entry, base_path
  *
- *   connections key:    (source_name, target_name, protocol, method, path)
- *   connections fields: source_file, target_file, crossing, confidence,
- *                       evidence, path_template
+ *   connections key:    (source_name, target_name, protocol_raw ?? protocol,
+ *                        method, path)
+ *   connections fields: protocol, source_file, target_file, crossing,
+ *                       confidence, evidence, path_template
+ *
+ *   The key's protocol component prefers `protocol_raw` (the agent's original
+ *   token, stable across the #42 canonicalization migration) and falls back to
+ *   `protocol` for pre-019 rows where protocol_raw is NULL. It is trim+lowercased
+ *   for IDENTITY STABILITY ONLY — "NATS", "nats", and " nats " key identically so
+ *   casing/whitespace variants of the same token don't churn the diff. The
+ *   displayed/projected protocol_raw value retains its original casing. This keeps
+ *   the diff churn-free across the migration: a pre-ship row stored as raw "kafka"
+ *   and a post-ship row stored as canonical "events" / protocol_raw "kafka"
+ *   produce the SAME key, so the edge is not falsely reported as removed+added.
+ *   The displayed/diffed `protocol` field is unchanged, so a genuine bucket change
+ *   still surfaces as a modification.
  *
  * The engine does NOT truncate `evidence` (or any other field). Truncation
  * for human display is the formatter's job . Test 17 verifies
@@ -84,6 +97,10 @@ const SERVICE_FIELDS = [
 ];
 
 const CONNECTION_FIELDS = [
+  // #42: protocol is now a DIFFED field (not part of the identity key, which
+  // keys on protocol_raw). A genuine canonical-bucket reassignment therefore
+  // surfaces as a modification rather than removed+added.
+  "protocol",
   "source_file",
   "target_file",
   "crossing",
@@ -126,26 +143,55 @@ export function loadServices(db, scanVersionId) {
  *   method + path + diff fields
  */
 export function loadConnections(db, scanVersionId) {
-  return db
-    .prepare(
-      `SELECT
-         src.name AS source_name,
-         tgt.name AS target_name,
-         c.protocol,
-         c.method,
-         c.path,
-         c.source_file,
-         c.target_file,
-         c.crossing,
-         c.confidence,
-         c.evidence,
-         c.path_template
-       FROM connections c
-       JOIN services src ON src.id = c.source_service_id
-       JOIN services tgt ON tgt.id = c.target_service_id
-       WHERE c.scan_version_id = ?`
-    )
-    .all(scanVersionId);
+  // #42: include c.protocol_raw so connectionKey can key on the stable original
+  // token across the canonicalization migration. Graceful for pre-019 DBs: if
+  // the column is absent the prepare throws, and we fall back to a SELECT that
+  // projects protocol_raw as NULL (connectionKey then keys on protocol).
+  try {
+    return db
+      .prepare(
+        `SELECT
+           src.name AS source_name,
+           tgt.name AS target_name,
+           c.protocol,
+           c.protocol_raw,
+           c.method,
+           c.path,
+           c.source_file,
+           c.target_file,
+           c.crossing,
+           c.confidence,
+           c.evidence,
+           c.path_template
+         FROM connections c
+         JOIN services src ON src.id = c.source_service_id
+         JOIN services tgt ON tgt.id = c.target_service_id
+         WHERE c.scan_version_id = ?`
+      )
+      .all(scanVersionId);
+  } catch {
+    return db
+      .prepare(
+        `SELECT
+           src.name AS source_name,
+           tgt.name AS target_name,
+           c.protocol,
+           NULL AS protocol_raw,
+           c.method,
+           c.path,
+           c.source_file,
+           c.target_file,
+           c.crossing,
+           c.confidence,
+           c.evidence,
+           c.path_template
+         FROM connections c
+         JOIN services src ON src.id = c.source_service_id
+         JOIN services tgt ON tgt.id = c.target_service_id
+         WHERE c.scan_version_id = ?`
+      )
+      .all(scanVersionId);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -157,10 +203,17 @@ function serviceKey(row) {
 }
 
 function connectionKey(row) {
+  // #42: prefer the stable raw token; fall back to protocol for pre-019 rows.
+  // Normalize the raw component for IDENTITY ONLY (trim + lowercase) so casing
+  // and surrounding whitespace variants of the SAME token (e.g. "NATS", "nats",
+  // " nats ") produce ONE key and don't churn the diff as removed+added. The
+  // displayed/projected protocol_raw value (loadConnections) stays verbatim — only
+  // this key component is normalized.
+  const rawComponent = String(row.protocol_raw ?? row.protocol ?? "").trim().toLowerCase();
   return JSON.stringify([
     row.source_name,
     row.target_name,
-    row.protocol,
+    rawComponent,
     row.method ?? "",
     row.path ?? "",
   ]);
