@@ -137,7 +137,7 @@ describe("#42 protocol canonicalization — persist + read", () => {
     db.close();
   });
 
-  it("persistFindings external nats edge reads back as events in actor connected_services", async () => {
+  it("persistFindings external NATS edge stores protocol=events + protocol_raw=NATS (HIGH-1 E2E)", async () => {
     const { db, qe, repoId } = await freshEngine();
     qe.persistFindings(repoId, {
       services: [
@@ -147,7 +147,7 @@ describe("#42 protocol canonicalization — persist + read", () => {
         {
           source: "api-server",
           target: "graph-reconciler",
-          protocol: "nats",
+          protocol: "NATS",
           method: "publish",
           path: "events.subject",
           crossing: "external",
@@ -160,21 +160,37 @@ describe("#42 protocol canonicalization — persist + read", () => {
       schemas: [],
     });
 
+    // The stored row carries the canonical bucket + the ORIGINAL casing.
+    const stored = db
+      .prepare(
+        "SELECT protocol, protocol_raw FROM actor_connections ac JOIN actors a ON a.id = ac.actor_id WHERE a.name = ?",
+      )
+      .get("graph-reconciler");
+    assert.equal(stored.protocol, "events", "stored actor protocol is the canonical bucket");
+    assert.equal(stored.protocol_raw, "NATS", "stored actor protocol_raw preserves original casing");
+
     const graph = qe.getGraph();
     const actor = graph.actors.find((a) => a.name === "graph-reconciler");
-    assert.ok(actor, "actor created for external nats target");
+    assert.ok(actor, "actor created for external NATS target");
     assert.ok(actor.connected_services.length >= 1, "actor has a connection");
     assert.equal(
       actor.connected_services[0].protocol,
       "events",
       "actor edge protocol stored + read as events",
     );
+    assert.equal(
+      actor.connected_services[0].protocol_raw,
+      "NATS",
+      "getGraph returns the ORIGINAL token NATS on the actor connected_service",
+    );
     db.close();
   });
 
-  it("WARNING 1: getGraph ACTOR read-time normalizes a directly-stored raw nats actor edge (no re-scan)", async () => {
+  it("WARNING 1: getGraph ACTOR read normalizes a legacy raw nats actor edge (protocol_raw NULL) and surfaces the raw", async () => {
     const { db, qe, repoId } = await freshEngine();
-    // Simulate pre-phase data: a stored actor_connections row with raw "nats".
+    // Simulate LEGACY pre-020 data: an actor_connections row stored with raw
+    // "nats" in protocol and NO protocol_raw (NULL). Read-time must canonicalize
+    // the bucket AND fall back to the stored raw protocol as the displayed raw.
     const svc = db
       .prepare("INSERT INTO services(repo_id,name,root_path,language) VALUES(?,?,?,?)")
       .run(repoId, "api-server", ".", "go").lastInsertRowid;
@@ -183,6 +199,7 @@ describe("#42 protocol canonicalization — persist + read", () => {
         "INSERT INTO actors(name,kind,direction,source) VALUES(?,'system','outbound','scan')",
       )
       .run("graph-reconciler").lastInsertRowid;
+    // protocol_raw left NULL (column exists post-020 but legacy rows have no value).
     db.prepare(
       "INSERT INTO actor_connections(actor_id,service_id,direction,protocol,path) VALUES(?,?,?,?,?)",
     ).run(actorId, svc, "outbound", "nats", "events.subject");
@@ -194,6 +211,16 @@ describe("#42 protocol canonicalization — persist + read", () => {
       actor.connected_services[0].protocol,
       "events",
       "stored raw nats actor edge reads back as events without a re-scan",
+    );
+    // Legacy fallback: protocol_raw is NULL → surface the stored raw protocol.
+    assert.ok(
+      actor.connected_services[0].protocol_raw,
+      "displayed raw token is non-empty for a legacy row",
+    );
+    assert.equal(
+      actor.connected_services[0].protocol_raw,
+      "nats",
+      "legacy row surfaces the stored raw protocol as the displayed raw token",
     );
     // Other fields preserved
     assert.equal(actor.connected_services[0].path, "events.subject");
