@@ -1917,7 +1917,11 @@ export class QueryEngine {
         FROM connections c
         JOIN services s_src ON c.source_service_id = s_src.id
         JOIN services s_tgt ON c.target_service_id = s_tgt.id
-        WHERE c.protocol NOT IN ('internal', 'sdk', 'import')
+        -- Endpoint exposure is an HTTP request/response concept. Post-#42 the
+        -- protocol column holds canonical buckets; only rest + grpc are
+        -- HTTP-style (graphql canonicalizes to rest). events/db/k8s/tf/helm/
+        -- internal/sdk/import are skipped — they have no exposed_endpoints (#43).
+        WHERE c.protocol IN ('rest', 'grpc')
           AND c.path IS NOT NULL
           AND EXISTS (
             SELECT 1 FROM exposed_endpoints ep
@@ -1938,7 +1942,9 @@ export class QueryEngine {
         FROM connections c
         JOIN services s_src ON c.source_service_id = s_src.id
         JOIN services s_tgt ON c.target_service_id = s_tgt.id
-        WHERE c.protocol NOT IN ('internal', 'sdk', 'import')
+        -- Endpoint exposure is HTTP-only; restrict to canonical HTTP-style
+        -- buckets rest + grpc (graphql→rest per #42). See #43.
+        WHERE c.protocol IN ('rest', 'grpc')
           AND c.path IS NOT NULL
           AND EXISTS (
             SELECT 1 FROM exposed_endpoints ep
@@ -1956,16 +1962,23 @@ export class QueryEngine {
 
     const mismatches = [];
     for (const c of rows) {
+      // Canonicalize the exposed side: exposed_endpoints.path is stored with
+      // NAMED params verbatim ({org_id}) while connections.path is stored
+      // {_}-blanked by the persist layer. Collapse both to {_} so parameterized
+      // routes compare equal — and so caller/callee param-name drift
+      // ({orgId} vs {org_id}) is tolerated (#43).
       const exposedPaths = new Set(
-        exposedStmt.all(c.target_id).map((r) => r.path),
+        exposedStmt.all(c.target_id).map((r) => canonicalizePath(r.path)),
       );
       // Try literal match first — preserves correctness when base_path is
       // absent  and when the agent emitted the literal prefixed path
-      // in `exposes` (Test 8).
-      if (exposedPaths.has(c.path)) continue;
+      // in `exposes` (Test 8). canonicalizePath(c.path) is idempotent
+      // (c.path is already blanked) but applied defensively.
+      if (exposedPaths.has(canonicalizePath(c.path))) continue;
       // Try stripped match if target has base_path (: gated on target).
       const stripped = stripBasePath(c.path, c.target_base_path);
-      if (stripped !== null && exposedPaths.has(stripped)) continue;
+      if (stripped !== null && exposedPaths.has(canonicalizePath(stripped)))
+        continue;
       // Neither match — real mismatch.
       mismatches.push({
         connection_id: c.id,
