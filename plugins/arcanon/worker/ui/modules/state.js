@@ -2,6 +2,23 @@
  * Shared graph state — single source of truth for all UI modules.
  */
 
+import { CANONICAL_PROTOCOLS } from "./protocol.js";
+
+/**
+ * The protocol render buckets the UI draws + toggles by default. Derived from
+ * the shared CANONICAL_PROTOCOLS source of truth (NOT a hand-written literal —
+ * that independent divergence was the original #42 bug) by intersecting against
+ * the rendered-bucket list. The infra-only buckets (k8s/tf/helm/import) are
+ * excluded from the DEFAULT-on protocol checkboxes here; db and other MUST be
+ * default-on so datastore edges get their own filter and unknown protocols are
+ * rendered (greyed) rather than silently dropped.
+ *
+ * @type {string[]}
+ */
+const RENDER_BUCKETS = ["rest", "grpc", "events", "db", "internal", "sdk", "other"].filter(
+  (b) => CANONICAL_PROTOCOLS.has(b),
+);
+
 export const state = {
   graphData: { nodes: [], edges: [], mismatches: [], actors: [] },
   positions: {},
@@ -12,7 +29,7 @@ export const state = {
   blastCache: {},
   isolatedNodeId: null,   // number|null — ID of node in isolation mode, or null when off
   isolationDepth: 1,      // number — hop depth (1, 2, or 3)
-  activeProtocols: new Set(["rest", "grpc", "events", "internal", "sdk"]),
+  activeProtocols: new Set(RENDER_BUCKETS),
   activeLayers: new Set(["services", "libraries", "infra", "external"]),
   mismatchesOnly: false,
   hideIsolated: false,
@@ -74,6 +91,10 @@ const DEFAULTS = {
   protocol: {
     rest: "#4299e1", grpc: "#68d391", events: "#9f7aea",
     internal: "#4a5568", sdk: "#d69e2e", import: "#d69e2e",
+    // db: datastore dependencies get a distinct teal/cyan (not events/amber,
+    // not grpc/green). other: muted grey matching the default edge so the
+    // catch-all reads as "rendered but unclassified".
+    db: "#38b2ac", other: "#718096",
   },
   nodeType: {
     library: "#9f7aea", sdk: "#9f7aea", frontend: "#f6ad55",
@@ -141,6 +162,8 @@ export function refreshColors() {
   PROTOCOL_COLORS.rest     = readCssVar("--color-edge-rest",    DEFAULTS.protocol.rest);
   PROTOCOL_COLORS.grpc     = readCssVar("--color-edge-grpc",    DEFAULTS.protocol.grpc);
   PROTOCOL_COLORS.events   = readCssVar("--color-edge-events",  DEFAULTS.protocol.events);
+  PROTOCOL_COLORS.db       = readCssVar("--color-edge-db",      DEFAULTS.protocol.db);
+  PROTOCOL_COLORS.other    = readCssVar("--color-edge-other",   DEFAULTS.protocol.other);
   PROTOCOL_COLORS.internal = readCssVar("--color-edge-default", DEFAULTS.protocol.internal);
 
   NODE_TYPE_COLORS.library  = readCssVar("--color-node-library",  DEFAULTS.nodeType.library);
@@ -158,7 +181,7 @@ export function refreshColors() {
   NODE_TINT_COLORS.frontend = readCssVar("--color-node-tint-frontend", DEFAULTS.nodeTint.frontend);
 }
 
-export const BUNDLE_SEVERITY = ["rest", "grpc", "events", "internal", "sdk", "import"];
+export const BUNDLE_SEVERITY = ["rest", "grpc", "events", "db", "internal", "sdk", "import", "other"];
 
 /**
  * Line dash patterns per protocol.
@@ -173,7 +196,9 @@ export const PROTOCOL_LINE_DASH = {
   rest:     [],
   grpc:     [],
   events:   [],
+  db:       [],
   internal: [],
   sdk:      [],
   import:   [],
+  other:    [],
 };

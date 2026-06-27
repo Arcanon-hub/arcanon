@@ -65,6 +65,48 @@ check(
   "blastCache: {}"
 );
 
+// ── Check 5: activeProtocols seeded from the shared canonical set ──────────
+// (#42 protocol-vocabulary fix — state must import CANONICAL_PROTOCOLS rather
+// than redefine its own bucket literal.)
+
+check(
+  src.includes('import { CANONICAL_PROTOCOLS } from "./protocol.js"'),
+  "state.js imports CANONICAL_PROTOCOLS from the shared protocol module",
+  'import { CANONICAL_PROTOCOLS } from "./protocol.js"'
+);
+
+check(
+  !/activeProtocols: new Set\(\["rest"/.test(src),
+  "activeProtocols is NOT a hardcoded literal bucket list",
+  "no hand-written activeProtocols literal"
+);
+
+// ── Check 6: db + other are default-on render buckets (behavioral) ─────────
+
+const mod = await import("./state.js");
+
+for (const bucket of ["rest", "grpc", "events", "db", "internal", "sdk", "other"]) {
+  check(
+    mod.state.activeProtocols.has(bucket),
+    `default activeProtocols includes "${bucket}"`,
+    `activeProtocols.has("${bucket}")`
+  );
+}
+
+// ── Check 7: PROTOCOL_COLORS has db + other entries ───────────────────────
+
+check(
+  typeof mod.PROTOCOL_COLORS.db === "string" && mod.PROTOCOL_COLORS.db.length > 0,
+  "PROTOCOL_COLORS.db is defined",
+  "PROTOCOL_COLORS.db"
+);
+
+check(
+  typeof mod.PROTOCOL_COLORS.other === "string" && mod.PROTOCOL_COLORS.other.length > 0,
+  "PROTOCOL_COLORS.other is defined",
+  "PROTOCOL_COLORS.other"
+);
+
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);

@@ -60,6 +60,10 @@
   --color-edge-rest:     #3b82f6;
   --color-edge-grpc:     #10b981;
   --color-edge-events:   #f59e0b;
+  /* db: datastore edges — distinct teal, NOT the events amber or grpc green. */
+  --color-edge-db:       #0d9488;
+  /* other: greyed catch-all for unrecognized protocols — rendered, never dropped. */
+  --color-edge-other:    #a1a1aa;
   --color-edge-default:  #8c8c8c;
   --color-edge-mismatch: #dc2626;
   --color-edge-change:   #f6e05e;
@@ -103,6 +107,10 @@
 
   --color-edge-default:  #4a5363;
   --color-edge-change:   #d6b336;
+  /* db: brighter teal so it reads against the darker canvas. */
+  --color-edge-db:       #2dd4bf;
+  /* other: muted grey, clearly greyed against dark surfaces. */
+  --color-edge-other:    #71717a;
 }
 
 /* Spacing, radius, shadow, typography, motion — shared across themes. */
