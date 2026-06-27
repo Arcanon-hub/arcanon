@@ -51,10 +51,16 @@ At minimum, list `"functionName"` if types are not visible.
 
 If the library calls external services internally, report those connections:
 
+**Canonical protocol vocabulary:** emit one of `rest · grpc · events · db · internal · sdk`.
+Pub/sub + streaming (kafka, rabbitmq, nats, sqs, sse) fold into `events`;
+datastores (postgres, mysql, mongodb, redis, sql) fold into `db`; graphql/http
+fold into `rest`. Name the specific technology in `evidence` if useful.
+
 | Protocol | Path format | Example |
 |----------|-------------|---------|
-| `rest` | `"/events/{id}"` | Template endpoint path |
-| `kafka` | `"events.published"` | Topic name |
+| `rest` | `"/events/{id}"` | Template endpoint path (graphql/http fold here) |
+| `events` | `"events.published"` | Topic name (kafka/rabbitmq/nats/sqs/sse) |
+| `db` | `"orders"` | Datastore dependency — table/collection/key namespace |
 
 ## source_file Requirement
 

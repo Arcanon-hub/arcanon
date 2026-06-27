@@ -72,11 +72,20 @@ If your service is exposed under a URL prefix that the reverse proxy, ingress, o
 
 ## Connection Path Format
 
+**Canonical protocol vocabulary:** emit one of `rest · grpc · events · db · internal · sdk`.
+Fold specific technologies into their canonical bucket: pub/sub + streaming
+(kafka, rabbitmq, nats, sqs, sse) → `events`; datastores (postgres, mysql,
+mongodb, redis, sql) → `db`; graphql and plain http → `rest`. You may still
+name the specific technology in `evidence` — the bucket is the render category,
+not the only place the technology is recorded. Anything unrecognized is kept and
+rendered under an "other" bucket (never dropped), so prefer a canonical token.
+
 | Protocol | Path format | Example |
 |----------|-------------|---------|
-| `rest` | `"/users/{id}"` | Template endpoint path |
+| `rest` | `"/users/{id}"` | Template endpoint path (graphql/http fold here) |
 | `grpc` | `"UserService/GetUser"` | Service/method |
-| `kafka`, `rabbitmq` | `"order.created"` | Topic name |
+| `events` | `"order.created"` | Topic name (kafka/rabbitmq/nats/sqs/sse) |
+| `db` | `"orders"` / `"users:byId"` | Datastore dependency — table/collection/key namespace (postgres/mysql/mongodb/redis/sql) |
 | `sdk` | `"createClient,publishEvent"` | **Specific function names called** |
 | `internal` | `"utils/auth:validateToken"` | Module:function |
 

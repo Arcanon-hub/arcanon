@@ -20,6 +20,8 @@ Read ONLY these files (do not scan source code yet):
 5. **Route/API files** — files named `routes.*`, `api.*`, `endpoints.*`, `handlers.*`, `controllers/*`
 6. **Proto/OpenAPI files** — `*.proto`, `openapi.yaml`, `swagger.json`
 7. **Event config** — files referencing kafka, rabbitmq, sqs, nats topics
+   (all emitted under the canonical `events` bucket; datastore dependencies —
+   postgres/mysql/mongodb/redis/sql — are emitted under the `db` bucket)
 8. **Client/HTTP files** — files whose names match `*client*`, `*api*`, `*http*` (case-insensitive),
    OR any file that imports `fetch`, `requests`, `reqwest`, or `httpx`. List these in `client_files`
    (per DISC-02). Do NOT read source files line-by-line; only check filenames for the name patterns,
