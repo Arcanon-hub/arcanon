@@ -1032,14 +1032,15 @@ Plans:
 
 ### Phase 131: Fix protocol vocabulary mismatch — render all edge protocols (pub/sub, DB, GraphQL, SSE) via canonical buckets with fallback-not-reject (#42)
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** ONE canonical protocol vocabulary (rest · grpc · events · db · internal · sdk) shared across scan → persist → getGraph → UI, with fallback-not-reject so pub/sub, database, GraphQL, SSE, and unknown protocols all render as toggleable edges (unknown greyed under "other", never dropped).
+**Requirements**: PV-01..PV-10 (local IDs — issue #42 ad-hoc phase, no REQUIREMENTS.md REQ-IDs)
 **Depends on:** Phase 130
-**Plans:** 0 plans
+**Plans:** 2 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 131 to break down)
+- [ ] 131-01-PLAN.md — Shared canonical-protocol module (single source of truth) + findings.js fallback-not-reject + schema enum + persist-time/read-time normalization + protocol_raw migration 019 + worker tests
+- [ ] 131-02-PLAN.md — UI alignment (activeProtocols seeded from shared set, db + other buckets/colors/checkboxes, edge normalization seam, protocol_raw in detail panel) + agent-prompt canonical vocabulary + consistency/drift test + human-verify
 
 ---
 
