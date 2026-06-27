@@ -23,6 +23,7 @@ import crypto from "crypto";
 
 import { chromaSearch, isChromaAvailable } from "../server/chroma.js";
 import { resolveConfigPath } from "../lib/config-path.js";
+import { canonicalProtocol } from "../ui/modules/protocol.js";
 
 // ---------------------------------------------------------------------------
 // LRU prepared statement cache 
@@ -453,10 +454,21 @@ export class QueryEngine {
       }
     }
 
-    // Try with path_template column (migration 013). Falls back
-    // through migration-009 (confidence+evidence), migration-008 (crossing),
-    // then pre-008 plain columns for legacy DBs.
+    // Try with protocol_raw column (migration 019) AND path_template (013).
+    // Falls back through path_template-only, then migration-009
+    // (confidence+evidence), migration-008 (crossing), then pre-008 plain
+    // columns for legacy DBs. protocol_raw preserves the agent's original token
+    // while protocol holds the canonical bucket (#42).
     this._hasPathTemplate = false;
+    this._hasProtocolRaw = false;
+    try {
+      this._stmtUpsertConnection = db.prepare(`
+        INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, protocol_raw, method, path, path_template, source_file, target_file, scan_version_id, crossing, confidence, evidence)
+        VALUES (@source_service_id, @target_service_id, @protocol, @protocol_raw, @method, @path, @path_template, @source_file, @target_file, @scan_version_id, @crossing, @confidence, @evidence)
+      `);
+      this._hasPathTemplate = true;
+      this._hasProtocolRaw = true;
+    } catch {
     try {
       this._stmtUpsertConnection = db.prepare(`
         INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, method, path, path_template, source_file, target_file, scan_version_id, crossing, confidence, evidence)
@@ -485,6 +497,7 @@ export class QueryEngine {
           `);
         }
       }
+    }
     }
 
     this._stmtBeginScan = db.prepare(
@@ -919,8 +932,9 @@ export class QueryEngine {
   }
 
   /**
-   * Inserts or replaces a connection row.
-   * @param {{ source_service_id: number, target_service_id: number, protocol: string, method?: string, path?: string, source_file?: string, target_file?: string }} connData
+   * Inserts or replaces a connection row. `protocol` is the canonical bucket;
+   * `protocol_raw` (migration 019) preserves the agent's original token.
+   * @param {{ source_service_id: number, target_service_id: number, protocol: string, protocol_raw?: string|null, method?: string, path?: string, source_file?: string, target_file?: string }} connData
    * @returns {number} Row id
    */
   upsertConnection(connData) {
@@ -934,11 +948,14 @@ export class QueryEngine {
       confidence: null,
       evidence: null,
       path_template: null,
+      protocol_raw: null,
       ...connData,
     });
-    // If the prepared statement does NOT include path_template (pre-migration-013),
-    // strip the key so better-sqlite3 doesn't complain about an extra named param.
+    // If the prepared statement does NOT include path_template (pre-migration-013)
+    // or protocol_raw (pre-migration-019), strip the key so the node:sqlite
+    // adapter doesn't reject an extra named param.
     if (!this._hasPathTemplate) delete sanitized.path_template;
+    if (!this._hasProtocolRaw) delete sanitized.protocol_raw;
     const result = this._stmtUpsertConnection.run(sanitized);
     return result.lastInsertRowid;
   }
@@ -1622,12 +1639,18 @@ export class QueryEngine {
       }
     }
 
+    // #42 read-time normalization: SELECT protocol_raw alongside protocol, and
+    // canonicalize protocol on the way out so ALREADY-STORED raw rows (e.g. a
+    // pre-phase "kafka" row the UI never showed) render under their canonical
+    // bucket WITHOUT a re-scan. Graceful-degradation ladder: try with
+    // protocol_raw (migration 019) + confidence/evidence (009), fall back to
+    // confidence/evidence only, then to neither.
     let connections;
     try {
       connections = this._db
         .prepare(
           `
-        SELECT c.id, c.protocol, c.method, c.path, c.source_file, c.target_file,
+        SELECT c.id, c.protocol, c.protocol_raw, c.method, c.path, c.source_file, c.target_file,
                s_src.name as source, s_tgt.name as target, c.scan_version_id,
                c.confidence, c.evidence
         FROM connections c
@@ -1637,19 +1660,39 @@ export class QueryEngine {
         )
         .all();
     } catch {
-      // confidence/evidence columns not yet present (migration 009 not applied)
-      connections = this._db
-        .prepare(
-          `
-        SELECT c.id, c.protocol, c.method, c.path, c.source_file, c.target_file,
-               s_src.name as source, s_tgt.name as target, c.scan_version_id,
-               null as confidence, null as evidence
-        FROM connections c
-        JOIN services s_src ON c.source_service_id = s_src.id
-        JOIN services s_tgt ON c.target_service_id = s_tgt.id
-      `,
-        )
-        .all();
+      try {
+        // protocol_raw not present (pre-migration-019) — confidence/evidence ok
+        connections = this._db
+          .prepare(
+            `
+          SELECT c.id, c.protocol, null as protocol_raw, c.method, c.path, c.source_file, c.target_file,
+                 s_src.name as source, s_tgt.name as target, c.scan_version_id,
+                 c.confidence, c.evidence
+          FROM connections c
+          JOIN services s_src ON c.source_service_id = s_src.id
+          JOIN services s_tgt ON c.target_service_id = s_tgt.id
+        `,
+          )
+          .all();
+      } catch {
+        // confidence/evidence columns not yet present (migration 009 not applied)
+        connections = this._db
+          .prepare(
+            `
+          SELECT c.id, c.protocol, null as protocol_raw, c.method, c.path, c.source_file, c.target_file,
+                 s_src.name as source, s_tgt.name as target, c.scan_version_id,
+                 null as confidence, null as evidence
+          FROM connections c
+          JOIN services s_src ON c.source_service_id = s_src.id
+          JOIN services s_tgt ON c.target_service_id = s_tgt.id
+        `,
+          )
+          .all();
+      }
+    }
+    // Read-time canonicalization (preserves protocol_raw verbatim).
+    for (const row of connections) {
+      row.protocol = canonicalProtocol(row.protocol);
     }
 
     const repos = this._db
@@ -1694,9 +1737,17 @@ export class QueryEngine {
         WHERE ac.actor_id = ?
       `);
 
+      // #42 WARNING 1: normalize each actor connection's protocol at read-time.
+      // This is a SEPARATE seam from the connections-array normalization above —
+      // the NATS api-server <-> graph-reconciler edges live as actor edges, so a
+      // stored raw "nats" actor edge must read back as "events" with NO re-scan.
+      // protocol is the only field rewritten; path/direction/service_* preserved.
       actors = actorRows.map((a) => ({
         ...a,
-        connected_services: actorConnStmt.all(a.id),
+        connected_services: actorConnStmt.all(a.id).map((row) => ({
+          ...row,
+          protocol: canonicalProtocol(row.protocol),
+        })),
       }));
     } catch {
       // actors table doesn't exist yet (migration 008 not applied)
@@ -1930,10 +1981,12 @@ export class QueryEngine {
       // actor_connection instead of dropping the edge entirely. This is the
       // primary path for crossing='external' findings. (#9)
       if (!targetId && conn.crossing === "external") {
+        // #42: the actor-edge writer stores the CANONICAL bucket so already
+        // pub/sub actor edges (e.g. raw "nats") render under the events bucket.
         this._upsertActorEdge({
           actorName: conn.target,
           sourceId,
-          protocol: conn.protocol,
+          protocol: canonicalProtocol(conn.protocol),
           path: conn.path,
         });
         continue;
@@ -1976,7 +2029,14 @@ export class QueryEngine {
       // canonicalize path ({xxx} -> {_}) and merge path_template.
       // Reading the existing path_template BEFORE the INSERT OR REPLACE prevents
       // clobbering on re-scan (the REPLACE deletes-then-inserts).
-      const protocol = conn.protocol || "unknown";
+      // #42: store the canonical bucket in connections.protocol and preserve the
+      // agent's original token in connections.protocol_raw. rawToken is null when
+      // the agent omitted the protocol entirely (canonical falls back to "other").
+      const rawToken =
+        typeof conn.protocol === "string" && conn.protocol !== ""
+          ? conn.protocol
+          : null;
+      const protocol = canonicalProtocol(conn.protocol);
       const method = conn.method || null;
       const rawPath = conn.path || null;
       const canonicalPath = canonicalizePath(rawPath);
@@ -1993,6 +2053,7 @@ export class QueryEngine {
         source_service_id: sourceId,
         target_service_id: targetId,
         protocol,
+        protocol_raw: rawToken,
         method,
         path: canonicalPath,
         path_template: mergedTemplate,
@@ -2117,8 +2178,9 @@ export class QueryEngine {
     this._stmtUpsertActorConnection.run({
       actor_id: actorRow.id,
       service_id: sourceId,
-      direction: "outbound",
-      protocol: protocol || null,
+      // #42 belt-and-suspenders: the caller already passes the canonical bucket,
+      // but normalize here too so any other call site stores canonical as well.
+      protocol: protocol ? canonicalProtocol(protocol) : null,
       path: path || null,
     });
   }
