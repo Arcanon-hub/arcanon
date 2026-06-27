@@ -6,6 +6,7 @@
  */
 
 import { state, refreshColors } from "./modules/state.js";
+import { canonicalProtocol } from "./modules/protocol.js";
 import { render } from "./modules/renderer.js";
 import { computeLayout } from "./modules/layout.js";
 import { setupInteractions, teardownInteractions, setupControls } from "./modules/interactions.js";
@@ -136,7 +137,11 @@ export async function loadProject(hash, canvas) {
     id: c.id,
     source_service_id: c.source_service_id ?? serviceNameToId[c.source],
     target_service_id: c.target_service_id ?? serviceNameToId[c.target],
-    protocol: c.protocol || "internal",
+    // Normalize to a canonical bucket at the UI seam so a stored raw "kafka"
+    // edge renders under "events" even on a stale client cache (#42). Plan 01
+    // normalizes the read; this is defense-in-depth + the protocol_raw carry.
+    protocol: canonicalProtocol(c.protocol || "internal"),
+    protocol_raw: c.protocol_raw ?? null,
     method: c.method,
     path: c.path,
     source_file: c.source_file,
@@ -190,7 +195,13 @@ export async function loadProject(hash, canvas) {
       state.graphData.edges.push({
         source_service_id: cs.service_id,
         target_service_id: syntheticId,
-        protocol: cs.protocol || 'rest',
+        // WARNING 1 (UI seam): the #42 headline repro (NATS api-server <->
+        // graph-reconciler) is an ACTOR/external edge. activeProtocols now
+        // holds canonical buckets only, so a raw nats/kafka actor edge here is
+        // dropped by renderer's activeProtocols.has(edge.protocol) skip unless
+        // wrapped. Route through canonicalProtocol so it renders under events.
+        protocol: canonicalProtocol(cs.protocol || 'rest'),
+        protocol_raw: cs.protocol_raw ?? null,
         method: null,
         path: cs.path,
         _isActorEdge: true,

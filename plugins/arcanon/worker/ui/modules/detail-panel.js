@@ -11,6 +11,25 @@ function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/**
+ * Render the original agent protocol token (protocol_raw — e.g. "NATS",
+ * "PostgreSQL") as a small escaped badge so the user sees the specific
+ * technology even though the edge buckets to its canonical color (#42).
+ * Shown only when protocol_raw is present AND differs from the canonical
+ * protocol (case-insensitive), so e.g. a plain "rest" edge gets no badge.
+ * MUST go through escapeHtml — protocol_raw originates from agent output
+ * (T-131-04).
+ *
+ * @param {object} e - A connection/edge object that may carry protocol_raw.
+ * @returns {string} HTML badge string, or "" when not applicable.
+ */
+function protocolRawBadge(e) {
+  if (!e || !e.protocol_raw) return '';
+  const canon = (e.protocol || '').toLowerCase();
+  if (String(e.protocol_raw).toLowerCase() === canon) return '';
+  return ` <span class="conn-proto-raw" style="color:var(--color-text-muted);font-size:0.85em" title="Original protocol token">${escapeHtml(e.protocol_raw)}</span>`;
+}
+
 function selectAndPanToNode(nodeId) {
   const pos = state.positions[nodeId];
   if (!pos) return;
@@ -260,7 +279,7 @@ function renderInfraConnections(node, outgoing, nameById) {
     for (const e of outgoing) {
       const target = nameById[e.target_service_id] || "?";
       html += `<div class="connection-item">
-        <div><span class="conn-method">${escapeHtml(e.method || e.protocol || '')}</span> <span class="conn-path">${escapeHtml(e.path || '')}</span></div>
+        <div><span class="conn-method">${escapeHtml(e.method || e.protocol || '')}</span>${protocolRawBadge(e)} <span class="conn-path">${escapeHtml(e.path || '')}</span></div>
         <div class="conn-direction">→ <span class="conn-target" style="cursor:pointer" data-node-id="${e.target_service_id}">${escapeHtml(target)}</span></div>
         ${e.source_file ? `<div class="conn-file">${escapeHtml(e.source_file)}</div>` : ""}
       </div>`;
@@ -287,7 +306,7 @@ function renderServiceConnections(outgoing, incoming, nameById) {
         : 'var(--color-text-muted)';
       const confidenceBadge = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${confidenceColor};margin-left:4px" title="Confidence: ${escapeHtml(e.confidence || 'unknown')}"></span>`;
       html += `<div class="connection-item" ${e.mismatch ? 'style="border-left:2px solid var(--color-error)"' : ""}>
-        <div><span class="conn-method">${escapeHtml(e.method || e.protocol)}</span> <span class="conn-path">${escapeHtml(e.path || "")}</span>${mismatchFlag}${confidenceBadge}</div>
+        <div><span class="conn-method">${escapeHtml(e.method || e.protocol)}</span>${protocolRawBadge(e)} <span class="conn-path">${escapeHtml(e.path || "")}</span>${mismatchFlag}${confidenceBadge}</div>
         <div class="conn-direction">→ <span class="conn-target" style="cursor:pointer" data-node-id="${e.target_service_id}">${escapeHtml(target)}</span></div>
         ${e.source_file ? `<div class="conn-file">${escapeHtml(e.source_file)}</div>` : ""}
         ${e.mismatch ? '<div class="conn-file" style="color:var(--color-error)">⚠ Endpoint handler not found in target</div>' : ""}
@@ -310,7 +329,7 @@ function renderServiceConnections(outgoing, incoming, nameById) {
         : 'var(--color-text-muted)';
       const confidenceBadge = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${confidenceColor};margin-left:4px" title="Confidence: ${escapeHtml(e.confidence || 'unknown')}"></span>`;
       html += `<div class="connection-item" ${e.mismatch ? 'style="border-left:2px solid var(--color-error)"' : ""}>
-        <div><span class="conn-method">${escapeHtml(e.method || e.protocol)}</span> <span class="conn-path">${escapeHtml(e.path || "")}</span>${mismatchFlag}${confidenceBadge}</div>
+        <div><span class="conn-method">${escapeHtml(e.method || e.protocol)}</span>${protocolRawBadge(e)} <span class="conn-path">${escapeHtml(e.path || "")}</span>${mismatchFlag}${confidenceBadge}</div>
         <div class="conn-direction">← <span class="conn-target" style="cursor:pointer" data-node-id="${e.source_service_id}">${escapeHtml(source)}</span></div>
         ${e.target_file ? `<div class="conn-file">${escapeHtml(e.target_file)}</div>` : ""}
         ${e.mismatch ? '<div class="conn-file" style="color:var(--color-error)">⚠ Endpoint handler not found in target</div>' : ""}
@@ -354,7 +373,7 @@ function renderActorDetail(node) {
     for (const cs of services) {
       const nodeIdAttr = cs.service_id != null ? ` data-node-id="${cs.service_id}"` : '';
       html += `<div class="connection-item">
-        <div><span class="conn-method">${escapeHtml(cs.protocol || '')}</span> <span class="conn-path">${escapeHtml(cs.path || '')}</span></div>
+        <div><span class="conn-method">${escapeHtml(cs.protocol || '')}</span>${protocolRawBadge(cs)} <span class="conn-path">${escapeHtml(cs.path || '')}</span></div>
         <div class="conn-direction">&larr; <span class="conn-target" style="cursor:pointer"${nodeIdAttr}>${escapeHtml(cs.service_name)}</span></div>
       </div>`;
     }
@@ -387,7 +406,7 @@ export function showBundlePanel(bundle) {
       ? ' <span style="color:var(--color-error);font-weight:bold" title="Endpoint not verified in target">✗</span>'
       : "";
     html += `<div class="connection-item"${e.mismatch ? ' style="border-left:2px solid var(--color-error)"' : ""}>
-      <div><span class="conn-method">${escapeHtml(e.method || e.protocol)}</span> <span class="conn-path">${escapeHtml(e.path || "")}</span>${mismatchFlag}</div>
+      <div><span class="conn-method">${escapeHtml(e.method || e.protocol)}</span>${protocolRawBadge(e)} <span class="conn-path">${escapeHtml(e.path || "")}</span>${mismatchFlag}</div>
       ${e.source_file ? `<div class="conn-file">${escapeHtml(e.source_file)}</div>` : ""}
       ${e.mismatch ? '<div class="conn-file" style="color:var(--color-error)">⚠ Endpoint handler not found in target</div>' : ""}
     </div>`;
