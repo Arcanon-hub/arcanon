@@ -1052,7 +1052,7 @@ Plans:
 
 Plans:
 
-- [ ] 132-01-PLAN.md — Canonicalize exposed+consumed paths (reuse canonicalizePath, preserve stripBasePath retry) + rest/grpc protocol allowlist in detectMismatches(); new node:test suite (param match, name drift, events skip, grpc checked, genuine mismatch, base_path+param) + full worker/bats regression gate
+- [x] 132-01-PLAN.md — Canonicalize exposed+consumed paths (reuse canonicalizePath, preserve stripBasePath retry) + rest/grpc protocol allowlist in detectMismatches(); new node:test suite (param match, name drift, events skip, grpc checked, genuine mismatch, base_path+param) + full worker/bats regression gate
 
 ---
 
@@ -1084,3 +1084,4 @@ Plans:
 | 114-122 | v0.1.4 | 21/21 | Complete | 2026-04-27 |
 | 123-127 | v0.1.5 | 5/5 | Complete | 2026-04-30 |
 | 129-130 | v0.1.9 | 0/? | Planning | - |
+| 131-132 | v0.1.9 fixes | 4/4 | 132 complete; 131-02 human-verify pending | - |
