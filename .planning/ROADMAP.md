@@ -1043,6 +1043,17 @@ Plans:
 - [x] 131-02-PLAN.md — UI alignment (activeProtocols seeded from shared set, db + other buckets/colors/checkboxes, edge normalization seam, protocol_raw in detail panel) + agent-prompt canonical vocabulary + consistency/drift test + human-verify
 - [x] 131-03-PLAN.md — Cross-AI review gap-closure: actor-edge protocol_raw end-to-end (migration 020 + writer/read/detail) + k8s/tf/helm/import renderable (no silent drop) + full-CANONICAL_PROTOCOLS drift test + checkbox-coverage + diff casing + explicit-other warning + narrowed catches
 
+### Phase 132: Fix detectMismatches() false endpoint_not_exposed on parameterized routes — canonicalize {...}→{_} on both sides + skip non-HTTP protocols (#43)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 131
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 132 to break down)
+
 ---
 
 ## Progress
