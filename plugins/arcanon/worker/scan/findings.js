@@ -32,8 +32,16 @@
  */
 
 import { maskHome } from "../lib/path-mask.js";
+import { canonicalProtocol } from "../ui/modules/protocol.js";
 
-/** @type {string[]} */
+/**
+ * Legacy export retained for backward-compat with any importer. It is NO LONGER
+ * an input gate: the canonical vocabulary in worker/ui/modules/protocol.js is
+ * now authoritative, and validateFindings normalizes-and-keeps unknown
+ * protocols (fallback, not reject) per #42. Do not reintroduce an allowlist
+ * reject against this list.
+ * @type {string[]}
+ */
 export const VALID_PROTOCOLS = [
   "rest",
   "grpc",
@@ -180,9 +188,19 @@ export function validateFindings(obj) {
     if (typeof conn.target !== "string") {
       return err(`connection[${i}].target must be a string`);
     }
-    if (!VALID_PROTOCOLS.includes(conn.protocol)) {
-      return err(
-        `connection[${i}].protocol must be one of: ${VALID_PROTOCOLS.join(", ")}`,
+    // #42 FALLBACK-NOT-REJECT: protocol must be a string (a non-string is a
+    // structural error), but an unrecognized token must NOT fail the parse.
+    // Previously this branch rejected the ENTIRE repo's findings on any unknown
+    // protocol. Now the connection is kept and canonicalized at persist-time;
+    // validation only warns when the token does not map to a known bucket. The
+    // raw conn.protocol is left untouched here — persist-time normalization
+    // (query-engine) owns the canonical write and preserves the raw token.
+    if (typeof conn.protocol !== "string") {
+      return err(`connection[${i}].protocol must be a string`);
+    }
+    if (canonicalProtocol(conn.protocol) === "other") {
+      warnings.push(
+        `connection[${i}].protocol "${conn.protocol}" is not a known protocol — kept and normalized to "other"`,
       );
     }
     if (typeof conn.method !== "string") {
