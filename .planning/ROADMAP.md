@@ -1035,12 +1035,12 @@ Plans:
 **Goal:** ONE canonical protocol vocabulary (rest · grpc · events · db · internal · sdk) shared across scan → persist → getGraph → UI, with fallback-not-reject so pub/sub, database, GraphQL, SSE, and unknown protocols all render as toggleable edges (unknown greyed under "other", never dropped).
 **Requirements**: PV-01..PV-10 (local IDs — issue #42 ad-hoc phase, no REQUIREMENTS.md REQ-IDs)
 **Depends on:** Phase 130
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 
 - [x] 131-01-PLAN.md — Shared canonical-protocol module (single source of truth) + findings.js fallback-not-reject + schema enum + persist-time/read-time normalization + protocol_raw migration 019 + worker tests
-- [ ] 131-02-PLAN.md — UI alignment (activeProtocols seeded from shared set, db + other buckets/colors/checkboxes, edge normalization seam, protocol_raw in detail panel) + agent-prompt canonical vocabulary + consistency/drift test + human-verify
+- [x] 131-02-PLAN.md — UI alignment (activeProtocols seeded from shared set, db + other buckets/colors/checkboxes, edge normalization seam, protocol_raw in detail panel) + agent-prompt canonical vocabulary + consistency/drift test + human-verify
 
 ---
 
