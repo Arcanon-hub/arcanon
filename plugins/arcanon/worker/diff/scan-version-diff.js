@@ -2,26 +2,24 @@
  * Scan-version diff engine —, , Task 2 .
  *
  * Computes a set-diff of services and connections between two scan-version IDs
- * across two open `better-sqlite3` Database handles. Returns an
+ * across two open Database handles (node:sqlite adapter). Returns an
  * added/removed/modified report keyed by stable cross-scan identities
  * (`(repo_id, name)` for services, `(source_name, target_name, protocol,
  * method, path)` for connections).
  *
- * Engine-shape contract (load-bearing for  shadow-DB reuse — see
- * 115-RESEARCH.md §8 for the full  dependency promise):
+ * Engine-shape contract (load-bearing — callers pass two raw Database handles):
  *
- *   - Takes two raw `better-sqlite3` Database handles (NOT projectRoot
- *     strings, NOT pool keys).  callers pass the same handle for
- *     both (`dbA === dbB`);  will pass a shadow DB handle on one
- *     side and the live DB handle on the other. The engine signature does
- *     not change between the two phases.
+ *   - Takes two raw Database handles (node:sqlite adapter) — NOT projectRoot
+ *     strings, NOT pool keys. Callers may pass the same handle for both
+ *     (`dbA === dbB`) or two distinct handles. The engine signature is the
+ *     same regardless.
  *
  *   - Pool-agnostic. Imports nothing from `worker/db/pool.js` or
  *     `worker/db/database.js`. The defensive grep regression in
  *     `scan-version-diff.test.js` (test 18) enforces this — it greps for
  *     the forbidden pool-helper names and fails the build if any appear.
- *     Adding any pool import would silently break 's shadow
- *     contract; the grep test catches it loudly.
+ *     Adding any pool import would silently break the raw-handle contract;
+ *     the grep test catches it loudly.
  *
  *   - Read-only. Only SELECT statements; no INSERT / UPDATE / DELETE
  *     anywhere in the module. Test 15 snapshots row counts pre/post diff
@@ -101,7 +99,7 @@ const CONNECTION_FIELDS = [
 /**
  * Load all services for a scan, projecting the diff fields.
  *
- * @param {import('better-sqlite3').Database} db
+ * @param {import('../db/sqlite-adapter.js').default} db
  * @param {number} scanVersionId
  * @returns {Array<object>} rows with repo_id + name + diff fields
  */
@@ -122,7 +120,7 @@ export function loadServices(db, scanVersionId) {
  * Load all connections for a scan, JOINing through services to project the
  * stable cross-scan key (source_name + target_name).
  *
- * @param {import('better-sqlite3').Database} db
+ * @param {import('../db/sqlite-adapter.js').default} db
  * @param {number} scanVersionId
  * @returns {Array<object>} rows with source_name + target_name + protocol +
  *   method + path + diff fields
@@ -243,8 +241,8 @@ function emptyResult(sameScan) {
  * with the same numeric ID do NOT short-circuit (different DBs can have
  * different content under the same ID).
  *
- * @param {import('better-sqlite3').Database} dbA
- * @param {import('better-sqlite3').Database} dbB
+ * @param {import('../db/sqlite-adapter.js').default} dbA
+ * @param {import('../db/sqlite-adapter.js').default} dbB
  * @param {number} scanIdA
  * @param {number} scanIdB
  * @returns {{

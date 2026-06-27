@@ -22,14 +22,6 @@ Re-scan exactly **one** linked repo. Other repos in the project are byte-untouch
 
 Resolves the repo by absolute or relative path, or by `repos.name` (basename); friendly disambiguation on multi-match.
 
-### `/arcanon:shadow-scan`
-
-Run a scan into the project's **shadow DB** (`impact-map-shadow.db`) instead of the live one. Live `impact-map.db` is byte-untouched. Use to validate a refactor's impact on the dependency graph before mutating live.
-
-Existing shadow DB is overwritten in place with a one-line warning. Shadow data never uploads to the hub.
-
-Pairs with `/arcanon:diff --shadow` (compare) and `/arcanon:promote-shadow` (atomic swap).
-
 ---
 
 ## Read-only navigation
@@ -46,13 +38,11 @@ Top-level alias for `/arcanon:map view` — opens the graph UI in your default b
 
 Eight smoke-test diagnostics with PASS / WARN / FAIL / SKIP per check and structured exit codes (`0` = all pass or only non-critical WARN; `1` = critical FAIL). Critical: worker reachable, data dir writable, DB integrity (`PRAGMA quick_check`). Non-critical: version match, schema head (computed dynamically from the migrations directory), config + linked repos, MCP smoke (server starts cleanly without crashing on import), hub credentials. Read-only — uses an isolated read-only SQLite connection that does not touch the worker's process-cached DB pool. `--json` for machine consumption.
 
-### `/arcanon:diff <scanA> <scanB> [--json] [--shadow]`
+### `/arcanon:diff <scanA> <scanB> [--json]`
 
 Compare any two scan versions. Accepts integer scan IDs, `HEAD` / `HEAD~N` shorthand, ISO 8601 timestamps, or branch names (resolves via `repo_state.last_scanned_commit`). Reports services + connections added / removed / modified.
 
-`--shadow` mode compares the LATEST completed live scan against the LATEST completed shadow scan — true modify-detection across two physically-separate DBs. Requires both `impact-map.db` and `impact-map-shadow.db` to exist; exits `2` with a friendly error otherwise.
-
-Read-only via direct SQLite read (no worker required). Same-DB diff (without `--shadow`) detects added / removed only — production schema's `UNIQUE` constraints prevent a true modify across two scan IDs in one DB.
+Read-only via direct SQLite read (no worker required). Same-DB diff detects added / removed only — production schema's `UNIQUE` constraints prevent a true modify across two scan IDs in one DB.
 
 ---
 
@@ -68,20 +58,6 @@ Stage a correction to the next scan via the `scan_overrides` table. The override
 | `service`    | `rename`, `set-base-path`     |
 
 Re-application is idempotent — once applied, the override row is stamped with `applied_in_scan_version_id`.
-
----
-
-## Shadow workflow (validate-before-commit)
-
-### `/arcanon:diff --shadow`
-
-See `/arcanon:diff` above — `--shadow` mode reports drift between the live and shadow DBs. Reuses the same diff engine as the standalone `/arcanon:diff <scanA> <scanB>`.
-
-### `/arcanon:promote-shadow [--json]`
-
-Atomically swap `impact-map-shadow.db` over `impact-map.db` via POSIX `rename(2)` (sibling-path placement under `projectHashDir(...)` guarantees same filesystem). Backs up the prior live DB to `impact-map.db.pre-promote-<ISO-timestamp>` (never auto-deleted — clean up manually). WAL sidecars (`-wal`, `-shm`) are renamed alongside the main file in BOTH backup and promote steps so SQLite never sees a stale log on next open.
-
-Refuses to promote during an active live scan referencing repos under cwd (filesystem scan-lock + PID liveness check). Cached live `QueryEngine` is evicted from the worker pool before the rename.
 
 ---
 
@@ -185,7 +161,7 @@ Plugin maintenance — version checks, worker lifecycle, and cache hygiene.
 | `2` | Usage error (wrong subcommand, missing required arg, repo not found, repo name ambiguous) |
 | `127` | Missing system dependency (Node, jq, git) |
 
-Most read-only commands (`list`, `diff`, `correct`, `rescan`, `shadow-scan`, `promote-shadow`, `doctor`) silently exit `0` with no output when invoked from a directory without an `impact-map.db`, so they don't pollute non-Arcanon shells.
+Most read-only commands (`list`, `diff`, `correct`, `rescan`, `doctor`) silently exit `0` with no output when invoked from a directory without an `impact-map.db`, so they don't pollute non-Arcanon shells.
 
 ## Environment variables
 

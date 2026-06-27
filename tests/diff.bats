@@ -83,8 +83,9 @@ setup() {
 # ---------------------------------------------------------------------------
 # Test 5 — integer ID happy path: full output assertions.
 # Note: production schema's UNIQUE constraints on services and connections
-# mean single-DB diff only detects added/removed (never modified). True
-# modify-detection requires the shadow-DB pattern .
+# mean a single DB only surfaces added/removed rows (never modified), since
+# the same row cannot be tagged with two scan_version_ids at once. Cross-scan
+# modify-detection is a deferred enhancement.
 # ---------------------------------------------------------------------------
 @test "diff integer IDs prints sectioned report" {
   bash "$SEED_SH" "$PROJECT_ROOT" "$DB_PATH" default >/dev/null
@@ -192,7 +193,8 @@ setup() {
 # Test 12 — Modified rows skipped: production schema's UNIQUE(services.repo_id,
 # services.name) and UNIQUE(connections...) constraints mean a single DB
 # cannot have the same row tagged with two different scan_version_ids. True
-# "modified" diff is the shadow-DB pattern  — deferred there.
+# cross-scan "modified" diff is therefore a deferred enhancement, not a
+# supported path today.
 # Sanity: the Modified section header still prints (with count 0).
 # ---------------------------------------------------------------------------
 @test "diff prints Modified section header with count even when none" {

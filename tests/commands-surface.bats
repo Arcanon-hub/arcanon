@@ -16,7 +16,7 @@ setup() {
   # `view` ships in v0.1.4, `doctor` ships in v0.1.4 ( — Plan
   # 114-03), `correct` ships in v0.1.4 ( — ), and
   # `rescan` ships in v0.1.4 ( — ).
-  for cmd in map drift impact sync login status export verify update list view doctor diff correct rescan shadow-scan promote-shadow; do
+  for cmd in map drift impact sync login status export verify update list view doctor diff correct rescan; do
     [ -f "$PLUGIN_DIR/commands/$cmd.md" ] || {
       echo "MISSING: commands/$cmd.md"
       return 1
@@ -25,7 +25,7 @@ setup() {
 }
 
 @test "all surviving commands have description frontmatter" {
-  for cmd in map drift impact sync login status export verify update list view doctor diff correct rescan shadow-scan promote-shadow; do
+  for cmd in map drift impact sync login status export verify update list view doctor diff correct rescan; do
     run grep -c '^description:' "$PLUGIN_DIR/commands/$cmd.md"
     [ "$status" -eq 0 ]
     [ "$output" -ge 1 ]
@@ -195,55 +195,4 @@ setup() {
   # Future regressions would re-introduce them; this guard catches that.
   ! grep -q 'rescan: cmdRescan' "$PLUGIN_DIR/worker/cli/hub.js"
   ! grep -q 'fastify.post.*"/api/rescan"' "$PLUGIN_DIR/worker/server/http.js"
-}
-
-# (119-01): /arcanon:shadow-scan must declare allowed-tools: Bash
-# and the markdown body must orchestrate the scan via Agent + getShadowQueryEngine
-# — NOT via the worker. Same architectural reversal as /arcanon:rescan above.
-@test "/arcanon:shadow-scan declares allowed-tools: Bash, Read, AskUserQuestion, Agent" {
-  [ -f "$PLUGIN_DIR/commands/shadow-scan.md" ]
-  run grep -E '^description:' "$PLUGIN_DIR/commands/shadow-scan.md"
-  [ "$status" -eq 0 ]
-  run grep -E '^allowed-tools:' "$PLUGIN_DIR/commands/shadow-scan.md"
-  [ "$status" -eq 0 ]
-  grep -q 'Agent' "$PLUGIN_DIR/commands/shadow-scan.md"
-}
-
-@test "/arcanon:shadow-scan body uses getShadowQueryEngine + Agent (no worker HTTP)" {
-  # Stage 2 reads shared common rules + a per-type template (service/library/
-  # infra) selected by detectRepoType() — the old monolithic agent-prompt-deep.md
-  # was removed (issue #39).
-  grep -q 'agent-prompt-discovery.md' "$PLUGIN_DIR/commands/shadow-scan.md"
-  grep -q 'agent-prompt-common.md' "$PLUGIN_DIR/commands/shadow-scan.md"
-  grep -q 'agent-prompt-service.md' "$PLUGIN_DIR/commands/shadow-scan.md"
-  # Regression guard: the removed monolithic template must NOT reappear.
-  ! grep -q 'agent-prompt-deep.md' "$PLUGIN_DIR/commands/shadow-scan.md"
-  # Persistence routes through the SHADOW pool helper, not openDb.
-  grep -q 'getShadowQueryEngine' "$PLUGIN_DIR/commands/shadow-scan.md"
-  # Apply-hook still fires ( — shadow overrides honoured).
-  grep -q 'applyPendingOverrides' "$PLUGIN_DIR/commands/shadow-scan.md"
-  # Regression guard: no hub.sh shadow-scan, no /scan-shadow POST.
-  ! grep -q 'hub.sh shadow-scan' "$PLUGIN_DIR/commands/shadow-scan.md"
-  ! grep -q '/scan-shadow' "$PLUGIN_DIR/commands/shadow-scan.md"
-}
-
-@test "worker/cli/hub.js does NOT register a shadow-scan handler" {
-  ! grep -q '"shadow-scan": cmdShadowScan' "$PLUGIN_DIR/worker/cli/hub.js"
-  ! grep -q 'fastify.post.*"/scan-shadow"' "$PLUGIN_DIR/worker/server/http.js"
-}
-
-# (119-02): /arcanon:promote-shadow must declare allowed-tools: Bash
-# and the Node-side handler must be registered in HANDLERS under the
-# hyphenated key.
-@test "/arcanon:promote-shadow declares allowed-tools: Bash" {
-  [ -f "$PLUGIN_DIR/commands/promote-shadow.md" ]
-  run grep -E '^description:' "$PLUGIN_DIR/commands/promote-shadow.md"
-  [ "$status" -eq 0 ]
-  run grep -E '^allowed-tools:' "$PLUGIN_DIR/commands/promote-shadow.md"
-  [ "$status" -eq 0 ]
-  grep -q 'Bash' "$PLUGIN_DIR/commands/promote-shadow.md"
-}
-
-@test "worker/cli/hub.js registers \"promote-shadow\": cmdPromoteShadow" {
-  grep -q '"promote-shadow": cmdPromoteShadow' "$PLUGIN_DIR/worker/cli/hub.js"
 }

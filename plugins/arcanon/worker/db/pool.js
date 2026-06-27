@@ -11,7 +11,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import Database from "./sqlite-adapter.js";
-import { openDb, runMigrations, _resetDbSingleton } from "./database.js";
+import { openDb, runMigrations } from "./database.js";
 import { QueryEngine } from "./query-engine.js";
 import { resolveDataDir } from "../lib/data-dir.js";
 
@@ -229,93 +229,6 @@ export function getQueryEngineByHash(hash) {
     );
     return null;
   }
-}
-
-/**
- * Open a fresh QueryEngine pointed at the project's SHADOW database
- * (impact-map-shadow.db). NEVER enters the pool cache — every call opens
- * a new handle. Caller MUST close via qe._db.close() when done.
- *
- * Used by /arcanon:shadow-scan, /arcanon:diff --shadow, and tests.
- *
- * Why uncached (RESEARCH §1, Option B): bypasses openDb()'s process-singleton
- * problem entirely (live and shadow can never collide because they don't
- * share a code path), avoids the eviction-on-promote landmine that a cached
- * shadow QE would create ( promote rename would orphan a stale
- * cached fd), and shadow ops are short-lived so caching offers near-zero
- * benefit. The inline pragma + runMigrations pattern mirrors getQueryEngineByHash.
- *
- * Atomic-promote constraint (RESEARCH §3): the shadow DB lives at
- * `${projectHashDir(root)}/impact-map-shadow.db` — sibling of the live
- * `impact-map.db`. Same parent dir → same filesystem → fs.rename is atomic
- * per POSIX. 's promote relies on this placement. Do NOT change
- * the path without updating that plan.
- *
- * @param {string} projectRoot - Absolute path to the project root.
- * @param {{ create?: boolean }} [opts] - if create=true, mkdir+open even when shadow DB doesn't exist (used by shadow-scan).
- * @returns {QueryEngine|null} null if shadow DB is absent and create=false.
- */
-export function getShadowQueryEngine(projectRoot, opts = {}) {
-  if (!projectRoot) return null;
-  const dir = projectHashDir(projectRoot);
-  const shadowPath = path.join(dir, "impact-map-shadow.db");
-  if (!fs.existsSync(shadowPath) && !opts.create) return null;
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    const db = new Database(shadowPath);
-    db.pragma("journal_mode = WAL");
-    db.pragma("foreign_keys = ON");
-    db.pragma("synchronous = NORMAL");
-    db.pragma("cache_size = -64000");
-    db.pragma("busy_timeout = 5000");
-    runMigrations(db);
-    // Note: NOT cached. Caller is responsible for closing via qe._db.close().
-    return new QueryEngine(db, null);
-  } catch (err) {
-    process.stderr.write(
-      `[db-pool] Failed to open shadow DB for ${projectRoot}: ${err.message}\n`,
-    );
-    return null;
-  }
-}
-
-/**
- * Drop the cached LIVE QueryEngine for a project, closing its DB handle first.
- *
- * REQUIRED before /arcanon:promote-shadow renames the live DB out from under
- * the worker — otherwise the cached `pool.get(projectRoot)._db` holds an fd
- * to a renamed-out inode and subsequent live-DB operations write to the
- * wrong file (RESEARCH §3, threat T-119-02-01).
- *
- * Implementation note ( deviation Rule 1 — see SUMMARY): the
- * pool's QueryEngine wraps the same Database instance that `openDb` cached
- * in its module-level `_db` slot (database.js:30). If we only delete the
- * pool entry and close the QE's handle, the next `getQueryEngine` call
- * routes through `openDb` which short-circuits on the still-set `_db`
- * pointing at the now-CLOSED handle — and the caller crashes at first
- * statement prepare. So we ALSO call `_resetDbSingleton()` to clear the
- * database.js cache, ensuring the next `getQueryEngine` opens a fresh
- * handle pointed at whatever file lives at the live path post-promote.
- *
- * Idempotent — safe to call when no entry is cached. Returns false in that
- * case (caller can use the return value to populate the `evicted_cached_qe`
- * field of the promote `--json` output). NOTE: returns true ONLY when the
- * pool had a cached entry — the database.js singleton reset is a side
- * effect, not the return-value gate.
- *
- * @param {string} projectRoot - Absolute path to the project root.
- * @returns {boolean} true if a cached pool entry was evicted, false if none cached.
- */
-export function evictLiveQueryEngine(projectRoot) {
-  if (!projectRoot) return false;
-  if (!pool.has(projectRoot)) return false;
-  const qe = pool.get(projectRoot);
-  try { qe._db.close(); } catch { /* already closed — still drop the entry */ }
-  pool.delete(projectRoot);
-  // Also clear the database.js process-singleton (see comment above) so the
-  // next getQueryEngine call opens a fresh handle. Idempotent in database.js.
-  _resetDbSingleton();
-  return true;
 }
 
 /**
