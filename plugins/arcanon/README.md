@@ -16,19 +16,17 @@ Every command supports `--help` / `-h` / `help`.
 **Scanning & graph**
 - `/arcanon:map` — scan linked repos and build the service graph
 - `/arcanon:rescan <repo>` — re-scan exactly one linked repo (bypasses the incremental skip)
-- `/arcanon:shadow-scan` — scan into a sandbox shadow DB; live DB byte-untouched
 - `/arcanon:export` — emit Mermaid / DOT / JSON / self-contained HTML
 
 **Read-only navigation**
 - `/arcanon:list` — 5-line project overview (repos, services, connections, actors, hub)
 - `/arcanon:view` — open the graph UI
 - `/arcanon:doctor` — 8-check smoke-test diagnostics
-- `/arcanon:diff <scanA> <scanB>` — diff two scans (`HEAD`/`HEAD~N`/ISO/branch; `--shadow` mode)
+- `/arcanon:diff <scanA> <scanB>` — diff two scans (`HEAD`/`HEAD~N`/ISO/branch)
 
 **Corrections & verification**
 - `/arcanon:correct <kind> --action <action>` — stage a `scan_overrides` row consumed on the next scan
 - `/arcanon:verify` — re-read source at cited line ranges; flag drifted connections
-- `/arcanon:promote-shadow` — atomic shadow → live swap with timestamped backup
 
 **Cross-repo intelligence**
 - `/arcanon:impact <target>` — cross-repo impact query (MCP-backed)

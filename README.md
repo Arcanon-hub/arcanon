@@ -51,7 +51,6 @@ Every `/arcanon:*` command supports `--help`, `-h`, or `help`.
 | --- | --- |
 | `/arcanon:map [view\|full]` | Scan repos, build or refresh the local service graph. |
 | `/arcanon:rescan <repo>` | Re-scan exactly one linked repo, bypassing the incremental skip. |
-| `/arcanon:shadow-scan` | Scan into a sandbox shadow DB; live DB is byte-untouched. |
 | `/arcanon:export` | Emit Mermaid / DOT / JSON / self-contained HTML from the latest scan. |
 
 **Read-only navigation**
@@ -60,14 +59,13 @@ Every `/arcanon:*` command supports `--help`, `-h`, or `help`.
 | `/arcanon:list` | 5-line project overview — repos, services, connections, actors, hub. |
 | `/arcanon:view` | Open the graph UI in your browser. |
 | `/arcanon:doctor` | 8-check smoke-test diagnostics with structured exit codes. |
-| `/arcanon:diff <scanA> <scanB>` | Compare two scans (int IDs, `HEAD`/`HEAD~N`, ISO, branches; `--shadow` mode). |
+| `/arcanon:diff <scanA> <scanB>` | Compare two scans (int IDs, `HEAD`/`HEAD~N`, ISO, branches). |
 
 **Corrections & verification**
 | Command | What it does |
 | --- | --- |
 | `/arcanon:correct <kind> --action ...` | Stage a `scan_overrides` row consumed on the next scan. |
 | `/arcanon:verify` | Re-read source at cited line ranges; flag drifted connections. |
-| `/arcanon:promote-shadow` | Atomically swap the shadow DB into live with a timestamped backup. |
 
 **Cross-repo intelligence**
 | Command | What it does |
