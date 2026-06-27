@@ -61,6 +61,7 @@ function buildDb() {
       source_service_id INTEGER NOT NULL REFERENCES services(id),
       target_service_id INTEGER NOT NULL REFERENCES services(id),
       protocol          TEXT    NOT NULL,
+      protocol_raw      TEXT,
       method            TEXT,
       path              TEXT,
       source_file       TEXT,
@@ -70,6 +71,40 @@ function buildDb() {
       confidence        TEXT,
       evidence          TEXT,
       path_template     TEXT
+    );
+  `);
+  return db;
+}
+
+/**
+ * Build a pre-019 DB whose connections table LACKS the protocol_raw column, to
+ * exercise loadConnections' graceful-degradation fallback.
+ */
+function buildDbPre019() {
+  const db = new Database(":memory:");
+  db.pragma("foreign_keys = ON");
+  db.exec(`
+    CREATE TABLE repos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT NOT NULL,
+      name TEXT NOT NULL, type TEXT NOT NULL, last_commit TEXT, scanned_at TEXT
+    );
+    CREATE TABLE scan_versions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, repo_id INTEGER NOT NULL REFERENCES repos(id),
+      started_at TEXT NOT NULL, completed_at TEXT, quality_score REAL
+    );
+    CREATE TABLE services (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, repo_id INTEGER NOT NULL REFERENCES repos(id),
+      name TEXT NOT NULL, root_path TEXT NOT NULL, language TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'service', scan_version_id INTEGER REFERENCES scan_versions(id),
+      owner TEXT, auth_mechanism TEXT, db_backend TEXT, boundary_entry TEXT, base_path TEXT
+    );
+    CREATE TABLE connections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_service_id INTEGER NOT NULL REFERENCES services(id),
+      target_service_id INTEGER NOT NULL REFERENCES services(id),
+      protocol TEXT NOT NULL, method TEXT, path TEXT, source_file TEXT, target_file TEXT,
+      scan_version_id INTEGER REFERENCES scan_versions(id),
+      crossing TEXT, confidence TEXT, evidence TEXT, path_template TEXT
     );
   `);
   return db;
@@ -124,6 +159,7 @@ function insertService(db, scanVersionId, repoId, name, fields = {}) {
 
 function insertConn(db, scanVersionId, srcId, tgtId, protocol, fields = {}) {
   const row = {
+    protocol_raw: fields.protocol_raw ?? null,
     method: fields.method ?? null,
     path: fields.path ?? null,
     source_file: fields.source_file ?? null,
@@ -136,15 +172,16 @@ function insertConn(db, scanVersionId, srcId, tgtId, protocol, fields = {}) {
   return db
     .prepare(
       `INSERT INTO connections
-       (source_service_id, target_service_id, protocol, method, path,
+       (source_service_id, target_service_id, protocol, protocol_raw, method, path,
         source_file, target_file, scan_version_id,
         crossing, confidence, evidence, path_template)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       srcId,
       tgtId,
       protocol,
+      row.protocol_raw,
       row.method,
       row.path,
       row.source_file,
@@ -154,6 +191,32 @@ function insertConn(db, scanVersionId, srcId, tgtId, protocol, fields = {}) {
       row.confidence,
       row.evidence,
       row.path_template
+    ).lastInsertRowid;
+}
+
+/** Insert a connection into a pre-019 DB (no protocol_raw column). */
+function insertConnPre019(db, scanVersionId, srcId, tgtId, protocol, fields = {}) {
+  return db
+    .prepare(
+      `INSERT INTO connections
+       (source_service_id, target_service_id, protocol, method, path,
+        source_file, target_file, scan_version_id,
+        crossing, confidence, evidence, path_template)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      srcId,
+      tgtId,
+      protocol,
+      fields.method ?? null,
+      fields.path ?? null,
+      fields.source_file ?? null,
+      fields.target_file ?? null,
+      scanVersionId,
+      fields.crossing ?? null,
+      fields.confidence ?? null,
+      fields.evidence ?? null,
+      fields.path_template ?? null,
     ).lastInsertRowid;
 }
 
@@ -368,6 +431,108 @@ describe("diffScanVersions — connections", () => {
 
     insertConn(db, sA, apiA, dbA, "http", { method: "GET", path: "/users" });
     insertConn(db, sB, apiB, dbB, "http", { method: "GET", path: "/users" });
+
+    const result = diffScanVersions(db, db, sA, sB);
+    assert.equal(result.connections.added.length, 0);
+    assert.equal(result.connections.removed.length, 0);
+    assert.equal(result.connections.modified.length, 0);
+  });
+
+  test("#42 no-churn: pre-phase raw kafka vs post-phase events/protocol_raw kafka keys identically", () => {
+    // Scan A is a pre-phase scan: protocol stores the raw token, protocol_raw NULL.
+    // Scan B is the first post-phase scan: protocol is the canonical bucket,
+    // protocol_raw preserves the original token. The connectionKey must match so
+    // the edge does NOT churn as removed+added.
+    const db = buildDb();
+    const repoId = seedRepo(db);
+    const sA = seedScan(db, repoId);
+    const sB = seedScan(db, repoId);
+
+    const apiA = insertService(db, sA, repoId, "api");
+    const brokerA = insertService(db, sA, repoId, "broker");
+    const apiB = insertService(db, sB, repoId, "api");
+    const brokerB = insertService(db, sB, repoId, "broker");
+
+    // Pre-phase: protocol = raw "kafka", protocol_raw = NULL.
+    insertConn(db, sA, apiA, brokerA, "kafka", {
+      method: "produce",
+      path: "orders.topic",
+      protocol_raw: null,
+    });
+    // Post-phase: protocol = canonical "events", protocol_raw = "kafka".
+    insertConn(db, sB, apiB, brokerB, "events", {
+      method: "produce",
+      path: "orders.topic",
+      protocol_raw: "kafka",
+    });
+
+    const result = diffScanVersions(db, db, sA, sB);
+    assert.equal(result.connections.added.length, 0, "no spurious added edge");
+    assert.equal(result.connections.removed.length, 0, "no spurious removed edge");
+    // The protocol FIELD differs (kafka -> events), so it is reported as a
+    // modification — but the EDGE IDENTITY is stable (not removed+added).
+    assert.equal(result.connections.modified.length, 1);
+    const mod = result.connections.modified[0];
+    assert.ok(
+      mod.changed_fields.some((f) => f.field === "protocol"),
+      "protocol bucket change still surfaces as a field modification",
+    );
+  });
+
+  test("#42 no-churn: two identical post-phase rows produce no diff", () => {
+    const db = buildDb();
+    const repoId = seedRepo(db);
+    const sA = seedScan(db, repoId);
+    const sB = seedScan(db, repoId);
+
+    const apiA = insertService(db, sA, repoId, "api");
+    const brokerA = insertService(db, sA, repoId, "broker");
+    const apiB = insertService(db, sB, repoId, "api");
+    const brokerB = insertService(db, sB, repoId, "broker");
+
+    insertConn(db, sA, apiA, brokerA, "events", {
+      method: "produce",
+      path: "orders.topic",
+      protocol_raw: "kafka",
+    });
+    insertConn(db, sB, apiB, brokerB, "events", {
+      method: "produce",
+      path: "orders.topic",
+      protocol_raw: "kafka",
+    });
+
+    const result = diffScanVersions(db, db, sA, sB);
+    assert.equal(result.connections.added.length, 0);
+    assert.equal(result.connections.removed.length, 0);
+    assert.equal(result.connections.modified.length, 0);
+  });
+
+  test("#42 pre-019 DB: loadConnections degrades gracefully (keys on protocol)", () => {
+    // A pre-019 DB lacks the protocol_raw column entirely. loadConnections must
+    // fall back to a SELECT projecting protocol_raw NULL, and connectionKey then
+    // keys on protocol — identical raw-kafka rows still diff as unchanged.
+    const db = buildDbPre019();
+    const repoId = seedRepo(db);
+    const sA = seedScan(db, repoId);
+    const sB = seedScan(db, repoId);
+
+    const apiA = insertService(db, sA, repoId, "api");
+    const brokerA = insertService(db, sA, repoId, "broker");
+    const apiB = insertService(db, sB, repoId, "api");
+    const brokerB = insertService(db, sB, repoId, "broker");
+
+    insertConnPre019(db, sA, apiA, brokerA, "kafka", {
+      method: "produce",
+      path: "orders.topic",
+    });
+    insertConnPre019(db, sB, apiB, brokerB, "kafka", {
+      method: "produce",
+      path: "orders.topic",
+    });
+
+    const rows = loadConnections(db, sA);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].protocol_raw, null, "pre-019 yields protocol_raw null");
 
     const result = diffScanVersions(db, db, sA, sB);
     assert.equal(result.connections.added.length, 0);
