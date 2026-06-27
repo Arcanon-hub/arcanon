@@ -67,7 +67,7 @@ fi
 ```bash
 TARGET_FILE=$(mktemp /tmp/arcanon-rescan-target-XXXXXX.json)
 node --input-type=module -e "
-  import Database from 'better-sqlite3';
+  import Database from '${CLAUDE_PLUGIN_ROOT}/worker/db/sqlite-adapter.js';
   import { resolveRepoIdentifier } from '${CLAUDE_PLUGIN_ROOT}/worker/lib/repo-resolver.js';
   const db = new Database('${DB_PATH}', { readonly: true });
   try {
