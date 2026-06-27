@@ -34,6 +34,11 @@
 🔄 **v0.1.9 Shadow Trio Removal & Rescan Repair** (Phases 129-130) — IN PLANNING
 
 - [ ] **Phase 129: Shadow Trio Removal, Rescan Repair & Docs** — Delete the shadow trio (commands + worker machinery + shell dispatch) while preserving the shared scan-version diff engine, repoint `/arcanon:rescan` to `node:sqlite`, and scrub all user docs.
+  - **Plans:** 3 plans
+  - Plans:
+    - [ ] 129-01-PLAN.md — RM+FIX: delete shadow commands, strip --shadow from diff.md, remove shadow worker machinery (preserve diffScanVersions engine), repair rescan.md to node:sqlite adapter
+    - [ ] 129-02-PLAN.md — DOC: scrub shadow surface from both READMEs + docs/commands.md, add [0.1.9] BREAKING changelog entry
+    - [ ] 129-03-PLAN.md — RM-06: cross-cutting zero-references audit + preserved-engine load check (Wave 2, depends on 129-01 + 129-02)
 - [ ] **Phase 130: Regression Tests & Release Gate** — Inline-`node` + reintroduction guard tests, full suite green with all removals applied, then pin manifests to 0.1.9 and close the release gate.
 
 <details>
