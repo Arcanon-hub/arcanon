@@ -112,12 +112,11 @@ export function openDb(projectRoot = process.cwd()) {
 }
 
 /**
- * Reset the module-level _db singleton.
+ * Reset the module-level _db singleton — used by tests and pool eviction paths.
  *
- * Required by 's `evictLiveQueryEngine` (pool.js) — the pool's
- * cached QueryEngine wraps the same Database instance that `openDb` cached
- * in the module-level `_db` slot. If we close the QE's handle but leave
- * `_db` pointing at the now-closed instance, the next `openDb()` call
+ * The pool's cached QueryEngine wraps the same Database instance that `openDb`
+ * cached in the module-level `_db` slot. If a caller closes the QE's handle but
+ * leaves `_db` pointing at the now-closed instance, the next `openDb()` call
  * returns the closed handle and `getQueryEngine` blows up at next-statement
  * time. This helper closes `_db` (best-effort) and clears the slot so the
  * next `openDb()` opens a fresh handle.

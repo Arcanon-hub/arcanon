@@ -5,17 +5,16 @@
  * integer ID, HEAD/HEAD~N, ISO 8601 date or timestamp, or branch name) into
  * a concrete `scan_versions.id` number.
  *
- * Engine-shape contract (load-bearing for  shadow-DB reuse):
+ * Engine-shape contract (load-bearing — caller passes a raw Database handle):
  *
- *   - Takes a raw `better-sqlite3` Database handle (NOT a projectRoot, NOT a
- *     pool key). The caller owns DB lifecycle. This module never opens,
+ *   - Takes a raw Database handle (node:sqlite adapter) — NOT a projectRoot,
+ *     NOT a pool key. The caller owns DB lifecycle. This module never opens,
  *     closes, attaches, or mutates the handle it receives.
  *
  *   - Pool-agnostic: imports nothing from `worker/db/pool.js` or
- *     `worker/db/database.js`.  (`/arcanon:diff --shadow`) opens a
- *     shadow DB itself and passes the handle here without going through the
- *     pool. Adding any pool import would break that contract — see
- *     115-RESEARCH.md §8 for the full  dependency promise.
+ *     `worker/db/database.js`. Callers open the DB themselves and pass the
+ *     handle here without going through the pool. Adding any pool import would
+ *     break that contract.
  *
  *   - Read-only: only SELECT statements. No INSERT / UPDATE / DELETE
  *     anywhere in this module.
@@ -47,7 +46,7 @@ import { execFileSync } from "node:child_process";
 /**
  * List all rows from the `scan_versions` table, newest first.
  *
- * @param {import('better-sqlite3').Database} db - open DB handle (caller owns lifecycle)
+ * @param {import('../db/sqlite-adapter.js').default} db - open DB handle (caller owns lifecycle)
  * @returns {Array<{id: number, repo_id: number, started_at: string, completed_at: string|null, quality_score: number|null}>}
  */
 export function listScanVersions(db) {
@@ -65,7 +64,7 @@ export function listScanVersions(db) {
  *
  * Precedence: integer → HEAD/HEAD~N → ISO date → branch (projectRoot required).
  *
- * @param {import('better-sqlite3').Database} db - open DB handle (caller owns lifecycle)
+ * @param {import('../db/sqlite-adapter.js').default} db - open DB handle (caller owns lifecycle)
  * @param {string} selector - the operator-supplied selector
  * @param {string} [projectRoot] - filesystem path to the project's git working tree;
  *   required only for the branch fallback. Pass undefined for engine callers

@@ -911,13 +911,13 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     results.push({ repoPath: r.repoPath, mode: r.mode, findings: r.findings });
   }
 
-  // (T-119-01-06): callers using a shadow QE set
-  // options.skipHubSync=true to suppress upload of synthetic shadow data.
-  // Default behaviour for live scans (no flag) is unchanged.
+  // Callers that suppress upload of synthetic / sandboxed scan data set
+  // options.skipHubSync=true. Default behaviour for live scans (no flag) is
+  // unchanged.
   // Optional Arcanon Hub sync — opt-in via ARCANON_API_KEY or config.hub.auto-sync.
   // Runs per-repo, fire-and-log — a hub failure never fails the scan.
   if (options.skipHubSync) {
-    slog('INFO', 'hub auto-sync skipped — caller requested skipHubSync (shadow scan)');
+    slog('INFO', 'hub auto-sync skipped — caller requested skipHubSync');
   } else {
   try {
     const { hubAutoSync, hubUrl, projectSlug, libraryDepsEnabled, orgId } = _readHubConfig();
