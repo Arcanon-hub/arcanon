@@ -182,6 +182,33 @@ test("validateFindings keeps a totally-unknown protocol without throwing", () =>
   assert.equal(result.findings.connections.length, 1);
 });
 
+// #42 LOW: a LITERAL canonical "other" token is intentional, not drift — it must
+// NOT trigger the "not a known protocol" warning. A genuinely unrecognized token
+// that merely FALLS BACK to "other" still warns. Both are kept (fallback-not-reject).
+test("validateFindings does NOT warn for a literal canonical 'other' protocol", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ protocol: "other" })];
+  const result = validateFindings(obj);
+  assert.equal(result.valid, true);
+  assert.equal(result.findings.connections.length, 1, "connection is kept");
+  assert.ok(
+    !result.warnings.some((w) => w.includes("not a known protocol")),
+    `literal 'other' must not warn as unknown, got: ${JSON.stringify(result.warnings)}`,
+  );
+});
+
+test("validateFindings STILL warns for an unrecognized token that falls back to 'other'", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ protocol: "zzz-bogus" })];
+  const result = validateFindings(obj);
+  assert.equal(result.valid, true);
+  assert.equal(result.findings.connections.length, 1, "connection is kept");
+  assert.ok(
+    result.warnings.some((w) => w.includes("zzz-bogus") && w.includes("not a known protocol")),
+    `unrecognized token must still warn, got: ${JSON.stringify(result.warnings)}`,
+  );
+});
+
 test("validateFindings still rejects a non-string protocol (structural error)", () => {
   const obj = minimalValid();
   obj.connections = [validConnection({ protocol: 42 })];

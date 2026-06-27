@@ -198,7 +198,12 @@ export function validateFindings(obj) {
     if (typeof conn.protocol !== "string") {
       return err(`connection[${i}].protocol must be a string`);
     }
-    if (canonicalProtocol(conn.protocol) === "other") {
+    // Warn only for a GENUINELY unrecognized token that FALLS BACK to "other" —
+    // NOT when the agent emits the literal canonical "other" (which canonicalizes
+    // to "other" legitimately, not via the unknown-token fallback). Distinguish
+    // them by the normalized raw token: a literal "other" is intentional, not drift.
+    const rawToken = conn.protocol.trim().toLowerCase();
+    if (canonicalProtocol(conn.protocol) === "other" && rawToken !== "other") {
       warnings.push(
         `connection[${i}].protocol "${conn.protocol}" is not a known protocol — kept and normalized to "other"`,
       );

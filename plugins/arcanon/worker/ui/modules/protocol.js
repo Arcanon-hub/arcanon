@@ -13,6 +13,19 @@
  *
  * Pure ESM, zero dependencies, NO DOM / browser API usage — it is imported by
  * both the Node worker and the browser, so it must run in either runtime.
+ *
+ * SYNCHRONIZED CONSUMERS (not literal imports). Several artifacts must stay
+ * aligned with this canonical set but cannot import it — they are kept in sync
+ * by CONVENTION, not enforcement, so any edit here must be mirrored in each:
+ *   - agent-schema.json (the protocol *description* — documentation, not an
+ *     enforced enum derived from this module)
+ *   - the agent prompts: agent-prompt-service.md, agent-prompt-library.md,
+ *     agent-prompt-discovery.md (advertise the canonical vocabulary)
+ *   - the CSS edge-color tokens in styles/tokens.css (one --color-edge-* per
+ *     rendered bucket, plus the shared --color-edge-infra)
+ *   - the filter-checkbox markup in index.html ([data-protocol] checkboxes)
+ * The protocol-consistency drift test guards the state.js / index.html alignment;
+ * the schema/prompt consumers are documentation-only and must be updated by hand.
  */
 
 /**

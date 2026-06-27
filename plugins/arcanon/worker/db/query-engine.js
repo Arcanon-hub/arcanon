@@ -1674,7 +1674,13 @@ export class QueryEngine {
       `,
         )
         .all();
-    } catch {
+    } catch (colErr) {
+      // Narrowed: only fall back on the EXPECTED missing-column error (a pre-019
+      // / pre-009 schema). Re-throw anything else so a genuinely malformed query
+      // surfaces instead of being silently misreported as a legacy schema.
+      if (!String(colErr.message).includes("no such column")) {
+        throw colErr;
+      }
       try {
         // protocol_raw not present (pre-migration-019) — confidence/evidence ok
         connections = this._db
