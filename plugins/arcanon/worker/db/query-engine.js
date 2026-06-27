@@ -1960,6 +1960,12 @@ export class QueryEngine {
       `SELECT path FROM exposed_endpoints WHERE service_id = ?`,
     );
 
+    // Known limitations (deferred, tracked as a follow-up to #43):
+    //  - Matching is path-only; c.method is not compared, so a consumed
+    //    POST /users/{_} matches an exposed GET /users/{id} by path. Method-aware
+    //    matching is a separate enhancement.
+    //  - Path normalization is param-only; trailing slashes, double slashes, and
+    //    case variants are not normalized.
     const mismatches = [];
     for (const c of rows) {
       // Canonicalize the exposed side: exposed_endpoints.path is stored with

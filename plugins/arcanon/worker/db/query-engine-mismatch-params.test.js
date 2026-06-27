@@ -126,13 +126,17 @@ describe('detectMismatches — parameterized routes (#43)', () => {
     );
   });
 
-  it('Test 2: param-name drift — consumed {orgId}→{_} vs exposed {org_id} → no mismatch', () => {
+  it('Test 2: param-name drift — consumed {orgId} vs exposed {org_id} → no mismatch (exercises consumed-side canonicalization)', () => {
     const { db, repoId } = freshDb();
     const aId = insertService(db, repoId, 'frontend', null);
     const bId = insertService(db, repoId, 'user-api-drift', null);
-    // Consumer used {orgId}, which the persist layer collapses to {_}.
+    // Defensive coverage (codex review #43): production stores the consumed path
+    // already blanked, but this test inserts a NAMED consumed param ({orgId}) so
+    // it genuinely exercises canonicalizePath(c.path) on the consumed side — if
+    // that call were dropped, raw {orgId} would not equal {org_id} and this fails.
+    // Names differ on purpose ({orgId} vs {org_id}) to prove name-drift robustness.
     insertExposedEndpoint(db, bId, 'GET', '/orgs/{org_id}/members');
-    insertConnection(db, aId, bId, 'rest', 'GET', '/orgs/{_}/members');
+    insertConnection(db, aId, bId, 'rest', 'GET', '/orgs/{orgId}/members');
 
     const qe = new QueryEngine(db);
     const mismatches = qe.detectMismatches();
