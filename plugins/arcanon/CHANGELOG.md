@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-## [0.1.9]
+## [0.1.9] - 2026-06-27
 
 Removed the shadow-DB command trio. The "validate-before-commit" workflow is now
 served by `/arcanon:map`'s confirm gate (preview impending changes before they
