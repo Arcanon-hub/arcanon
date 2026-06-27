@@ -507,6 +507,50 @@ describe("diffScanVersions — connections", () => {
     assert.equal(result.connections.modified.length, 0);
   });
 
+  test("#42 casing: 'NATS' / 'nats' / ' nats ' produce the SAME diff key (no churn)", () => {
+    // The raw token component of connectionKey is trim+lowercased for identity,
+    // so casing/whitespace variants of the same token must NOT churn the diff.
+    // protocol is identical ('events') across both scans, so the only candidate
+    // for a diff is the IDENTITY key — which must collapse all three casings.
+    const variants = ["NATS", "nats", " nats "];
+    for (let i = 0; i < variants.length; i++) {
+      for (let j = i + 1; j < variants.length; j++) {
+        const db = buildDb();
+        const repoId = seedRepo(db);
+        const sA = seedScan(db, repoId);
+        const sB = seedScan(db, repoId);
+
+        const apiA = insertService(db, sA, repoId, "api");
+        const brokerA = insertService(db, sA, repoId, "broker");
+        const apiB = insertService(db, sB, repoId, "api");
+        const brokerB = insertService(db, sB, repoId, "broker");
+
+        insertConn(db, sA, apiA, brokerA, "events", {
+          method: "produce",
+          path: "orders.topic",
+          protocol_raw: variants[i],
+        });
+        insertConn(db, sB, apiB, brokerB, "events", {
+          method: "produce",
+          path: "orders.topic",
+          protocol_raw: variants[j],
+        });
+
+        const result = diffScanVersions(db, db, sA, sB);
+        assert.equal(
+          result.connections.added.length,
+          0,
+          `no spurious added edge for "${variants[i]}" vs "${variants[j]}"`,
+        );
+        assert.equal(
+          result.connections.removed.length,
+          0,
+          `no spurious removed edge for "${variants[i]}" vs "${variants[j]}"`,
+        );
+      }
+    }
+  });
+
   test("#42 pre-019 DB: loadConnections degrades gracefully (keys on protocol)", () => {
     // A pre-019 DB lacks the protocol_raw column entirely. loadConnections must
     // fall back to a SELECT projecting protocol_raw NULL, and connectionKey then

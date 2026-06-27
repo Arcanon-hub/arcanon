@@ -66,11 +66,14 @@
  *
  *   The key's protocol component prefers `protocol_raw` (the agent's original
  *   token, stable across the #42 canonicalization migration) and falls back to
- *   `protocol` for pre-019 rows where protocol_raw is NULL. This keeps the diff
- *   churn-free across the migration: a pre-ship row stored as raw "kafka" and a
- *   post-ship row stored as canonical "events" / protocol_raw "kafka" produce
- *   the SAME key, so the edge is not falsely reported as removed+added. The
- *   displayed/diffed `protocol` field is unchanged, so a genuine bucket change
+ *   `protocol` for pre-019 rows where protocol_raw is NULL. It is trim+lowercased
+ *   for IDENTITY STABILITY ONLY — "NATS", "nats", and " nats " key identically so
+ *   casing/whitespace variants of the same token don't churn the diff. The
+ *   displayed/projected protocol_raw value retains its original casing. This keeps
+ *   the diff churn-free across the migration: a pre-ship row stored as raw "kafka"
+ *   and a post-ship row stored as canonical "events" / protocol_raw "kafka"
+ *   produce the SAME key, so the edge is not falsely reported as removed+added.
+ *   The displayed/diffed `protocol` field is unchanged, so a genuine bucket change
  *   still surfaces as a modification.
  *
  * The engine does NOT truncate `evidence` (or any other field). Truncation
@@ -200,11 +203,17 @@ function serviceKey(row) {
 }
 
 function connectionKey(row) {
+  // #42: prefer the stable raw token; fall back to protocol for pre-019 rows.
+  // Normalize the raw component for IDENTITY ONLY (trim + lowercase) so casing
+  // and surrounding whitespace variants of the SAME token (e.g. "NATS", "nats",
+  // " nats ") produce ONE key and don't churn the diff as removed+added. The
+  // displayed/projected protocol_raw value (loadConnections) stays verbatim — only
+  // this key component is normalized.
+  const rawComponent = String(row.protocol_raw ?? row.protocol ?? "").trim().toLowerCase();
   return JSON.stringify([
     row.source_name,
     row.target_name,
-    // #42: prefer the stable raw token; fall back to protocol for pre-019 rows.
-    row.protocol_raw ?? row.protocol,
+    rawComponent,
     row.method ?? "",
     row.path ?? "",
   ]);
