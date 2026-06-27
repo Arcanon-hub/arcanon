@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.9]
+
+Removed the shadow-DB command trio. The "validate-before-commit" workflow is now
+served by `/arcanon:map`'s confirm gate (preview impending changes before they
+persist) and scan-version diffing via `/arcanon:diff <scanA> <scanB>`.
+
+### BREAKING
+
+- **Removed `/arcanon:shadow-scan`.** Scans no longer write to a separate
+  `impact-map-shadow.db`. To preview a refactor's impact before persisting,
+  re-run `/arcanon:map` and review the confirm gate before accepting the new
+  scan.
+- **Removed `/arcanon:promote-shadow`.** There is no shadow DB to swap into
+  live. The confirm gate on `/arcanon:map` replaces the promote step.
+- **Removed the `/arcanon:diff --shadow` mode.** `/arcanon:diff` no longer
+  accepts `--shadow`. Compare scan versions instead with
+  `/arcanon:diff <scanA> <scanB>` (integer scan IDs, `HEAD` / `HEAD~N`, ISO
+  timestamps, or branch names) — the retained replacement for shadow diffing.
+
+  **Migration path:** preview impending changes via `/arcanon:map`'s confirm
+  gate before they persist; compare any two completed scans via
+  `/arcanon:diff <scanA> <scanB>`.
+
+### Fixed
+
+- **`/arcanon:rescan` no longer imports the removed `better-sqlite3`.** The
+  rescan path now imports the `node:sqlite` adapter (`worker/db/sqlite-adapter.js`),
+  matching the `node:sqlite` migration completed in `0.1.8`.
+
 ## [0.1.8] - 2026-06-20
 
 Replaced the `better-sqlite3` native module with Node's built-in `node:sqlite`,
