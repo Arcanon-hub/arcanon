@@ -1030,6 +1030,17 @@ Plans:
 - [x] 130-01-PLAN.md — Test cleanup + TST-01 rescan-resolve regression + TST-02 reintroduction guard + TST-03 full-suite-green
 - [x] 130-02-PLAN.md — VER-01 manifest bump to 0.1.9 + lockfile regen + VER-02 release gate
 
+### Phase 131: Fix protocol vocabulary mismatch — render all edge protocols (pub/sub, DB, GraphQL, SSE) via canonical buckets with fallback-not-reject (#42)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 130
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 131 to break down)
+
 ---
 
 ## Progress
