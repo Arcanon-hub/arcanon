@@ -174,8 +174,14 @@ setup() {
 @test "/arcanon:rescan body invokes Agent + applyPendingOverrides directly (no worker HTTP)" {
   # The markdown command must call the discovery + deep prompts as Agents
   # (mirrors map.md). Prove the prompt-template paths are referenced.
+  # Stage 2 reads shared common rules + a per-type template (service/library/
+  # infra) selected by detectRepoType() — the old monolithic agent-prompt-deep.md
+  # was removed (issue #39).
   grep -q 'agent-prompt-discovery.md' "$PLUGIN_DIR/commands/rescan.md"
-  grep -q 'agent-prompt-deep.md' "$PLUGIN_DIR/commands/rescan.md"
+  grep -q 'agent-prompt-common.md' "$PLUGIN_DIR/commands/rescan.md"
+  grep -q 'agent-prompt-service.md' "$PLUGIN_DIR/commands/rescan.md"
+  # Regression guard: the removed monolithic template must NOT reappear.
+  ! grep -q 'agent-prompt-deep.md' "$PLUGIN_DIR/commands/rescan.md"
   # 's apply-hook must fire between persistFindings and endScan.
   grep -q 'applyPendingOverrides' "$PLUGIN_DIR/commands/rescan.md"
   # Regression guard: must NOT shell out to hub.sh rescan and must NOT POST
@@ -204,8 +210,14 @@ setup() {
 }
 
 @test "/arcanon:shadow-scan body uses getShadowQueryEngine + Agent (no worker HTTP)" {
+  # Stage 2 reads shared common rules + a per-type template (service/library/
+  # infra) selected by detectRepoType() — the old monolithic agent-prompt-deep.md
+  # was removed (issue #39).
   grep -q 'agent-prompt-discovery.md' "$PLUGIN_DIR/commands/shadow-scan.md"
-  grep -q 'agent-prompt-deep.md' "$PLUGIN_DIR/commands/shadow-scan.md"
+  grep -q 'agent-prompt-common.md' "$PLUGIN_DIR/commands/shadow-scan.md"
+  grep -q 'agent-prompt-service.md' "$PLUGIN_DIR/commands/shadow-scan.md"
+  # Regression guard: the removed monolithic template must NOT reappear.
+  ! grep -q 'agent-prompt-deep.md' "$PLUGIN_DIR/commands/shadow-scan.md"
   # Persistence routes through the SHADOW pool helper, not openDb.
   grep -q 'getShadowQueryEngine' "$PLUGIN_DIR/commands/shadow-scan.md"
   # Apply-hook still fires ( — shadow overrides honoured).

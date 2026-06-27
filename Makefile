@@ -1,4 +1,4 @@
-.PHONY: test lint check install uninstall dev help
+.PHONY: test lint check install uninstall dev help hooks-install
 
 PLUGIN_NAME := arcanon
 PLUGIN_DIR  := $(shell pwd)/plugins/$(PLUGIN_NAME)
@@ -11,8 +11,8 @@ help: ## Show available targets
 test: ## Run all bats tests
 	$(BATS) tests/*.bats
 
-lint: ## Shellcheck scripts and libs
-	shellcheck -x -e SC1091 plugins/$(PLUGIN_NAME)/scripts/*.sh plugins/$(PLUGIN_NAME)/lib/*.sh
+lint: ## Shellcheck scripts and libs (matches CI: --severity=error)
+	shellcheck -x --severity=error -e SC1091 plugins/$(PLUGIN_NAME)/scripts/*.sh plugins/$(PLUGIN_NAME)/lib/*.sh
 
 check: ## Validate plugin.json and hooks.json
 	jq empty plugins/$(PLUGIN_NAME)/.claude-plugin/plugin.json
@@ -32,3 +32,9 @@ uninstall: ## Remove plugin and marketplace registration
 
 dev: ## Launch Claude Code with this plugin loaded (no install)
 	claude --plugin-dir $(PLUGIN_DIR)
+
+hooks-install: ## Install git pre-push hook (runs CI checks before every push)
+	@chmod +x scripts/pre-push.sh
+	@mkdir -p .git/hooks
+	@ln -sf ../../scripts/pre-push.sh .git/hooks/pre-push
+	@echo "pre-push hook installed → runs bats + worker tests before each push (bypass: git push --no-verify)"

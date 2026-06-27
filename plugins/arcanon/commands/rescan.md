@@ -122,14 +122,30 @@ The agent returns a JSON with `languages`, `frameworks`, `service_hints`,
 
 **Stage 2 — Deep scan** (reads source code, targeted by discovery):
 
-Read the deep-scan prompt template using the Read tool:
+Select the per-type template based on the repo's type — this mirrors
+`detectRepoType()` in `worker/scan/manager.js`:
+- **infra** → `agent-prompt-infra.md` — Terraform (`*.tf`), Kustomize/Helm
+  (`kustomization.yaml`, `Chart.yaml`, `helmfile.yaml`), an `overlays/` or
+  `terraform/` directory, or a `docker-compose.*` with no service entry point
+- **library** → `agent-prompt-library.md` — a package manifest that exports but
+  has no start/serve entry point (`package.json` with `main`/`exports`/`types`
+  but no `start` script; `pyproject.toml` `[project]` without
+  `[project.scripts]`; `Cargo.toml` `[lib]` without `[[bin]]`)
+- **service** → `agent-prompt-service.md` — everything else (the default)
+
+Read the shared rules and the selected per-type template using the Read tool:
 
 ```
-Read(${CLAUDE_PLUGIN_ROOT}/worker/scan/agent-prompt-deep.md)
+Read(${CLAUDE_PLUGIN_ROOT}/worker/scan/agent-prompt-common.md)
+Read(${CLAUDE_PLUGIN_ROOT}/worker/scan/agent-prompt-service.md)   # or -library.md / -infra.md per the type above
 ```
 
-Replace `{{REPO_PATH}}` with `$REPO_PATH` and `{{DISCOVERY_JSON}}` with the
-Stage 1 output. Spawn the deep agent:
+Compose the prompt from the per-type template: replace `{{COMMON_RULES}}` with
+the contents of `agent-prompt-common.md`, `{{REPO_PATH}}` with `$REPO_PATH`, and
+`{{DISCOVERY_JSON}}` with the Stage 1 output. The common rules reference
+`{{SCHEMA_JSON}}` — point it at
+`${CLAUDE_PLUGIN_ROOT}/worker/scan/agent-schema.json` (the agent reads the schema
+from there). Spawn the deep agent:
 
 ```
 Agent(
