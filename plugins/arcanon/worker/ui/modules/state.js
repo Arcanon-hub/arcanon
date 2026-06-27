@@ -8,16 +8,33 @@ import { CANONICAL_PROTOCOLS } from "./protocol.js";
  * The protocol render buckets the UI draws + toggles by default. Derived from
  * the shared CANONICAL_PROTOCOLS source of truth (NOT a hand-written literal —
  * that independent divergence was the original #42 bug) by intersecting against
- * the rendered-bucket list. The infra-only buckets (k8s/tf/helm/import) are
- * excluded from the DEFAULT-on protocol checkboxes here; db and other MUST be
- * default-on so datastore edges get their own filter and unknown protocols are
- * rendered (greyed) rather than silently dropped.
+ * the rendered-bucket list. db and other MUST be default-on so datastore edges
+ * get their own filter and unknown protocols are rendered (greyed) rather than
+ * silently dropped.
+ *
+ * The infra buckets (k8s/tf/helm/import) are pre-existing first-class members of
+ * CANONICAL_PROTOCOLS. They are now default-on render buckets too (under a shared
+ * --color-edge-infra token) so the renderer's `activeProtocols.has(edge.protocol)`
+ * gate can NEVER silently drop a canonical protocol (HIGH-2 / no-silent-drop).
+ * This EXTENDS — it does not contradict — CONTEXT's locked render set
+ * (rest·grpc·events·db·internal·sdk·other): the locked six remain the primary
+ * service-connection buckets; the infra buckets are additive and share one color.
  *
  * @type {string[]}
  */
-const RENDER_BUCKETS = ["rest", "grpc", "events", "db", "internal", "sdk", "other"].filter(
-  (b) => CANONICAL_PROTOCOLS.has(b),
-);
+const RENDER_BUCKETS = [
+  "rest",
+  "grpc",
+  "events",
+  "db",
+  "internal",
+  "sdk",
+  "other",
+  "k8s",
+  "tf",
+  "helm",
+  "import",
+].filter((b) => CANONICAL_PROTOCOLS.has(b));
 
 export const state = {
   graphData: { nodes: [], edges: [], mismatches: [], actors: [] },
@@ -90,11 +107,16 @@ const DEFAULTS = {
   },
   protocol: {
     rest: "#4299e1", grpc: "#68d391", events: "#9f7aea",
-    internal: "#4a5568", sdk: "#d69e2e", import: "#d69e2e",
+    internal: "#4a5568", sdk: "#d69e2e",
     // db: datastore dependencies get a distinct teal/cyan (not events/amber,
     // not grpc/green). other: muted grey matching the default edge so the
     // catch-all reads as "rendered but unclassified".
     db: "#38b2ac", other: "#718096",
+    // Infra buckets (k8s/tf/helm/import) share one muted slate/indigo color,
+    // distinct from db-teal and other-grey, so infrastructure edges render as a
+    // single recognizable class. import previously shared sdk's amber; it now
+    // joins the infra color for a consistent infra read.
+    k8s: "#7c83db", tf: "#7c83db", helm: "#7c83db", import: "#7c83db",
   },
   nodeType: {
     library: "#9f7aea", sdk: "#9f7aea", frontend: "#f6ad55",
@@ -165,6 +187,12 @@ export function refreshColors() {
   PROTOCOL_COLORS.db       = readCssVar("--color-edge-db",      DEFAULTS.protocol.db);
   PROTOCOL_COLORS.other    = readCssVar("--color-edge-other",   DEFAULTS.protocol.other);
   PROTOCOL_COLORS.internal = readCssVar("--color-edge-default", DEFAULTS.protocol.internal);
+  // Infra buckets share one --color-edge-infra token (both themes) so no
+  // canonical protocol resolves to an empty color → renderer never drops them.
+  PROTOCOL_COLORS.k8s      = readCssVar("--color-edge-infra",   DEFAULTS.protocol.k8s);
+  PROTOCOL_COLORS.tf       = readCssVar("--color-edge-infra",   DEFAULTS.protocol.tf);
+  PROTOCOL_COLORS.helm     = readCssVar("--color-edge-infra",   DEFAULTS.protocol.helm);
+  PROTOCOL_COLORS.import   = readCssVar("--color-edge-infra",   DEFAULTS.protocol.import);
 
   NODE_TYPE_COLORS.library  = readCssVar("--color-node-library",  DEFAULTS.nodeType.library);
   NODE_TYPE_COLORS.sdk      = readCssVar("--color-node-library",  DEFAULTS.nodeType.sdk);
@@ -181,7 +209,7 @@ export function refreshColors() {
   NODE_TINT_COLORS.frontend = readCssVar("--color-node-tint-frontend", DEFAULTS.nodeTint.frontend);
 }
 
-export const BUNDLE_SEVERITY = ["rest", "grpc", "events", "db", "internal", "sdk", "import", "other"];
+export const BUNDLE_SEVERITY = ["rest", "grpc", "events", "db", "internal", "sdk", "import", "k8s", "tf", "helm", "other"];
 
 /**
  * Line dash patterns per protocol.
@@ -200,5 +228,8 @@ export const PROTOCOL_LINE_DASH = {
   internal: [],
   sdk:      [],
   import:   [],
+  k8s:      [],
+  tf:       [],
+  helm:     [],
   other:    [],
 };

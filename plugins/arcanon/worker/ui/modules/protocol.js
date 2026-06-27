@@ -21,9 +21,12 @@
  * panel) can iterate the full render set.
  *
  * The CONTEXT canonical set is rest·grpc·events·db·internal·sdk. k8s/tf/helm/
- * import are pre-existing first-class protocols already present in the schema
- * and UI — they MUST keep rendering and are therefore preserved verbatim, not
- * folded to "other".
+ * import are pre-existing first-class infra protocols already present in the
+ * schema. They ARE rendered (default-on in state.activeProtocols, under a shared
+ * --color-edge-infra token, with their own filter checkboxes) — so "every
+ * canonical value is renderable" holds and the renderer's
+ * activeProtocols.has(edge.protocol) gate can never silently drop a canonical
+ * protocol. They are preserved verbatim, never folded to "other".
  *
  * @type {Set<string>}
  */

@@ -813,6 +813,12 @@
         <label class="filter-label"><input type="checkbox" data-protocol="sdk" checked /> SDK</label>
         <label class="filter-label"><input type="checkbox" data-protocol="internal" checked /> Internal</label>
         <label class="filter-label"><input type="checkbox" data-protocol="other" checked /> Other</label>
+        <!-- Infra buckets (k8s/tf/helm/import) — first-class canonical protocols,
+             default-on so the renderer never silently drops a canonical edge. -->
+        <label class="filter-label"><input type="checkbox" data-protocol="k8s" checked /> K8s</label>
+        <label class="filter-label"><input type="checkbox" data-protocol="tf" checked /> Terraform</label>
+        <label class="filter-label"><input type="checkbox" data-protocol="helm" checked /> Helm</label>
+        <label class="filter-label"><input type="checkbox" data-protocol="import" checked /> Import</label>
       </div>
       <div class="filter-section">
         <span class="filter-section-label">Layer</span>

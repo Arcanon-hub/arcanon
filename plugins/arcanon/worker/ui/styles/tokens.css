@@ -64,6 +64,9 @@
   --color-edge-db:       #0d9488;
   /* other: greyed catch-all for unrecognized protocols — rendered, never dropped. */
   --color-edge-other:    #a1a1aa;
+  /* infra: k8s/tf/helm/import share one muted slate/indigo — distinct from
+     db-teal and other-grey so infrastructure edges read as a single class. */
+  --color-edge-infra:    #6366f1;
   --color-edge-default:  #8c8c8c;
   --color-edge-mismatch: #dc2626;
   --color-edge-change:   #f6e05e;
@@ -111,6 +114,8 @@
   --color-edge-db:       #2dd4bf;
   /* other: muted grey, clearly greyed against dark surfaces. */
   --color-edge-other:    #71717a;
+  /* infra: brighter slate/indigo so k8s/tf/helm/import read against dark canvas. */
+  --color-edge-infra:    #818cf8;
 }
 
 /* Spacing, radius, shadow, typography, motion — shared across themes. */
