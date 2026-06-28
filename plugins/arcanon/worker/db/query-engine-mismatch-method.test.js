@@ -315,6 +315,32 @@ describe('detectMismatches — method-aware hardening (#46 review)', () => {
     assert.equal(forThisConn[0].type, 'endpoint_not_exposed');
   });
 
+  it('H1b (MM-06 round-2, control-char forge): exposed GET "/A\\u0001/B" vs consumed "GET\\u0001/A" "/B" → exactly one mismatch (nested Map is collision-proof)', () => {
+    const { db, repoId } = freshDb();
+    const aId = insertService(db, repoId, 'frontend', null);
+    const bId = insertService(db, repoId, 'h1b-ctrlchar-api', null);
+    // The #46 round-2 review showed U+0001 is NOT a safe delimiter: it is valid
+    // in untrusted scan JSON, survives trim(), and SQLite stores it in TEXT. With
+    // the old `${method}${path}` join BOTH sides collapse to
+    // "GET/A/B" → forged false match (ZERO mismatches). The nested
+    // Map<method, Set<path>> has no concatenation, so the two distinct
+    // (method,path) pairs cannot collide → EXACTLY ONE mismatch.
+    insertExposedEndpoint(db, bId, 'GET', '/A/B');
+    insertConnection(db, aId, bId, 'rest', 'GET/A', '/B');
+
+    const qe = new QueryEngine(db);
+    const mismatches = qe.detectMismatches();
+    const forThisConn = mismatches.filter(
+      (m) => m.source === 'frontend' && m.target === 'h1b-ctrlchar-api'
+    );
+    assert.equal(
+      forThisConn.length,
+      1,
+      `U+0001 in untrusted method/path must not forge a match, got: ${JSON.stringify(forThisConn)}`
+    );
+    assert.equal(forThisConn[0].type, 'endpoint_not_exposed');
+  });
+
   it('H2 (MM-07, empty-string method): consumed "" /e/{_} vs exposed GET /e/{id} → no mismatch (empty → null → path-only)', () => {
     const { db, repoId } = freshDb();
     const aId = insertService(db, repoId, 'frontend', null);

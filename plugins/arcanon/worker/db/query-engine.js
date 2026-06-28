@@ -257,15 +257,6 @@ export function normalizeMethod(m) {
   return trimmed.toUpperCase();
 }
 
-/**
- * Collision-safe delimiter for the method-aware composite key (#46 / 134-02).
- * U+0001 (Start of Heading) cannot appear in a real HTTP method or URL path,
- * so `${method}${SEP}${path}` cannot be forged by a method or path that
- * contains the join character (a space-containing method could forge the old
- * `${method} ${path}` join). Used symmetrically on the exposed-set build and
- * the consumed-side lookup.
- */
-const METHOD_PATH_SEP = "";
 
 // ---------------------------------------------------------------------------
 // Binding sanitizer
@@ -1993,8 +1984,8 @@ export class QueryEngine {
     //  - Method-aware matching landed in #46: the consumed method is compared
     //    against the exposed method (case-insensitive). Null-method edges on
     //    either side fall back to path-only matching so method-less / non-HTTP
-    //    edges (consumed) and method-agnostic exposures (exposed) never produce
-    //    new false positives.
+    //    edges (consumed) and null-method exposures (exposed; null = unknown,
+    //    treated as a wildcard to avoid new false positives) never produce them.
     //  - Path normalization is param-only; trailing slashes, double slashes, and
     //    case variants are not normalized.
     const mismatches = [];
@@ -2006,17 +1997,19 @@ export class QueryEngine {
       // ({orgId} vs {org_id}) is tolerated (#43).
       //
       // Method-aware matching (#46): build three derived structures per target:
-      //  (a) composite key Set `UPPER(method)${SEP}${canonPath}` for method-aware
-      //      match. SEP is a control char (U+0001) that cannot appear in a method
-      //      or path, so a space/delimiter-containing malformed method cannot
-      //      forge a collision with a different (method,path) pair (MM-06).
+      //  (a) exposedByMethod: Map<UPPER(method) -> Set<canonPath>> for the
+      //      method-aware match. A nested map (NOT a delimiter-joined string key)
+      //      is structurally collision-proof — untrusted scan text cannot forge a
+      //      (method,path) collision regardless of which characters it contains,
+      //      because the method is a real map key and the path a set member with
+      //      no concatenation (MM-06, #46 round-2 review).
       //  (b) wildcard set of canonPaths whose exposed method is null (MM-03).
       //      null = unknown; treated as a wildcard specifically to avoid
       //      introducing new false positives (it may conceal a verb mismatch).
       //  (c) all-paths set of every canonPath (MM-02 — the null-consumed-method
       //      path-only fallback, identical to pre-#46 behavior).
       const exposedRows = exposedStmt.all(c.target_id);
-      const exposedKeys = new Set();
+      const exposedByMethod = new Map();
       const exposedWildcardPaths = new Set();
       const exposedAllPaths = new Set();
       for (const r of exposedRows) {
@@ -2028,13 +2021,18 @@ export class QueryEngine {
         if (exposedMethod === null) {
           exposedWildcardPaths.add(canon);
         } else {
-          exposedKeys.add(`${exposedMethod}${METHOD_PATH_SEP}${canon}`);
+          let paths = exposedByMethod.get(exposedMethod);
+          if (paths === undefined) {
+            paths = new Set();
+            exposedByMethod.set(exposedMethod, paths);
+          }
+          paths.add(canon);
         }
       }
       // A candidate canonical path is "exposed for this connection" when:
       //  - c.method is null/empty/whitespace → it is in the all-paths set
       //    (path-only fallback); else
-      //  - `UPPER(c.method)${SEP}${canon}` is in the composite key Set, OR
+      //  - canon is in exposedByMethod.get(UPPER(c.method)), OR
       //  - canon is in the wildcard (null-exposed-method) set.
       // normalizeMethod (MM-07) maps "" / "   " consumed methods to null so they
       // take the path-only fallback instead of being treated as a concrete verb.
@@ -2042,7 +2040,7 @@ export class QueryEngine {
       const isExposed = (canon) => {
         if (consumedMethod === null) return exposedAllPaths.has(canon);
         return (
-          exposedKeys.has(`${consumedMethod}${METHOD_PATH_SEP}${canon}`) ||
+          (exposedByMethod.get(consumedMethod)?.has(canon) ?? false) ||
           exposedWildcardPaths.has(canon)
         );
       };
