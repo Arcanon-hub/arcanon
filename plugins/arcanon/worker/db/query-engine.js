@@ -238,6 +238,35 @@ export function canonicalizePath(pathStr) {
   return pathStr.replace(/\{[^/}]+\}/g, "{_}");
 }
 
+/**
+ * Normalizes an HTTP method for method-aware mismatch matching (#46 / 134-02).
+ *
+ * Scan output is untrusted free text. A method that is null/undefined OR
+ * empty/whitespace-only is "unknown" — there is no concrete verb to compare —
+ * so it is coerced to null and routed through the path-only fallback (same as
+ * a missing method). Any other value is trimmed and upper-cased for
+ * case-insensitive matching.
+ *
+ * @param {string|null|undefined} m
+ * @returns {string|null} UPPER(trim(m)), or null when unknown (empty/whitespace).
+ */
+export function normalizeMethod(m) {
+  if (m == null) return null;
+  const trimmed = m.trim();
+  if (trimmed === "") return null;
+  return trimmed.toUpperCase();
+}
+
+/**
+ * Collision-safe delimiter for the method-aware composite key (#46 / 134-02).
+ * U+0001 (Start of Heading) cannot appear in a real HTTP method or URL path,
+ * so `${method}${SEP}${path}` cannot be forged by a method or path that
+ * contains the join character (a space-containing method could forge the old
+ * `${method} ${path}` join). Used symmetrically on the exposed-set build and
+ * the consumed-side lookup.
+ */
+const METHOD_PATH_SEP = "";
+
 // ---------------------------------------------------------------------------
 // Binding sanitizer
 // ---------------------------------------------------------------------------
@@ -1977,9 +2006,13 @@ export class QueryEngine {
       // ({orgId} vs {org_id}) is tolerated (#43).
       //
       // Method-aware matching (#46): build three derived structures per target:
-      //  (a) composite key Set `UPPER(method) ${canonPath}` for method-aware match;
-      //  (b) wildcard set of canonPaths whose exposed method is null (MM-03 —
-      //      method-agnostic exposure matches any consumed verb);
+      //  (a) composite key Set `UPPER(method)${SEP}${canonPath}` for method-aware
+      //      match. SEP is a control char (U+0001) that cannot appear in a method
+      //      or path, so a space/delimiter-containing malformed method cannot
+      //      forge a collision with a different (method,path) pair (MM-06).
+      //  (b) wildcard set of canonPaths whose exposed method is null (MM-03).
+      //      null = unknown; treated as a wildcard specifically to avoid
+      //      introducing new false positives (it may conceal a verb mismatch).
       //  (c) all-paths set of every canonPath (MM-02 — the null-consumed-method
       //      path-only fallback, identical to pre-#46 behavior).
       const exposedRows = exposedStmt.all(c.target_id);
@@ -1989,22 +2022,27 @@ export class QueryEngine {
       for (const r of exposedRows) {
         const canon = canonicalizePath(r.path);
         exposedAllPaths.add(canon);
-        if (r.method == null) {
+        // normalizeMethod coerces a null OR empty/whitespace-only exposed method
+        // to the null wildcard, keeping both sides symmetric (MM-07).
+        const exposedMethod = normalizeMethod(r.method);
+        if (exposedMethod === null) {
           exposedWildcardPaths.add(canon);
         } else {
-          exposedKeys.add(`${r.method.toUpperCase()} ${canon}`);
+          exposedKeys.add(`${exposedMethod}${METHOD_PATH_SEP}${canon}`);
         }
       }
       // A candidate canonical path is "exposed for this connection" when:
-      //  - c.method is null → it is in the all-paths set (path-only fallback); else
-      //  - `UPPER(c.method) ${canon}` is in the composite key Set, OR
+      //  - c.method is null/empty/whitespace → it is in the all-paths set
+      //    (path-only fallback); else
+      //  - `UPPER(c.method)${SEP}${canon}` is in the composite key Set, OR
       //  - canon is in the wildcard (null-exposed-method) set.
-      const consumedMethod =
-        c.method == null ? null : c.method.toUpperCase();
+      // normalizeMethod (MM-07) maps "" / "   " consumed methods to null so they
+      // take the path-only fallback instead of being treated as a concrete verb.
+      const consumedMethod = normalizeMethod(c.method);
       const isExposed = (canon) => {
         if (consumedMethod === null) return exposedAllPaths.has(canon);
         return (
-          exposedKeys.has(`${consumedMethod} ${canon}`) ||
+          exposedKeys.has(`${consumedMethod}${METHOD_PATH_SEP}${canon}`) ||
           exposedWildcardPaths.has(canon)
         );
       };
