@@ -1070,11 +1070,12 @@ Plans:
 **Goal:** Make `detectMismatches()` method-aware — compare the HTTP method alongside the canonical path so a wrong verb (e.g. consumed `POST /users/{id}` vs exposed only `GET /users/{id}`) is flagged, with a path-only fallback for null-method edges to avoid new false positives (#46).
 **Requirements**: MM-01, MM-02, MM-03, MM-04, MM-05
 **Depends on:** Phase 133
-**Plans:** 1/1 plans complete
+**Plans:** 2 plans (1 complete)
 
 Plans:
 
 - [x] 134-01-PLAN.md — Method-aware exposed-endpoint matching in detectMismatches() with null-method path-only fallbacks + TDD suite (#46)
+- [ ] 134-02-PLAN.md — Hardening from cross-AI review: collision-safe composite key + empty/whitespace-method→null + reworded null-semantics comment + 4 edge tests (#46)
 
 ---
 
