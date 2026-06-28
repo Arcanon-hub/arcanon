@@ -102,6 +102,26 @@ For `sdk` connections: the `path` must be the specific exported function(s) the 
 - `source_file: null` is only valid when the call site is dynamically generated or the source file is minified/bundled with no recoverable origin.
 - Absolute paths starting with `/` are REJECTED at parse time — the field is dropped, the connection still persists. The agent MUST emit relative paths.
 
+## Backing-service clients
+
+For every file listed in the discovery context's `client_files` that imports a client library
+opening a network connection to a stateful **backing service** (datastore, message broker, search
+engine, cache, or vector database), you MUST emit a `connection` with `crossing: "external"` whose
+`target` is the backing service (the library/service name, e.g. `chromadb`, `postgres`, `redis`).
+
+Classify the protocol by reasoning into the **existing canonical buckets** above (do NOT invent new
+ones): a datastore client → `db`; a message-broker client → `events`; a REST/HTTP or search-engine
+API client → `rest`. If the kind is unknown or ambiguous, still pick the closest canonical bucket —
+never drop the connection.
+
+Use the client-construction call site as evidence: set `source_file` to the file and
+`path:function`/`path:line` where the client is built or connected (e.g. `new XClient(...)` /
+`connect()`), and put that constructing/connecting expression in `evidence`.
+
+Example shape: `import { ChromaClient } from "chromadb"` + `new ChromaClient(...)` in
+`worker/server/chroma.js` → an `external` connection, target `chromadb`, protocol `rest`
+(a vector-DB REST API), structured like the `stripe-api` example below.
+
 ## Example
 
 ```json
