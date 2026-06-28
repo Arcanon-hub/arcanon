@@ -1059,12 +1059,12 @@ Plans:
 **Goal:** Teach the `/arcanon:map` discovery and service agent prompts to detect, by reasoning, files importing any network backing-service client (datastore/broker/search/cache/vector DB) and emit an `external` connection per client into the existing canonical protocol buckets — so silently-missed edges like `arcanon → chromadb` appear in the impact map.
 **Requirements**: SC-01, SC-02, SC-03, SC-04, SC-05, SC-06, SC-07
 **Depends on:** Phase 132
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 
 - [x] 133-01-PLAN.md — Generalize discovery item 8 to reasoning-based backing-service-client detection; instruct service prompt to emit external connections; prompt-content test + regression gate
-- [ ] 133-02-PLAN.md — Gap-closure (cross-AI review): two-stage candidate handoff (`backing_service_deps`) so non-entry-point/non-name-matched importers like chroma.js are reachable (HIGH-1); call-site-conditioned emission not MUST-on-import (HIGH-2); ambiguous→other not closest-bucket (HIGH-3); section-coherent + reachability-contract tests
+- [x] 133-02-PLAN.md — Gap-closure (cross-AI review): two-stage candidate handoff (`backing_service_deps`) so non-entry-point/non-name-matched importers like chroma.js are reachable (HIGH-1); call-site-conditioned emission not MUST-on-import (HIGH-2); ambiguous→other not closest-bucket (HIGH-3); section-coherent + reachability-contract tests
 
 ### Phase 134: detectMismatches method-aware endpoint matching — path-only comparison currently ignores HTTP method (#46)
 
