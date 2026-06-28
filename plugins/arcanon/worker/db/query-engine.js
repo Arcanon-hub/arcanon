@@ -1957,13 +1957,15 @@ export class QueryEngine {
     }
 
     const exposedStmt = this._db.prepare(
-      `SELECT path FROM exposed_endpoints WHERE service_id = ?`,
+      `SELECT method, path FROM exposed_endpoints WHERE service_id = ?`,
     );
 
     // Known limitations (deferred, tracked as a follow-up to #43):
-    //  - Matching is path-only; c.method is not compared, so a consumed
-    //    POST /users/{_} matches an exposed GET /users/{id} by path. Method-aware
-    //    matching is a separate enhancement.
+    //  - Method-aware matching landed in #46: the consumed method is compared
+    //    against the exposed method (case-insensitive). Null-method edges on
+    //    either side fall back to path-only matching so method-less / non-HTTP
+    //    edges (consumed) and method-agnostic exposures (exposed) never produce
+    //    new false positives.
     //  - Path normalization is param-only; trailing slashes, double slashes, and
     //    case variants are not normalized.
     const mismatches = [];
@@ -1973,17 +1975,47 @@ export class QueryEngine {
       // {_}-blanked by the persist layer. Collapse both to {_} so parameterized
       // routes compare equal — and so caller/callee param-name drift
       // ({orgId} vs {org_id}) is tolerated (#43).
-      const exposedPaths = new Set(
-        exposedStmt.all(c.target_id).map((r) => canonicalizePath(r.path)),
-      );
+      //
+      // Method-aware matching (#46): build three derived structures per target:
+      //  (a) composite key Set `UPPER(method) ${canonPath}` for method-aware match;
+      //  (b) wildcard set of canonPaths whose exposed method is null (MM-03 —
+      //      method-agnostic exposure matches any consumed verb);
+      //  (c) all-paths set of every canonPath (MM-02 — the null-consumed-method
+      //      path-only fallback, identical to pre-#46 behavior).
+      const exposedRows = exposedStmt.all(c.target_id);
+      const exposedKeys = new Set();
+      const exposedWildcardPaths = new Set();
+      const exposedAllPaths = new Set();
+      for (const r of exposedRows) {
+        const canon = canonicalizePath(r.path);
+        exposedAllPaths.add(canon);
+        if (r.method == null) {
+          exposedWildcardPaths.add(canon);
+        } else {
+          exposedKeys.add(`${r.method.toUpperCase()} ${canon}`);
+        }
+      }
+      // A candidate canonical path is "exposed for this connection" when:
+      //  - c.method is null → it is in the all-paths set (path-only fallback); else
+      //  - `UPPER(c.method) ${canon}` is in the composite key Set, OR
+      //  - canon is in the wildcard (null-exposed-method) set.
+      const consumedMethod =
+        c.method == null ? null : c.method.toUpperCase();
+      const isExposed = (canon) => {
+        if (consumedMethod === null) return exposedAllPaths.has(canon);
+        return (
+          exposedKeys.has(`${consumedMethod} ${canon}`) ||
+          exposedWildcardPaths.has(canon)
+        );
+      };
       // Try literal match first — preserves correctness when base_path is
       // absent  and when the agent emitted the literal prefixed path
       // in `exposes` (Test 8). canonicalizePath(c.path) is idempotent
       // (c.path is already blanked) but applied defensively.
-      if (exposedPaths.has(canonicalizePath(c.path))) continue;
+      if (isExposed(canonicalizePath(c.path))) continue;
       // Try stripped match if target has base_path (: gated on target).
       const stripped = stripBasePath(c.path, c.target_base_path);
-      if (stripped !== null && exposedPaths.has(canonicalizePath(stripped)))
+      if (stripped !== null && isExposed(canonicalizePath(stripped)))
         continue;
       // Neither match — real mismatch.
       mismatches.push({
