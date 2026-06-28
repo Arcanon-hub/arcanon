@@ -1056,14 +1056,14 @@ Plans:
 
 ### Phase 133: Teach the agent scanner to detect network-datastore/broker client connections by reasoning — chromadb/pg/mongodb/redis/etc., examples-not-allowlist (#45)
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Teach the `/arcanon:map` discovery and service agent prompts to detect, by reasoning, files importing any network backing-service client (datastore/broker/search/cache/vector DB) and emit an `external` connection per client into the existing canonical protocol buckets — so silently-missed edges like `arcanon → chromadb` appear in the impact map.
+**Requirements**: SC-01, SC-02, SC-03
 **Depends on:** Phase 132
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 133 to break down)
+- [ ] 133-01-PLAN.md — Generalize discovery item 8 to reasoning-based backing-service-client detection; instruct service prompt to emit external connections; prompt-content test + regression gate
 
 ### Phase 134: detectMismatches method-aware endpoint matching — path-only comparison currently ignores HTTP method (#46)
 
