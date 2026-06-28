@@ -1043,6 +1043,17 @@ Plans:
 - [x] 131-02-PLAN.md — UI alignment (activeProtocols seeded from shared set, db + other buckets/colors/checkboxes, edge normalization seam, protocol_raw in detail panel) + agent-prompt canonical vocabulary + consistency/drift test + human-verify
 - [x] 131-03-PLAN.md — Cross-AI review gap-closure: actor-edge protocol_raw end-to-end (migration 020 + writer/read/detail) + k8s/tf/helm/import renderable (no silent drop) + full-CANONICAL_PROTOCOLS drift test + checkbox-coverage + diff casing + explicit-other warning + narrowed catches
 
+### Phase 132: Fix detectMismatches() false endpoint_not_exposed on parameterized routes — canonicalize {...}→{_} on both sides + skip non-HTTP protocols (#43)
+
+**Goal:** detectMismatches() stops reporting false `endpoint_not_exposed` for parameterized routes (consumed `{_}` paths compared against exposed named-param paths) and skips non-HTTP protocols — by canonicalizing exposed + consumed paths through the existing `canonicalizePath()` on both sides (literal + base_path-stripped) and restricting the candidate set to `c.protocol IN ('rest','grpc')`, with no persist-layer or helper changes.
+**Requirements**: DM-01 (canonicalize exposed + consumed paths on both compare paths), DM-02 (restrict endpoint-exposure check to rest/grpc at both candidate sites), DM-03 (regression: genuine mismatches still flagged, existing tests + full worker/bats suites green)
+**Depends on:** Phase 131
+**Plans:** 1 plan
+
+Plans:
+
+- [x] 132-01-PLAN.md — Canonicalize exposed+consumed paths (reuse canonicalizePath, preserve stripBasePath retry) + rest/grpc protocol allowlist in detectMismatches(); new node:test suite (param match, name drift, events skip, grpc checked, genuine mismatch, base_path+param) + full worker/bats regression gate
+
 ---
 
 ## Progress
@@ -1073,3 +1084,4 @@ Plans:
 | 114-122 | v0.1.4 | 21/21 | Complete | 2026-04-27 |
 | 123-127 | v0.1.5 | 5/5 | Complete | 2026-04-30 |
 | 129-130 | v0.1.9 | 0/? | Planning | - |
+| 131-132 | v0.1.9 fixes | 4/4 | 132 complete; 131-02 human-verify pending | - |
