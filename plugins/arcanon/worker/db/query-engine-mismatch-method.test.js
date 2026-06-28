@@ -270,3 +270,206 @@ describe('detectMismatches — method-aware matching (#46)', () => {
     );
   });
 });
+
+// ===========================================================================
+// Method-aware mismatch detection — hardening (#46 cross-AI review, 134-02)
+// ===========================================================================
+//
+// Robustness-only edges from 134-REVIEWS.md. Behavior for conventional HTTP
+// data is already correct (134-01, M1–M6b); these pin the malformed-input and
+// null/empty-method corners the review flagged:
+//
+//   - H1  (MM-06, collision-safe key): a space-containing malformed method must
+//         not forge a match via the old `${method} ${path}` join.
+//   - H2/H2c (MM-07, empty/whitespace method): "" and "   " normalize to null
+//         (unknown) → path-only fallback (and still flag a genuinely absent path).
+//   - H3  (MM-09, both methods null): matches by canonical path.
+//   - H4/H4b (MM-09, null + concrete co-exposure): null wildcard wins for any verb.
+//   - H5/H5b (MM-09, null fallback + base_path): null consumed → path-only AFTER
+//         base_path strip (and still flag a stripped-but-absent path).
+describe('detectMismatches — method-aware hardening (#46 review)', () => {
+  it('H1 (MM-06, collision-safe key): exposed GET "/A /B" vs consumed "GET /A" "/B" → exactly one mismatch (no forged match)', () => {
+    const { db, repoId } = freshDb();
+    const aId = insertService(db, repoId, 'frontend', null);
+    const bId = insertService(db, repoId, 'h1-collision-api', null);
+    // Exposed: method "GET", canonical path "/A /B" (internal space survives
+    // canonicalizePath, which only collapses {param} → {_}). Uppercase path so
+    // the malformed-method toUpperCase() on the consumed side cannot diverge by
+    // case — isolating the JOIN-CHARACTER collision the review flagged.
+    insertExposedEndpoint(db, bId, 'GET', '/A /B');
+    // Consumed: malformed method "GET /A" on path "/B". Pre-fix the space-joined
+    // key produced "GET /A /B" for BOTH sides → false match (ZERO). The
+    // collision-safe representation keeps them distinct → EXACTLY ONE mismatch.
+    insertConnection(db, aId, bId, 'rest', 'GET /A', '/B');
+
+    const qe = new QueryEngine(db);
+    const mismatches = qe.detectMismatches();
+    const forThisConn = mismatches.filter(
+      (m) => m.source === 'frontend' && m.target === 'h1-collision-api'
+    );
+    assert.equal(
+      forThisConn.length,
+      1,
+      `space-containing method must not forge a match for a different (method,path) pair, got: ${JSON.stringify(forThisConn)}`
+    );
+    assert.equal(forThisConn[0].type, 'endpoint_not_exposed');
+  });
+
+  it('H2 (MM-07, empty-string method): consumed "" /e/{_} vs exposed GET /e/{id} → no mismatch (empty → null → path-only)', () => {
+    const { db, repoId } = freshDb();
+    const aId = insertService(db, repoId, 'frontend', null);
+    const bId = insertService(db, repoId, 'h2-empty-api', null);
+    insertExposedEndpoint(db, bId, 'GET', '/e/{id}');
+    insertConnection(db, aId, bId, 'rest', '', '/e/{_}');
+
+    const qe = new QueryEngine(db);
+    const mismatches = qe.detectMismatches();
+    const forThisConn = mismatches.filter(
+      (m) => m.source === 'frontend' && m.target === 'h2-empty-api'
+    );
+    assert.equal(
+      forThisConn.length,
+      0,
+      `empty-string method must normalize to null and take the path-only fallback, got: ${JSON.stringify(forThisConn)}`
+    );
+  });
+
+  it('H2b (MM-07 contrast): consumed "" on an UNexposed path /missing/{_} → exactly one mismatch', () => {
+    const { db, repoId } = freshDb();
+    const aId = insertService(db, repoId, 'frontend', null);
+    const bId = insertService(db, repoId, 'h2b-empty-api', null);
+    insertExposedEndpoint(db, bId, 'GET', '/e/{id}');
+    insertConnection(db, aId, bId, 'rest', '', '/missing/{_}');
+
+    const qe = new QueryEngine(db);
+    const mismatches = qe.detectMismatches();
+    const forThisConn = mismatches.filter(
+      (m) => m.source === 'frontend' && m.target === 'h2b-empty-api'
+    );
+    assert.equal(
+      forThisConn.length,
+      1,
+      `empty-method path-only fallback must still flag a genuinely absent path, got: ${JSON.stringify(forThisConn)}`
+    );
+    assert.equal(forThisConn[0].type, 'endpoint_not_exposed');
+  });
+
+  it('H2c (MM-07, whitespace-only method): consumed "   " /e/{_} vs exposed GET /e/{id} → no mismatch', () => {
+    const { db, repoId } = freshDb();
+    const aId = insertService(db, repoId, 'frontend', null);
+    const bId = insertService(db, repoId, 'h2c-ws-api', null);
+    insertExposedEndpoint(db, bId, 'GET', '/e/{id}');
+    insertConnection(db, aId, bId, 'rest', '   ', '/e/{_}');
+
+    const qe = new QueryEngine(db);
+    const mismatches = qe.detectMismatches();
+    const forThisConn = mismatches.filter(
+      (m) => m.source === 'frontend' && m.target === 'h2c-ws-api'
+    );
+    assert.equal(
+      forThisConn.length,
+      0,
+      `whitespace-only method must normalize to null and take the path-only fallback, got: ${JSON.stringify(forThisConn)}`
+    );
+  });
+
+  it('H3 (MM-09, both methods null): exposed null /both/{id} vs consumed null /both/{_} → no mismatch', () => {
+    const { db, repoId } = freshDb();
+    const aId = insertService(db, repoId, 'frontend', null);
+    const bId = insertService(db, repoId, 'h3-bothnull-api', null);
+    insertExposedEndpoint(db, bId, null, '/both/{id}');
+    insertConnection(db, aId, bId, 'rest', null, '/both/{_}');
+
+    const qe = new QueryEngine(db);
+    const mismatches = qe.detectMismatches();
+    const forThisConn = mismatches.filter(
+      (m) => m.source === 'frontend' && m.target === 'h3-bothnull-api'
+    );
+    assert.equal(
+      forThisConn.length,
+      0,
+      `both methods null must match by canonical path, got: ${JSON.stringify(forThisConn)}`
+    );
+  });
+
+  it('H4 (MM-09, null + concrete co-exposure): exposed (null, POST) on /co/{id}; consumed DELETE /co/{_} → no mismatch (null wildcard wins)', () => {
+    const { db, repoId } = freshDb();
+    const aId = insertService(db, repoId, 'frontend', null);
+    const bId = insertService(db, repoId, 'h4-coexpose-api', null);
+    // Two exposed rows on the SAME canonical path: a null wildcard + a concrete POST.
+    insertExposedEndpoint(db, bId, null, '/co/{id}');
+    insertExposedEndpoint(db, bId, 'POST', '/co/{id}');
+    insertConnection(db, aId, bId, 'rest', 'DELETE', '/co/{_}');
+
+    const qe = new QueryEngine(db);
+    const mismatches = qe.detectMismatches();
+    const forThisConn = mismatches.filter(
+      (m) => m.source === 'frontend' && m.target === 'h4-coexpose-api'
+    );
+    assert.equal(
+      forThisConn.length,
+      0,
+      `null wildcard co-exposed with concrete POST must still match DELETE, got: ${JSON.stringify(forThisConn)}`
+    );
+  });
+
+  it('H4b (MM-09, null + concrete co-exposure): consumed GET /co/{_} → no mismatch (concrete POST present but null wildcard matches GET)', () => {
+    const { db, repoId } = freshDb();
+    const aId = insertService(db, repoId, 'frontend', null);
+    const bId = insertService(db, repoId, 'h4b-coexpose-api', null);
+    insertExposedEndpoint(db, bId, null, '/co/{id}');
+    insertExposedEndpoint(db, bId, 'POST', '/co/{id}');
+    insertConnection(db, aId, bId, 'rest', 'GET', '/co/{_}');
+
+    const qe = new QueryEngine(db);
+    const mismatches = qe.detectMismatches();
+    const forThisConn = mismatches.filter(
+      (m) => m.source === 'frontend' && m.target === 'h4b-coexpose-api'
+    );
+    assert.equal(
+      forThisConn.length,
+      0,
+      `null wildcard must match GET even with a concrete POST co-exposed, got: ${JSON.stringify(forThisConn)}`
+    );
+  });
+
+  it('H5 (MM-09, null fallback + base_path): base_path /api, exposed GET /orgs/{org_id}/members, consumed null /api/orgs/{_}/members → no mismatch', () => {
+    const { db, repoId } = freshDb();
+    const aId = insertService(db, repoId, 'frontend', null);
+    const bId = insertService(db, repoId, 'h5-prefixed-api', '/api');
+    insertExposedEndpoint(db, bId, 'GET', '/orgs/{org_id}/members');
+    // null consumed method → path-only fallback, applied AFTER base_path strip.
+    insertConnection(db, aId, bId, 'rest', null, '/api/orgs/{_}/members');
+
+    const qe = new QueryEngine(db);
+    const mismatches = qe.detectMismatches();
+    const forThisConn = mismatches.filter(
+      (m) => m.source === 'frontend' && m.target === 'h5-prefixed-api'
+    );
+    assert.equal(
+      forThisConn.length,
+      0,
+      `null consumed method + base_path strip must match by path, got: ${JSON.stringify(forThisConn)}`
+    );
+  });
+
+  it('H5b (MM-09 contrast): base_path /api, consumed null /api/orgs/{_}/missing → exactly one mismatch (stripped path genuinely absent)', () => {
+    const { db, repoId } = freshDb();
+    const aId = insertService(db, repoId, 'frontend', null);
+    const bId = insertService(db, repoId, 'h5b-prefixed-api', '/api');
+    insertExposedEndpoint(db, bId, 'GET', '/orgs/{org_id}/members');
+    insertConnection(db, aId, bId, 'rest', null, '/api/orgs/{_}/missing');
+
+    const qe = new QueryEngine(db);
+    const mismatches = qe.detectMismatches();
+    const forThisConn = mismatches.filter(
+      (m) => m.source === 'frontend' && m.target === 'h5b-prefixed-api'
+    );
+    assert.equal(
+      forThisConn.length,
+      1,
+      `null-method fallback after strip must still flag a genuinely absent path, got: ${JSON.stringify(forThisConn)}`
+    );
+    assert.equal(forThisConn[0].type, 'endpoint_not_exposed');
+  });
+});
