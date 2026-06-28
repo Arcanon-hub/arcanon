@@ -714,6 +714,14 @@ describe("scanRepos — incremental prompt constraint", () => {
       /You MUST only examine/,
       "prompt must use strong directive language",
     );
+    // #45 round-2: the changed-files-only restriction must carve out an exception
+    // for backing_service_deps candidate call-site lookup, else an unchanged
+    // importer (e.g. chroma.js) is never resolved on incremental scans.
+    assert.match(
+      capturedPrompt,
+      /EXCEPTION — backing-service clients[\s\S]*backing_service_deps/,
+      "incremental constraint must exempt backing_service_deps candidate lookup",
+    );
 
     assert.equal(results.length, 1);
     assert.equal(results[0].mode, "incremental");

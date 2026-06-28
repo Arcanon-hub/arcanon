@@ -22,10 +22,42 @@ Read ONLY these files (do not scan source code yet):
 7. **Event config** — files referencing kafka, rabbitmq, sqs, nats topics
    (all emitted under the canonical `events` bucket; datastore dependencies —
    postgres/mysql/mongodb/redis/sql — are emitted under the `db` bucket)
-8. **Client/HTTP files** — files whose names match `*client*`, `*api*`, `*http*` (case-insensitive),
-   OR any file that imports `fetch`, `requests`, `reqwest`, or `httpx`. List these in `client_files`
-   (per DISC-02). Do NOT read source files line-by-line; only check filenames for the name patterns,
-   and limit import scanning to files already opened for entry-point detection.
+8. **Client / backing-service files** — list in `client_files` (per DISC-02) any file that is an
+   outbound client. This includes, but is NOT limited to:
+   - files whose names match `*client*`, `*api*`, `*http*` (case-insensitive); OR
+   - files that import a generic HTTP client (`fetch`, `requests`, `reqwest`, `httpx`, and equivalents); OR
+   - **files that import a client library which is CAPABLE of opening a network connection to a
+     stateful backing service** — a datastore, message broker, search engine, cache, or vector
+     database. (Importing such a library does NOT by itself prove a connection is made — whether a
+     connection is actually opened is decided at the construction/use call site, which Stage-2
+     confirms. Discovery only nominates the file as a candidate client.)
+
+   Decide this last category by REASONING, not by matching a fixed list: ask "is this imported
+   library capable of opening a network connection to a stateful backing service?" For example (not
+   limited to): `chromadb`, `pg`/`postgres`, `mongodb`/`mongoose`, `redis`/`ioredis`,
+   `@elastic/elasticsearch`, `mysql2`, `cassandra-driver`, `amqplib`, `kafkajs`. These are
+   illustrative only — apply the SAME judgment to equivalents in ANY language and to libraries NOT
+   listed here.
+
+   To stay fast, do NOT read source files line-by-line: check filenames for the name patterns, and
+   limit import scanning to files already opened for entry-point detection — so you reason about
+   declared client dependencies without reading every file.
+
+   **Also emit `backing_service_deps` (per DISC-02, candidate handoff for HIGH-1).** IN ADDITION to
+   `client_files` above (KEEP those name/HTTP-client heuristics unchanged), scan the manifest
+   dependency lists you already read (`package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`, etc.)
+   and emit into `backing_service_deps` every declared dependency that — by the SAME REASONING — is
+   capable of opening a network connection to a stateful backing service (datastore, message broker,
+   search engine, cache, or vector database). `backing_service_deps` holds library/dependency NAMES
+   (e.g. `chromadb`, `pg`, `redis`), **NOT file paths** — these are CANDIDATES for Stage-2 to resolve
+   to actual import/call sites in source.
+
+   WHY both fields exist: a file like one doing `import { ChromaClient } from "chromadb"` may be
+   neither name-matched (its name is not `*client*`) nor an entry point, and imports neither `fetch`
+   nor `requests` — so it will NOT appear in `client_files`. The manifest-declared `chromadb` entry in
+   `backing_service_deps` carries that dependency name across the handoff so Stage-2 (which DOES read
+   source) can locate the import/call site and emit the edge. Reuse the same non-exhaustive,
+   any-language example set; do NOT turn `backing_service_deps` into a gating allowlist.
 
 ---
 
@@ -51,7 +83,8 @@ Return ONLY a fenced JSON code block:
   "proto_files": ["string — .proto files found"],
   "openapi_files": ["string — openapi/swagger files found"],
   "event_config_files": ["string — files with event/queue configuration"],
-  "client_files": ["string — files matching *client*, *api*, *http* patterns or importing fetch/requests/reqwest/httpx"],
+  "client_files": ["string — files matching *client*/*api*/*http* names, OR importing a generic HTTP client (fetch/requests/reqwest/httpx), OR importing any network backing-service client (datastore/broker/search/cache/vector DB)"],
+  "backing_service_deps": ["string — manifest-declared dependency NAMES (from package.json/pyproject.toml/Cargo.toml/go.mod etc.) that, by reasoning, are capable of opening a network connection to a stateful backing service (datastore, message broker, search engine, cache, or vector database). These are CANDIDATES for Stage-2 to locate in source — library names, NOT file paths (e.g. chromadb, pg, redis; non-exhaustive, any language)"],
   "has_dockerfile": true,
   "has_docker_compose": true,
   "mono_repo": false,

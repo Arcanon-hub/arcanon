@@ -102,6 +102,49 @@ For `sdk` connections: the `path` must be the specific exported function(s) the 
 - `source_file: null` is only valid when the call site is dynamically generated or the source file is minified/bundled with no recoverable origin.
 - Absolute paths starting with `/` are REJECTED at parse time — the field is dropped, the connection still persists. The agent MUST emit relative paths.
 
+## Backing-service clients
+
+Two inputs name backing-service client candidates: the discovery context's `client_files` (file
+paths) AND its `backing_service_deps` (manifest-declared dependency NAMES). Process BOTH.
+
+**Locate from candidates (HIGH-1).** For EACH library name in `backing_service_deps`, locate that
+library's import statement and its construction/use call site in the repo's source — grep/read source
+as needed to find them. A candidate's importing file may be neither name-matched nor an entry point,
+so it may NOT appear in `client_files`; that is exactly why `backing_service_deps` exists — to drive
+you to find the call site that `client_files` could not surface. (Also keep inspecting the files in
+`client_files` as before.)
+
+**Emit only from a real call site (HIGH-2 — call-site-conditioned, NOT import-triggered).** Do NOT
+emit a connection merely because a file imports such a library. Emit an `external` connection ONLY
+when a real construction/use call site PROVES an outbound connection — e.g. `new XClient(...)`
+followed by an operation, a `connect()`, a query/publish/heartbeat call, or an explicit remote
+endpoint/host configuration. A bare construction alone is WEAK evidence: prefer construction PLUS an
+operation, or an explicit remote endpoint/config. Emit NO connection for: an unused import, a
+type-only import, a dependency re-export, an optional adapter, or a client constructed but never used
+to reach the network. This aligns with the common rule — do NOT infer connections from imports alone;
+require a directly citable call site.
+
+**Classify from observed transport, not library name (HIGH-3 + MEDIUM-4).** Classify the protocol
+from the OBSERVED client/transport at the call site, into the existing canonical buckets above (do
+NOT invent new ones): datastore semantics → `db`; broker semantics → `events`; demonstrated HTTP →
+`rest`; demonstrated gRPC → `grpc`. If the kind is GENUINELY ambiguous, use `other` (never drop) —
+matching the "unrecognized → other, never dropped" fallback already stated above. Do NOT teach
+"search-engine API → rest" as a blanket rule, and do NOT classify by library name.
+
+**Evidence (MEDIUM-5).** Use the construction/use call site as evidence: set `source_file` to the
+file and `path:function`/`path:line` where the client is built and used (e.g. `new XClient(...)` then
+`connect()`/an operation), and put that expression in `evidence`. `source_file` remains REQUIRED.
+
+**Target naming (MEDIUM-6).** Prefer a configured service/product identity for `target` when
+available; otherwise use a normalized library-derived name, so the graph does not fragment (`pg` vs
+`postgres` vs hostnames).
+
+Example shape: if a module does `import { ChromaClient } from "chromadb"` and then constructs and uses
+a client (e.g. `new ChromaClient(...)` then a `heartbeat()`/query observed using an HTTP transport at
+the call site) → an `external` connection, target a normalized `chromadb`, protocol classified from
+the OBSERVED transport (HTTP transport at the call site → `rest`), structured like the `stripe-api`
+example below. Do not classify by the library name alone.
+
 ## Example
 
 ```json
