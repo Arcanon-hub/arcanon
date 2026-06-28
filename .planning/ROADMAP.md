@@ -1054,6 +1054,28 @@ Plans:
 
 - [x] 132-01-PLAN.md — Canonicalize exposed+consumed paths (reuse canonicalizePath, preserve stripBasePath retry) + rest/grpc protocol allowlist in detectMismatches(); new node:test suite (param match, name drift, events skip, grpc checked, genuine mismatch, base_path+param) + full worker/bats regression gate
 
+### Phase 133: Teach the agent scanner to detect network-datastore/broker client connections by reasoning — chromadb/pg/mongodb/redis/etc., examples-not-allowlist (#45)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 132
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 133 to break down)
+
+### Phase 134: detectMismatches method-aware endpoint matching — path-only comparison currently ignores HTTP method (#46)
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 133
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 134 to break down)
+
 ---
 
 ## Progress
