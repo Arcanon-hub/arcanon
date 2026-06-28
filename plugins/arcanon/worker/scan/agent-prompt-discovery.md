@@ -22,10 +22,24 @@ Read ONLY these files (do not scan source code yet):
 7. **Event config** — files referencing kafka, rabbitmq, sqs, nats topics
    (all emitted under the canonical `events` bucket; datastore dependencies —
    postgres/mysql/mongodb/redis/sql — are emitted under the `db` bucket)
-8. **Client/HTTP files** — files whose names match `*client*`, `*api*`, `*http*` (case-insensitive),
-   OR any file that imports `fetch`, `requests`, `reqwest`, or `httpx`. List these in `client_files`
-   (per DISC-02). Do NOT read source files line-by-line; only check filenames for the name patterns,
-   and limit import scanning to files already opened for entry-point detection.
+8. **Client / backing-service files** — list in `client_files` (per DISC-02) any file that is an
+   outbound client. This includes, but is NOT limited to:
+   - files whose names match `*client*`, `*api*`, `*http*` (case-insensitive); OR
+   - files that import a generic HTTP client (`fetch`, `requests`, `reqwest`, `httpx`, and equivalents); OR
+   - **files that import a client library which opens a network connection to a stateful backing
+     service** — a datastore, message broker, search engine, cache, or vector database.
+
+   Decide this last category by REASONING, not by matching a fixed list: ask "does this imported
+   library open a network connection to a stateful backing service?" For example (not limited to):
+   `chromadb`, `pg`/`postgres`, `mongodb`/`mongoose`, `redis`/`ioredis`, `@elastic/elasticsearch`,
+   `mysql2`, `cassandra-driver`, `amqplib`, `kafkajs`. These are illustrative only — apply the SAME
+   judgment to equivalents in ANY language and to libraries NOT listed here. A file qualifies even
+   when its name is not `*client*` and it imports neither `fetch` nor `requests` (e.g. a module that
+   does `import { ChromaClient } from "chromadb"` and `new ChromaClient(...)`).
+
+   To stay fast, do NOT read source files line-by-line: check filenames for the name patterns, and
+   limit import scanning to files already opened for entry-point detection plus the manifest
+   dependency lists — so you reason about declared client dependencies without reading every file.
 
 ---
 
@@ -51,7 +65,7 @@ Return ONLY a fenced JSON code block:
   "proto_files": ["string — .proto files found"],
   "openapi_files": ["string — openapi/swagger files found"],
   "event_config_files": ["string — files with event/queue configuration"],
-  "client_files": ["string — files matching *client*, *api*, *http* patterns or importing fetch/requests/reqwest/httpx"],
+  "client_files": ["string — files matching *client*/*api*/*http* names, OR importing a generic HTTP client (fetch/requests/reqwest/httpx), OR importing any network backing-service client (datastore/broker/search/cache/vector DB)"],
   "has_dockerfile": true,
   "has_docker_compose": true,
   "mono_repo": false,
