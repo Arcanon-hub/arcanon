@@ -1063,7 +1063,7 @@ Plans:
 
 Plans:
 
-- [ ] 133-01-PLAN.md — Generalize discovery item 8 to reasoning-based backing-service-client detection; instruct service prompt to emit external connections; prompt-content test + regression gate
+- [x] 133-01-PLAN.md — Generalize discovery item 8 to reasoning-based backing-service-client detection; instruct service prompt to emit external connections; prompt-content test + regression gate
 
 ### Phase 134: detectMismatches method-aware endpoint matching — path-only comparison currently ignores HTTP method (#46)
 
