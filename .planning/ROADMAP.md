@@ -1147,7 +1147,8 @@ Plans:
   2. Calling the DB factory/pool with the same canonical project path twice returns the same cached handle (cache hit) — not a newly opened connection on every call.
   3. Integration tests exercise real pool resolution against real per-project databases (no mocked resolvers or in-memory stubs) and confirm that a cross-project query returns zero results from the wrong project.
 
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 137-01-PLAN.md — openDb() factory + pool keyed by resolved dbPath + ISO-11 isolation tests (ISO-01, ISO-02, ISO-11)
 
 ---
 
