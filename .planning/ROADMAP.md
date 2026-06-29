@@ -1227,7 +1227,12 @@ Plans:
   4. An incremental scan preserves unchanged findings and removes only the findings owned by deleted or renamed files — a changed-files-only report does not wipe the full project snapshot.
   5. End-to-end tests confirm that scan initiation via the command, MCP, and HTTP transports all produce consistent, correct graph state.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 141-01-PLAN.md — scan-service.js: persistScanResult write pipeline + PIPE-04 incremental preserve/remove + real-DB E2E suite [PIPE-01, PIPE-03, PIPE-04, CTR-05]
+- [ ] 141-02-PLAN.md — command + worker adapters: map.md/rescan.md Step 5 + manager.js Phase B route through persistScanResult [PIPE-01, PIPE-03, PIPE-04, CTR-05]
+- [ ] 141-03-PLAN.md — HTTP /scan adapter + queryScan response.ok fix (PIPE-02 false-success) + transport tests [PIPE-01, PIPE-02, CTR-05]
 
 ---
 
