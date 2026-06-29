@@ -232,7 +232,41 @@ Understand and protect your architecture across repositories — see how service
 
 ### Active
 
-- (planning next milestone — run `/gsd-new-milestone`)
+- v0.2.0 Scan Persistence, Pipeline & Security Hardening — see `.planning/REQUIREMENTS.md`
+
+## Current Milestone: v0.2.0 Scan Persistence, Pipeline & Security Hardening
+
+**Goal:** Fix the scan→persist→graph core so per-project data is isolated, scans
+persist atomically with usable history, one pipeline serves every entry point,
+the MCP/Hub security boundaries hold, and the drift/search integrations + runtime
+scaling that sit on top return correct, performant data.
+
+**Target tracks (dependency-ordered, GitHub issues #49–#52):**
+- **Security (#51)** — replace shell-string execution in `worker/mcp/server.js`
+  (`commit_range`, `oasdiff` spec paths) with `execFileSync`/argv arrays; bind
+  Hub queue rows to an immutable org/URL so an org switch can't misroute a queued
+  upload; mark non-retriable 4xx failures `dead` in one drain. Independent —
+  sequenced early.
+- **Persistence foundation (#49)** — replace the global `openDb()` singleton with
+  a DB factory/pool keyed by canonical project identity; make the full scan a
+  transactional unit of work (begin → persist → overrides → reconcile → end);
+  choose an explicit history/version model; add a project-level run identifier;
+  reconcile all child state (endpoints, actors, schemas, deps, metadata).
+- **Pipeline unification (#50)** — one `ScanService` behind Claude commands, MCP,
+  and HTTP; one canonical contract (crossing values, protocols, `source_file` vs
+  symbol/line, schema↔connection identity); validate at every persistence entry;
+  fix MCP false-success, `/arcanon:rescan` override throw, and incremental delete.
+- **Integrations + scaling (#52)** — repair drift-graph SQL + route through the
+  canonical version/diff API; move Chroma sync into the transactional completion
+  path with project-namespaced IDs; fix UI dangling-edge rendering; then bounded
+  concurrency, batched N+1 queries, pagination, pool eviction, and indexes.
+
+**Key context:** Two root causes verified live — the `openDb()` global singleton
+(`worker/db/database.js:93`) and MCP shell injection (`worker/mcp/server.js:250`,
+plus `oasdiff` at :1055/:1085). #49 is the foundation #50 and #52 build on; #51 is
+independent and ships early. The #49 history-model choice (append-only versioned
+rows vs immutable snapshot DBs) is the milestone's central design decision and
+should be settled in `/gsd-discuss-phase` for that phase before its plans.
 
 ## Current State
 
