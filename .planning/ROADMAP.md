@@ -1112,7 +1112,8 @@ Plans:
   3. Git revision/range inputs containing `--option-like-strings` or shell metacharacters are validated and either rejected with a clear error or passed literally as data — no input can be interpreted as a git flag.
   4. Response bodies and payload fragments that may contain source-file evidence are absent from worker log output after a scan or sync operation.
 
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 135-01-PLAN.md — git + oasdiff calls to execFileSync argv; commit_range validation (reject option-injection, `--` separator); redactExecError so logs carry no command lines/bodies (SEC-01, SEC-02, SEC-03, SEC-08)
 
 ---
 
@@ -1129,7 +1130,9 @@ Plans:
   3. A drain attempt that receives a non-retriable 4xx response (401, 403, 404, 410) transitions the row to `dead` in a single attempt — no retry loop is entered, and the row state is visible in queue status output.
   4. Queue status counters (pending / uploading / dead / complete) match the actual persisted row states — no discrepancy between in-memory tracking and database state.
 
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 136-01-PLAN.md — Bind queue rows to immutable (hub_url, org_id) at enqueue; hold legacy rows (SEC-04, SEC-06)
+- [ ] 136-02-PLAN.md — Drain to per-row destination; dead-on-non-retriable 4xx in one attempt (SEC-05, SEC-07)
 
 ---
 
@@ -1145,7 +1148,8 @@ Plans:
   2. Calling the DB factory/pool with the same canonical project path twice returns the same cached handle (cache hit) — not a newly opened connection on every call.
   3. Integration tests exercise real pool resolution against real per-project databases (no mocked resolvers or in-memory stubs) and confirm that a cross-project query returns zero results from the wrong project.
 
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 137-01-PLAN.md — openDb() factory + pool keyed by resolved dbPath + ISO-11 isolation tests (ISO-01, ISO-02, ISO-11)
 
 ---
 
@@ -1162,7 +1166,9 @@ Plans:
   3. Running a full scan for repo A never deletes or modifies endpoints, actors, service-dependencies, or node-metadata owned by repo B — cross-repo contamination is structurally impossible.
   4. An abandoned scan (process killed mid-scan) leaves the database in a recoverable state — the next scan for that project completes successfully without manual intervention.
 
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 138-01-PLAN.md — Transaction-ready DB primitives: applyPendingOverridesSync; endScan completed_at-last (ISO-04) + repo-scoped cleanup (ISO-05); beginScan startedAt + abandoned-scan recovery (ISO-10); query-engine-txn.test.js proving ISO-03/04/05/10
+- [ ] 138-02-PLAN.md — Wire manager.js Phase B write path into one db.transaction (ISO-03), beginScan inside tx + per-repo rollback isolation (ISO-10); manager-txn.test.js end-to-end proof
 
 ---
 
