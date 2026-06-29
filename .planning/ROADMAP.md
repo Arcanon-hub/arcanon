@@ -1271,7 +1271,12 @@ Plans:
   5. The DB pool evicts idle handles after a configurable timeout and closes all open handles on worker shutdown — no project database file descriptor remains open after the worker process exits.
   6. Fastify routes that perform synchronous SQLite reads or filesystem operations complete without blocking the Node.js event loop beyond the documented interactive-latency budget.
 
-**Plans**: TBD
+**Plans**: 5 plans (2 waves)
+- [ ] 143-01-PLAN.md — PERF-03: perf-indexes migration (next-free >=023) + EXPLAIN QUERY PLAN tests [Wave 1]
+- [ ] 143-02-PLAN.md — PERF-04 bounded scan concurrency + PERF-02 dep-collector rootPath dedup [Wave 1]
+- [ ] 143-03-PLAN.md — PERF-05 pool idle eviction + closeAll + shutdown wiring [Wave 1]
+- [ ] 143-04-PLAN.md — PERF-02 detectMismatches/actor batching + evidence file cache [Wave 1]
+- [ ] 143-05-PLAN.md — PERF-01 getGraph pagination/summary + PERF-06 route observability/TTL caches + benchmark [Wave 2]
 
 ---
 
