@@ -220,57 +220,41 @@ Understand and protect your architecture across repositories — see how service
 - ✓ Auth regression test suite — `client.test.js` 7-code table-driven test, new `whoami.test.js` (7 tests), `integration.test.js` round-trip via `withTempHome` async fixture; net 824 total / 823 pass / 1 baseline-flake fail (AUTH-10) — v0.1.5
 - ✓ v0.1.5 release gate (VER-01..03) — 4 manifests pinned at 0.1.5 + lockfile regen, CHANGELOG `[0.1.5]` with explicit BREAKING/THE-1030 callout, bats 458/459 + node 823/824 green at v0.1.4 floors — v0.1.5
 
+- ✓ Native SQLite migration — replaced `better-sqlite3` with Node's built-in `node:sqlite` (`DatabaseSync`) behind a thin adapter; eliminated the runtime native-module install that raced Claude Code's ~30s MCP connection timeout; Node floor raised to >=22.13 — v0.1.8 (PR #38)
+
+- ✓ Shadow trio removed end-to-end — `/arcanon:shadow-scan`, `/arcanon:promote-shadow`, `/arcanon:diff --shadow` + worker machinery deleted; `diffScanVersions` scan-version engine preserved (RM-01..06) — v0.1.9
+- ✓ `/arcanon:rescan` repaired — inline `node` repointed off removed `better-sqlite3` onto the `node:sqlite` adapter; regression test pins the resolve path (FIX-01, TST-01) — v0.1.9
+- ✓ One canonical protocol vocabulary across scan→persist→getGraph→UI with fallback-not-reject — pub/sub, DB, GraphQL, SSE + unknown all render as toggleable edges, never dropped (PV-01..18, #42) — v0.1.9
+- ✓ `detectMismatches()` no longer false-flags parameterized routes — two-sided `{param}`→`{_}` canonicalization + `rest`/`grpc` allowlist skips non-HTTP protocols (DM-01..03, #43) — v0.1.9
+- ✓ Agent scanner detects network backing-service clients (datastore/broker/search/cache/vector DB) by reasoning, examples-not-allowlist — `arcanon→chromadb` now detectable (SC-01..07, #45) — v0.1.9
+- ✓ `detectMismatches()` is method-aware — `(method, canonicalPath)`-keyed `exposedByMethod` Map, case-insensitive, null-method path-only fallback (MM-01..09, #46) — v0.1.9
+- ✓ v0.1.9 release gate (VER-01..02) — 3 manifests pinned at 0.1.9 + lockfile regen, CHANGELOG `[0.1.9]` BREAKING, zero shadow references, worker 945/945 — v0.1.9
+
 ### Active
 
-- v0.1.9 Shadow Trio Removal & Rescan Repair — see `.planning/REQUIREMENTS.md`
-
-## Current Milestone: v0.1.9 Shadow Trio Removal & Rescan Repair
-
-**Goal:** Remove the redundant shadow-scan workflow and repair the broken
-`/arcanon:rescan` command — shrinking maintenance surface and eliminating
-silent bit-rot in the scan command layer.
-
-**Target features:**
-- Remove the shadow trio — `/arcanon:shadow-scan`, `/arcanon:promote-shadow`,
-  and the `--shadow` mode of `/arcanon:diff` — including worker machinery
-  (`getShadowQueryEngine`, `cmdPromoteShadow` + handler, diff-engine shadow
-  paths) and their bats suites.
-- Fix `/arcanon:rescan` — repoint its inline `node` from the removed
-  `better-sqlite3` to the `node:sqlite` adapter.
-- Update user docs — README (root + plugin), CHANGELOG (BREAKING note),
-  `docs/commands.md`.
-- Close the root cause — add test coverage that exercises command inline-`node`
-  paths so future dependency migrations cannot silently break them.
-
-**Rationale:** The shadow trio duplicates capability already provided by
-`/arcanon:map`'s confirm gate (preview-before-persist) and `/arcanon:diff`'s
-scan-version comparison. It has been broken since the v0.1.8 `node:sqlite`
-migration (stale `better-sqlite3` import) with no user reports — evidence it
-is unused. Removing user-facing commands is a **breaking change** (pre-1.0,
-documented in CHANGELOG).
+- (planning next milestone — run `/gsd-new-milestone`)
 
 ## Current State
 
-**Shipped:** v0.1.5 Identity & Privacy (2026-04-30) — 5 phases (123-127), 5 plans, 20/21 REQs satisfied (VER-04 deferred), 45 commits squashed into PR #23 (merge `525a160`), +9,150/-871 LOC, 4-day cycle.
+**Shipped:** v0.1.9 Shadow Trio Removal, Rescan Repair & Scan/Mismatch Fixes (2026-06-29) — 6 phases (129-134), 13 plans, 32 tasks, 52/52 REQs, git range `ca5cb96..af8dfae` (PRs #41/#44/#47/#48). Audit `tech_debt` (no blockers). Preceded by v0.1.8 Native SQLite Migration (Phase 128, PR #38) and the out-of-roadmap v0.1.6/0.1.7 dependency-install hardening.
 
-**Operator surface today (post-v0.1.5):** 17 `/arcanon:*` slash commands. `/arcanon:login` whoami-driven 4×2 branch table with multi-grant AskUserQuestion re-entry via exit-7 + stdout sentinel. `/arcanon:status` Identity block (nested in `--json`). `/arcanon:sync` carries `X-Org-Id` header on every upload. `~/.arcanon/config.json` stores the credential triple (apiKey + hubUrl + default_org_id) at mode 0600 with spread-merge preservation. Egress masking at MCP / HTTP / logger / export — zero `$HOME` paths leak from any wire boundary; DB still stores absolute paths for git operations. 7-code RFC 7807 error parser surfaces actionable messages.
+**Scan/graph accuracy today (post-v0.1.9):** One canonical protocol vocabulary (`rest·grpc·events·db·internal·sdk` + infra + `other`) shared scan→persist→getGraph→UI with fallback-not-reject — no protocol is silently dropped. `detectMismatches()` is canonicalized on both sides and method-aware, so parameterized routes and non-HTTP protocols no longer false-flag. The agent scanner detects network backing-service clients (datastore/broker/search/cache/vector DB) by reasoning, so edges like `arcanon→chromadb` surface. Storage runs on Node's built-in `node:sqlite` (no runtime native install). Command surface is lean — the shadow-scan trio is gone; `/arcanon:diff <scanA> <scanB>` is the documented scan-comparison path.
 
-**Hub-side blocker (live):** arcanon-hub THE-1030 not yet deployed. Hub-half of the product (login round-trip + sync upload) is non-functional until the hub enforces `X-Org-Id` and serves `whoami`. Local features (`/arcanon:map`, `/arcanon:impact`, `/arcanon:list`, `/arcanon:diff`, `/arcanon:export`, `/arcanon:doctor`, `/arcanon:view`) work standalone. Marketplace publication held back until hub is reachable.
+**Operator surface (carried from v0.1.5):** `/arcanon:login` whoami-driven flow, `/arcanon:status` Identity block, `/arcanon:sync` with `X-Org-Id`, credential triple in `~/.arcanon/config.json` (mode 0600), egress `$HOME` masking at MCP/HTTP/logger/export.
 
-**Deferred at v0.1.5 close:** 3 operator-side e2e walkthroughs (125-01 T4, 125-02 T4, 127-01 T4) — all unblock together when THE-1030 deploys. Plus 1 carry-forward (Phase 114 UAT — 7 operator scenarios from v0.1.4) and 3 follow-up items: cmdStatus `data_dir`/`config_file` masking (out-of-charter), marketplace.json description softening, `auth.js:174` orphan JSDoc cleanup. All recorded in `STATE.md ## Deferred Items`.
+**Hub-side blocker (live):** arcanon-hub THE-1030 still not deployed — the hub-half of the product (login round-trip + sync upload) remains non-functional until the hub enforces `X-Org-Id` and serves `whoami`. All local features work standalone. Marketplace publication held back until hub is reachable.
+
+**Deferred at v0.1.9 close:** Phase 131 live-graph human-verify (#42) — code + automated tests green, visual confirmation of db/other edge buckets + colors in a running `/arcanon:view` not yet done. Plus the v0.1.5 carry-forwards still pending on the THE-1030 hub deploy (3 operator e2e walkthroughs, Phase 114 UAT). Recorded in `STATE.md` / milestone audit.
 
 ## Next Milestone Goals
 
-After arcanon-hub THE-1030 deploys:
+Open candidates for the next planning cycle (run `/gsd-new-milestone` to scope one):
 
-- **Operator validation closeout** — run the 3 bundled walkthroughs against the live hub, flip VER-04 to satisfied, push tag, publish to marketplace.
-
-Open candidates for the next planning cycle:
-
-- **v0.1.6 Hub Surface follow-on** — multi-level scope (product/project/repo grants) per arcanon-hub APIKEY-01; service-account credentials per APIKEY-02. Both deferred from THE-1029.
-- **v0.2.0 Skills & Agents** — design the skills layer on top of shipped hooks, refactor inline `Explore` agent calls, add MCP-tool-composing investigator agent. Intentionally deferred since v0.1.1.
-- **Status PII closeout** — small follow-up to mask `data_dir` + `config_file` in cmdStatus (`hub.js:384-385`) and add a bats grep gate. Pre-existing v0.1.4 leak, out of v0.1.5 PII charter.
-- Platform extensions, observability surface, agent runtime work, or new Linear backlog items not yet captured.
+- **Operator validation closeout** — once arcanon-hub THE-1030 deploys, run the bundled walkthroughs against the live hub, flip VER-04, publish to marketplace.
+- **v0.2.0 Skills & Agents** — design the skills layer on top of shipped hooks, refactor inline `Explore` agent calls, add an MCP-tool-composing investigator agent. Deferred since v0.1.1.
+- **Scan-accuracy follow-ons** — live `arcanon→chromadb` re-scan verification (#45), a dedicated `db`-bucket mismatch-exclusion test, and trailing-slash/case path-normalization (deferred from #46).
+- **Status PII closeout** — mask `data_dir` + `config_file` in cmdStatus and add a bats grep gate (pre-existing v0.1.4 leak).
+- Windows CI hardening (support works by design but is unverified — no Windows CI).
 
 ## (archived) Milestone: v0.1.3 Trust & Foundations
 
@@ -333,7 +317,7 @@ Architecture: commands/ for user-invoked features, skills/ for auto-invoked know
 Known tech debt: db/database.js has console.log in script-mode guard, getQueryEngineByHash inline migration workaround, renderLibraryConnections() unused `outgoing` parameter, node_metadata table unused (forward-looking for STRIDE/vuln views), impact-flow.bats imports stale module paths (pre-existing from v3.0 restructure), package.json bin entry references non-existent ligamen-init.js, graph-fit-to-screen.test.js has 2 stale assertions for inlined fitToScreen() (Phase 26 regression).
 
 ---
-*Last updated: 2026-04-30 — after v0.1.5 milestone close (Identity & Privacy shipped)*
+*Last updated: 2026-06-29 — after v0.1.9 milestone close (Shadow Trio Removal, Rescan Repair & Scan/Mismatch Fixes shipped)*
 
 ## Constraints
 
@@ -413,6 +397,12 @@ Known tech debt: db/database.js has console.log in script-mode guard, getQueryEn
 | Centralized 7-code RFC 7807 error map (AUTH-08) — v0.1.5 | `HUB_ERROR_CODE_MESSAGES` frozen in `client.js`; UI surfaces just print the message. New error codes added in one place. `body.title` fallback preserved for forward-compat with codes the plugin doesn't yet recognize. | ✓ Good |
 | Nested `identity:` object in `--json` mode (D-125-03) — v0.1.5 | Additive contract: existing top-level keys (plugin_version, data_dir, config_file, etc.) unchanged; new structured data nests under one new key. Insulates existing JSON consumers from field-set churn. | ✓ Good |
 | Hold marketplace publication until THE-1030 deploys — v0.1.5 | Codebase ships, but hub-half of product is non-functional until server enforces X-Org-Id + serves whoami. Shipping broken hub UX on first impression signals "don't trust this." Local-only features still work standalone — codebase tag is fine; public marketplace listing should wait. | Pending (deploy timing) |
+| Migrate to `node:sqlite` behind an adapter — v0.1.8 | The runtime native-module install (`better-sqlite3`) raced Claude Code's ~30s MCP connection timeout on fresh installs. Node's built-in `DatabaseSync` removes the native compile/download entirely; a thin adapter isolates the swap. Node floor raised to >=22.13. | ✓ Good |
+| Reasoning-based agent detection, not static allowlists — v0.1.9 | A hardcoded list of client libraries silently misses the next one (the #42/#45 anti-pattern). The LLM scanner reasons over open input; only the render/canonical vocabulary stays a closed set. Static lists remain correct for the Rust pattern engine, not the agent scanner. | ✓ Good |
+| Canonical protocol vocabulary as single source of truth — v0.1.9 | One `worker/ui/modules/protocol.js` (`canonicalProtocol`) shared scan→persist→getGraph→UI, with persist+read-time normalization and fallback-not-reject. A divergent UI literal or reject-on-unknown was dropping real edges (NATS actor edge, pub/sub, DB). Unknown → `other`, never dropped. | ✓ Good |
+| Structural Map key over string-join for method-aware matching — v0.1.9 | A `${method}${SEP}${path}` composite key is forgeable (a method literally containing the delimiter collides). The shipped `exposedByMethod` `Map<method,Set<path>>` is collision-free by construction. Caught by cross-AI (codex) round-2 review. | ✓ Good |
+| Cross-AI (codex) review as a verification seam — v0.1.9 | A same-model plan-checker missed the #42 actor-edge gap, the #45 chromadb-incremental gap, and the #46 forgeable-key issue; an independent model caught all three. Findings captured per-phase in `*-REVIEWS.md`. | ✓ Good (pattern reusable) |
+| Pre-push hook mirrors CI — v0.1.9 | PRs kept failing CI on bats then getting fixed reactively. `scripts/pre-push.sh` + `make hooks-install` runs the CI-equivalent suite before push, with OS-conditional HOK-06 latency headroom on Darwin. Root-cause prevention over reactive fixing. | ✓ Good |
 
 ---
-*Last updated: 2026-04-30 — after v0.1.5 milestone close (Identity & Privacy shipped)*
+*Last updated: 2026-06-29 — after v0.1.9 milestone close (Shadow Trio Removal, Rescan Repair & Scan/Mismatch Fixes shipped)*

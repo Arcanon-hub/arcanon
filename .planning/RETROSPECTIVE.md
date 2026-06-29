@@ -468,13 +468,47 @@
 
 ---
 
+## Milestone: v0.1.9 — Shadow Trio Removal, Rescan Repair & Scan/Mismatch Fixes
+
+**Shipped:** 2026-06-29
+**Phases:** 6 (129-134) | **Plans:** 13 | **Requirements:** 52/52
+
+### What Was Built
+Removed the shadow-scan command trio end-to-end and repaired `/arcanon:rescan` onto the `node:sqlite` adapter (129-130, PR #41), then absorbed four issue-driven scan/mismatch fixes inserted mid-milestone: one canonical protocol vocabulary with fallback-not-reject (#42), parameterized-route mismatch fix (#43), reasoning-based backing-service client detection (#45), and method-aware `detectMismatches()` (#46).
+
+### What Worked
+- **Cross-AI (codex) review as an independent verification seam.** A same-model plan-checker had passed all four phases, yet codex caught three real defects an in-family reviewer missed: the #42 actor-edge `protocol_raw` gap, the #45 chromadb-incremental-scan gap, and the #46 forgeable string-delimiter key. Each was fixed and re-verified before merge. This was the single highest-value pattern of the milestone.
+- **`/gsd-phase --insert` for issue-driven scope.** Treating each GitHub issue as its own inserted phase (131-134) kept plans small and independently mergeable (one PR per issue) instead of one sprawling change.
+- **Pre-push hook mirroring CI** stopped the reactive "push → CI fails on bats → fix → repush" loop after it was built mid-milestone.
+
+### What Was Inefficient
+- **Planning artifacts drifted from reality.** Inserted phases 131-134 shipped and merged, but REQUIREMENTS.md traceability, ROADMAP.md, and STATE.md were never updated to match — the milestone close had to reconcile a 15-req roadmap against 52 actually-shipped reqs, and STATE.md's accumulated-context still described a superseded `METHOD_PATH_SEP` approach the shipped code had abandoned. Update the central docs at insert time, not at close.
+- **No formal verify-phase/validate-phase artifacts** — verification happened via `/gsd-review` + codex + CI-on-merge, so the milestone audit had to substitute an integration check + the full test suite for six missing VERIFICATION.md files.
+- **One residual never closed:** Phase 131's live-graph human-verify (#42) — automated tests are green but the visual confirmation kept being deferred behind the next issue.
+
+### Patterns Established
+- Reasoning-based agent detection over static allowlists (the closed set is the *render* vocabulary, not the *detection* surface).
+- Structural Map keys over forgeable string-join composites for security-sensitive matching.
+- Cross-AI review captured per-phase in `*-REVIEWS.md`.
+
+### Key Lessons
+- An independent model finds what a same-family reviewer rationalizes past — budget for cross-AI review on correctness-critical changes.
+- When you insert phases mid-milestone, the central planning docs are now stale by construction; reconcile immediately or pay it all back at close.
+
+### Cost Observations
+- Model mix: ~60% sonnet (executors, integration checker), ~35% opus (planning, audit, orchestration), codex CLI for cross-AI review.
+- Sessions: multi-session, spread across 2026-06-27 → 06-29; each issue shipped as its own PR.
+- Notable: the cross-AI review loop (round-2 on #45 and #46) added wall-clock but caught defects that would otherwise have shipped.
+
+---
+
 ## Cross-Milestone Trends
 
-| Metric | v1.0 | v2.0 | v2.1 | v2.2 | v2.3 | v3.0 | v4.0 | v5.6.0 | v5.7.0 | v5.8.0 | v0.1.1 | v0.1.2 |
-|--------|------|------|------|------|------|------|------|--------|--------|--------|--------|--------|
-| Phases | 13 | 8 | 5 | 3 | 3 | 6 | 7 | 5 | 3 | 5 | 4 | 5 |
-| Plans | 17 | 19 | 11 | 5 | 5 | 11 | 14 | 6 | 3 | 16 | 12 | 9 |
-| Requirements | 79 | 8 | 13 | 5 | 9 | 33 | 22 | 9 | 6 | — | 46 | 46 |
-| Tests | 150 | ~50 | ~20 | ~30 | ~30 | ~60 | 0 (rename only) | ~10 | 0 (prompt only) | ~60 | ~45 | 0 (rename) |
-| LOC | 4,323 | ~7,000 | ~7,500 | ~8,000 | ~9,000 | ~12,000 | ~41,600 | ~48,000 | ~48,000 | — | +1,484 / −380 | ~50 files touched |
-| Timeline | 1 day | 1 day | 1 day | 1 day | 1 day | 1 day | 2 days | 1 day | 1 day | — | 1 day | 1 day |
+| Metric | v1.0 | v2.0 | v2.1 | v2.2 | v2.3 | v3.0 | v4.0 | v5.6.0 | v5.7.0 | v5.8.0 | v0.1.1 | v0.1.2 | v0.1.9 |
+|--------|------|------|------|------|------|------|------|--------|--------|--------|--------|--------|--------|
+| Phases | 13 | 8 | 5 | 3 | 3 | 6 | 7 | 5 | 3 | 5 | 4 | 5 | 6 |
+| Plans | 17 | 19 | 11 | 5 | 5 | 11 | 14 | 6 | 3 | 16 | 12 | 9 | 13 |
+| Requirements | 79 | 8 | 13 | 5 | 9 | 33 | 22 | 9 | 6 | — | 46 | 46 | 52 |
+| Tests | 150 | ~50 | ~20 | ~30 | ~30 | ~60 | 0 (rename only) | ~10 | 0 (prompt only) | ~60 | ~45 | 0 (rename) | 945 (worker) |
+| LOC | 4,323 | ~7,000 | ~7,500 | ~8,000 | ~9,000 | ~12,000 | ~41,600 | ~48,000 | ~48,000 | — | +1,484 / −380 | ~50 files touched | +2,842 / −110 (#42/43/45/46) |
+| Timeline | 1 day | 1 day | 1 day | 1 day | 1 day | 1 day | 2 days | 1 day | 1 day | — | 1 day | 1 day | ~3 days |
