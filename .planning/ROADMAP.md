@@ -1112,7 +1112,8 @@ Plans:
   3. Git revision/range inputs containing `--option-like-strings` or shell metacharacters are validated and either rejected with a clear error or passed literally as data — no input can be interpreted as a git flag.
   4. Response bodies and payload fragments that may contain source-file evidence are absent from worker log output after a scan or sync operation.
 
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 135-01-PLAN.md — git + oasdiff calls to execFileSync argv; commit_range validation (reject option-injection, `--` separator); redactExecError so logs carry no command lines/bodies (SEC-01, SEC-02, SEC-03, SEC-08)
 
 ---
 
