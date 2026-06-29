@@ -1,5 +1,34 @@
 # Milestones
 
+## v0.1.9 Shadow Trio Removal, Rescan Repair & Scan/Mismatch Fixes (Shipped: 2026-06-29)
+
+**Phases completed:** 6 phases (129-134), 13 plans, 32 tasks
+**Requirements:** 52/52 complete (RM/FIX/DOC/TST/VER for 129-130 + the 4 inserted families PV-01..18, DM-01..03, SC-01..07, MM-01..09)
+**Git range:** `ca5cb96` → `af8dfae` (PRs #41, #44, #47, #48); audit `tech_debt`, no blockers — `.planning/milestones/v0.1.9-MILESTONE-AUDIT.md`
+**Shape:** began as the focused 129-130 cleanup, then absorbed four issue-driven scan/mismatch fixes (#42/#43/#45/#46) inserted mid-milestone via `/gsd-phase --insert`. Each inserted phase was verified by cross-AI (codex) review captured in `*-REVIEWS.md` rather than the formal verify-phase flow.
+
+**Key accomplishments:**
+
+- **Shadow trio removed end-to-end (RM-01..06, FIX-01, DOC-01..03 — Phase 129, PR #41):** Deleted `/arcanon:shadow-scan`, `/arcanon:promote-shadow`, and `/arcanon:diff --shadow` plus all worker machinery (`getShadowQueryEngine`, `cmdPromoteShadow` + handler, diff-engine shadow branch), while preserving the shared `diffScanVersions` scan-version engine. Repaired `/arcanon:rescan` — repointed its inline `node` off the removed `better-sqlite3` onto the `node:sqlite` adapter. Scrubbed both READMEs, `docs/commands.md`, and added a `[0.1.9]` BREAKING changelog entry.
+- **Regression tests + release gate (TST-01..03, VER-01..02 — Phase 130):** New `tests/rescan-resolve.bats` executes the rescan Step-1 inline-`node` resolve path against a fixture DB so a future dependency rename fails CI instead of breaking silently; reintroduction guards assert the shadow command files stay absent. Manifests pinned to 0.1.9 with an npm-regenerated lockfile.
+- **One canonical protocol vocabulary (PV-01..18 — Phase 131, #42, PR #44):** `worker/ui/modules/protocol.js` (`canonicalProtocol` + `CANONICAL_PROTOCOLS` + aliases) is the single source of truth shared across scan → persist → getGraph → UI. Fallback-not-reject: pub/sub, DB, GraphQL, SSE and unknown protocols all render as toggleable edges (`other`, never dropped). Cross-AI review added: actor edges carry `protocol_raw` end-to-end (NATS shows as "NATS"), and k8s/tf/helm/import render under a shared infra token.
+- **No false endpoint mismatches on parameterized routes (DM-01..03 — Phase 132, #43, PR #47):** `detectMismatches()` canonicalizes `{...}`→`{_}` on both consumed and exposed paths before comparing and restricts the candidate set to `c.protocol IN ('rest','grpc')` — eliminating the false `endpoint_not_exposed` flood and the mis-flagging of events/db/infra connections.
+- **Scanner detects backing-service clients by reasoning (SC-01..07 — Phase 133, #45, PR #48):** Discovery + service agent prompts now flag any file opening a network connection to a stateful backing service (datastore/broker/search/cache/vector DB) by reasoning with non-exhaustive examples — never a static allowlist. A two-stage `backing_service_deps` candidate handoff makes `arcanon → chromadb` actually detectable even when the importer isn't an entry point; emission is call-site-conditioned, ambiguous protocol → `other`.
+- **Method-aware mismatch detection (MM-01..09 — Phase 134, #46, PR #48):** `detectMismatches()` now compares HTTP method, keyed on `(UPPER(method), canonicalPath)` via a nested `exposedByMethod` Map with case-insensitive comparison and a null-method path-only fallback (zero new false positives). Cross-AI round-2 review replaced an earlier forgeable string-delimiter key with the structurally collision-free Map and added a `normalizeMethod()` helper plus forge-regression tests.
+
+**Patterns established:**
+
+- **Reasoning-based agent detection, not static allowlists:** the LLM scanner identifies backing-service clients by reasoning over open input; only the render/canonical vocabulary stays a closed set. A static list silently misses the next library (the #42/#45 anti-pattern).
+- **Cross-AI (codex) review as a verification seam:** a same-model plan-checker missed the #42 actor `protocol_raw` gap, the #45 chromadb-incremental gap, and the #46 forgeable-key issue; an independent model caught all three. Findings captured per-phase in `*-REVIEWS.md`.
+- **Pre-push hook mirrors CI:** `scripts/pre-push.sh` + `make hooks-install` runs the CI-equivalent suite (bats, worker npm test, jq manifests, shellcheck `--severity=error`) before push, with OS-conditional HOK-06 latency headroom on Darwin.
+
+**Known deferred at close:**
+
+- Phase 131 live-graph human-verify (#42, plan 131-02 Task 4) — code + automated tests green; the db/other buckets + edge colors were never visually confirmed in a running `/arcanon:view`.
+- (Optional) a dedicated `db`-bucket mismatch-exclusion test mirroring the existing `events` case.
+
+---
+
 ## v0.1.5 Identity & Privacy (Shipped: 2026-04-30)
 
 **Phases completed:** 5 phases (123-127), 5 plans
