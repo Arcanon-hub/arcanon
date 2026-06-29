@@ -28,8 +28,21 @@
 - ✅ **v0.1.6 / v0.1.7 Resilient Dependency Install** — install-deps + MCP launcher hardening (shipped 2026-06-16, outside roadmap)
 - ✅ **v0.1.8 Native SQLite Migration** — Phase 128 (shipped 2026-06-20, PR #38)
 - ✅ **v0.1.9 Shadow Trio Removal, Rescan Repair & Scan/Mismatch Fixes** — Phases 129-134 (shipped 2026-06-29)
+- 🔄 **v0.2.0 Scan Persistence, Pipeline & Security Hardening** — Phases 135-143 (active)
 
 ## Phases
+
+### v0.2.0 Scan Persistence, Pipeline & Security Hardening (Phases 135-143) — ACTIVE
+
+- [ ] **Phase 135: Shell-Exec Hardening** - Replace string-interpolated git/oasdiff calls in MCP server with execFileSync/argv; validate git revision inputs; suppress evidence from logs
+- [ ] **Phase 136: Hub Queue Tenant-Binding** - Bind Hub queue rows to immutable org/URL at enqueue time; dead-on-non-retriable 4xx; safe legacy row migration
+- [ ] **Phase 137: DB Isolation & Pool** - Replace global openDb() singleton with factory/pool keyed by canonical project identity; real per-project integration tests
+- [ ] **Phase 138: Transactional Scan Unit-of-Work** - Full scan as one atomic transaction; repo-scoped-only cleanup; failure recovery for abandoned scans
+- [ ] **Phase 139: History Model, Run Identifier & Child Reconciliation** - Explicit history/version model (design decision); project run ID; full child-state reconciliation on successful scan
+- [ ] **Phase 140: Canonical Contract** - Single executable contract for all finding shapes; every persistence entry point validates; schema findings attach to exactly one connection
+- [ ] **Phase 141: ScanService Unification** - One ScanService behind commands, MCP, HTTP; fix MCP false-success, rescan override throw, incremental delete; end-to-end transport tests
+- [ ] **Phase 142: Integration Correctness** - Fix drift-graph SQL; Chroma sync in transactional completion path with project namespacing; fix UI dangling-edge rendering
+- [ ] **Phase 143: Scaling & Runtime Hardening** - Response pagination, batched N+1 queries, index tests, bounded concurrency, pool lifecycle, async Fastify routes
 
 <details>
 <summary>✅ v0.1.9 Shadow Trio Removal, Rescan Repair & Scan/Mismatch Fixes (Phases 129-134) — SHIPPED 2026-06-29</summary>
@@ -1008,7 +1021,7 @@ Plans:
 
 - [x] 129-01-PLAN.md
 - [x] 129-02-PLAN.md
-- [ ] 129-03-PLAN.md
+- [x] 129-03-PLAN.md
 
 ---
 
@@ -1084,6 +1097,164 @@ Plans:
 
 ---
 
+## v0.2.0 — Scan Persistence, Pipeline & Security Hardening
+
+### Phase 135: Shell-Exec Hardening
+
+**Milestone**: v0.2.0
+**Goal**: The MCP server cannot be exploited via shell injection or log-based secret extraction — all git and oasdiff invocations pass arguments as argv arrays, revision inputs are validated, and evidence fragments are stripped from logs.
+**Depends on**: Phase 134 (v0.1.9 complete) — INDEPENDENT of persistence work; sequences first
+**Requirements**: SEC-01, SEC-02, SEC-03, SEC-08
+**Success Criteria** (what must be TRUE):
+
+  1. `queryChanged()` calls `execFileSync` with the commit range as an argv element — passing a commit range containing shell metacharacters (`;`, `|`, `$(...)`) returns a git error, not command execution.
+  2. Both `oasdiff breaking` and `oasdiff diff` invocations pass spec paths as argv values — a path containing spaces, quotes, or shell metacharacters does not execute any additional commands or access unintended files.
+  3. Git revision/range inputs containing `--option-like-strings` or shell metacharacters are validated and either rejected with a clear error or passed literally as data — no input can be interpreted as a git flag.
+  4. Response bodies and payload fragments that may contain source-file evidence are absent from worker log output after a scan or sync operation.
+
+**Plans**: TBD
+
+---
+
+### Phase 136: Hub Queue Tenant-Binding
+
+**Milestone**: v0.2.0
+**Goal**: Hub queue rows are permanently bound to their enqueue-time org and URL so an org switch cannot misroute a queued upload, and non-retriable failures close the row in a single drain attempt.
+**Depends on**: Phase 135 (sequential within security track; no persistence dependency)
+**Requirements**: SEC-04, SEC-05, SEC-06, SEC-07
+**Success Criteria** (what must be TRUE):
+
+  1. After enqueueing a scan upload to org A and switching the active org to org B, `drainQueue()` sends the enqueued row to org A's stored hub URL — the current active org has no effect on already-queued rows.
+  2. A queue row created before this fix (without a bound destination) is never silently retargeted — it is migrated to a safe state or held in a distinct status for explicit user action, not drained to the current org.
+  3. A drain attempt that receives a non-retriable 4xx response (401, 403, 404, 410) transitions the row to `dead` in a single attempt — no retry loop is entered, and the row state is visible in queue status output.
+  4. Queue status counters (pending / uploading / dead / complete) match the actual persisted row states — no discrepancy between in-memory tracking and database state.
+
+**Plans**: TBD
+
+---
+
+### Phase 137: DB Isolation & Pool
+
+**Milestone**: v0.2.0
+**Goal**: Each project's database is served by an isolated, correctly cached handle — the global `openDb()` singleton is replaced with a factory/pool keyed by canonical project identity.
+**Depends on**: Phase 136 (security track complete; ISO is the foundation for PIPE and INTG)
+**Requirements**: ISO-01, ISO-02, ISO-11
+**Success Criteria** (what must be TRUE):
+
+  1. Opening two different project roots in the same worker process yields two distinct, non-overlapping database handles — writes to project A's database are not visible when querying project B's database.
+  2. Calling the DB factory/pool with the same canonical project path twice returns the same cached handle (cache hit) — not a newly opened connection on every call.
+  3. Integration tests exercise real pool resolution against real per-project databases (no mocked resolvers or in-memory stubs) and confirm that a cross-project query returns zero results from the wrong project.
+
+**Plans**: TBD
+
+---
+
+### Phase 138: Transactional Scan Unit-of-Work
+
+**Milestone**: v0.2.0
+**Goal**: A complete scan is one atomic operation — failure at any intermediate step rolls back cleanly, completed brackets close only after all cleanup finishes, and cleanup is scoped strictly to the repo being scanned.
+**Depends on**: Phase 137 (DB pool must be in place before transactional scan logic is built on top)
+**Requirements**: ISO-03, ISO-04, ISO-05, ISO-10
+**Success Criteria** (what must be TRUE):
+
+  1. If a scan fails between the persist-findings step and the end-scan step, the prior scan's data remains fully intact — no partial write is visible in the graph or via MCP queries.
+  2. A scan version row is marked completed only after all stale-data cleanup and reconciliation have finished — a query for completed scan versions never returns a version with uncommitted cleanup work.
+  3. Running a full scan for repo A never deletes or modifies endpoints, actors, service-dependencies, or node-metadata owned by repo B — cross-repo contamination is structurally impossible.
+  4. An abandoned scan (process killed mid-scan) leaves the database in a recoverable state — the next scan for that project completes successfully without manual intervention.
+
+**Plans**: TBD
+
+---
+
+### Phase 139: History Model, Run Identifier & Child Reconciliation
+
+**Milestone**: v0.2.0
+**Goal**: Two completed scans retain enough data for an accurate diff, all child state disappears after a successful full scan, and all repo scans from one map operation are grouped by a shared project run identifier. The history model design decision (append-only versioned rows vs immutable snapshot databases) is settled before this phase executes.
+**Depends on**: Phase 138 (transactional scan must be solid before adding versioned history on top)
+**Requirements**: ISO-06, ISO-07, ISO-08, ISO-09
+**Success Criteria** (what must be TRUE):
+
+  1. An explicit, documented history model is implemented — `/arcanon:diff HEAD~1 HEAD` produces correct added/removed/modified results referencing two real retained scan versions without SQL errors.
+  2. After a successful full scan, endpoints, actors, service-dependencies, and node-metadata rows that existed in the prior scan but are no longer detected are absent from the graph and from diff output — removed state does not accumulate.
+  3. A project-level run/map identifier groups all per-repo scan records created during one `/arcanon:map` invocation — the identifier is visible in scan metadata and usable for project-level version comparisons.
+  4. Graph drift output references the correct column names (`scan_versions.started_at`, `scan_versions.completed_at`, `target_service_id`) and produces correct change sets between two retained versions.
+
+**Plans**: TBD
+
+---
+
+### Phase 140: Canonical Contract
+
+**Milestone**: v0.2.0
+**Goal**: One executable contract defines all finding shapes — crossing values, protocols, source locations, schemas, and evidence — and every persistence entry point validates against it before writing.
+**Depends on**: Phase 139 (ISO foundation complete; CTR contract is built before the unified pipeline in Phase 141)
+**Requirements**: CTR-01, CTR-02, CTR-03, CTR-04
+**Success Criteria** (what must be TRUE):
+
+  1. A schema finding submitted without an explicit connection identity is rejected before any database write — no finding silently attaches to every connection as a catch-all.
+  2. `source_file` and optional symbol/line information are distinct, separately named fields in both the contract schema and the persistence layer — a scan emitting both can be stored and round-tripped without data loss or field collisions.
+  3. Submitting a finding with an invalid crossing value, unrecognized protocol, or missing required field is caught at the contract validation layer — the error is logged and the finding is skipped, not written with corrupt or default-filled data.
+  4. All existing persistence entry points (scanning manager, MCP handler, HTTP route) pass findings through the single canonical validator before any write — no direct call to `persistFindings()` with unvalidated input exists.
+
+**Plans**: TBD
+
+---
+
+### Phase 141: ScanService Unification
+
+**Milestone**: v0.2.0
+**Goal**: One `ScanService` pipeline serves all entry points — `/arcanon:map`, `/arcanon:rescan`, MCP `impact_scan`, and HTTP scan — with no duplicated persistence logic, correct error propagation, and working incremental behavior.
+**Depends on**: Phase 140 (canonical contract must be in place before the unified pipeline routes through it)
+**Requirements**: PIPE-01, PIPE-02, PIPE-03, PIPE-04, CTR-05
+**Success Criteria** (what must be TRUE):
+
+  1. Triggering a scan via `/arcanon:map`, via the MCP `impact_scan` tool, and via the HTTP scan endpoint all invoke the same `ScanService` code path — no duplicate `beginScan`/`endScan` calls, reconciliation logic, or override-application exist outside the service.
+  2. MCP `impact_scan` returns a meaningful error response (not `{ triggered: true }`) when the underlying pipeline call fails — a failed scan is observable and actionable from the MCP response.
+  3. Running `/arcanon:rescan` after pending corrections have been staged applies those corrections exactly once on the next successful scan and completes without throwing — no "pending overrides" exception surfaces to the user.
+  4. An incremental scan preserves unchanged findings and removes only the findings owned by deleted or renamed files — a changed-files-only report does not wipe the full project snapshot.
+  5. End-to-end tests confirm that scan initiation via the command, MCP, and HTTP transports all produce consistent, correct graph state.
+
+**Plans**: TBD
+
+---
+
+### Phase 142: Integration Correctness
+
+**Milestone**: v0.2.0
+**Goal**: Drift, semantic search, and UI filtering all produce correct results against the fixed persistence layer — drift SQL is repaired, Chroma sync lives in the transactional completion path with project-namespaced IDs, and UI edges never dangle.
+**Depends on**: Phase 141 (ISO + PIPE complete; correctness fixes build on the unified, transactional foundation)
+**Requirements**: INTG-01, INTG-02, INTG-03, INTG-04
+**Success Criteria** (what must be TRUE):
+
+  1. `/arcanon:drift graph` runs successfully against two real retained scan versions — no SQL errors from missing or renamed columns; output correctly identifies added, removed, and changed services and connections.
+  2. After a successful scan, the Chroma semantic search index reflects the current graph state — services or endpoints removed in the scan are absent from Chroma; sync occurs inside the scan-completion path, not in a disconnected `writeScan()` caller.
+  3. A semantic search query scoped to project A returns zero results from project B's services — Chroma records are namespaced by project identity so identical service names across projects do not overwrite each other.
+  4. The graph UI never renders an edge whose required source or target node is excluded by the active filter — invisible nodes produce no dangling half-drawn edges in the canvas.
+
+**Plans**: TBD
+**UI hint**: yes
+
+---
+
+### Phase 143: Scaling & Runtime Hardening
+
+**Milestone**: v0.2.0
+**Goal**: The system handles large maps and concurrent workloads without unbounded memory, latency, or file-handle leakage — response pagination, batched queries, bounded concurrency, pool eviction, and async Fastify routes are all in place.
+**Depends on**: Phase 142 (integrations must return correct data before optimizing for scale)
+**Requirements**: PERF-01, PERF-02, PERF-03, PERF-04, PERF-05, PERF-06
+**Success Criteria** (what must be TRUE):
+
+  1. `getGraph()` enforces a documented response size limit or pagination mechanism — a project exceeding the node limit returns a bounded payload with a clear indication that pagination or a summary view is available, rather than an unbounded serialization.
+  2. `detectMismatches()`, actor-connection lookups, and evidence-file validation are batched within a scan run — no per-connection or per-actor N+1 query pattern produces measurable overhead under profiling with a realistic dataset.
+  3. Query-plan tests confirm that indexes exist for upstream-impact traversal and scan-version access patterns, including target-side connection lookups — `EXPLAIN QUERY PLAN` output shows index scans, not full-table scans, for the hot paths.
+  4. Multi-repo agent scanning uses a bounded, configurable concurrency limit — scanning 10 repos with a limit of 3 produces no more than 3 concurrent agent invocations at any point, and the bound is covered by a test.
+  5. The DB pool evicts idle handles after a configurable timeout and closes all open handles on worker shutdown — no project database file descriptor remains open after the worker process exits.
+  6. Fastify routes that perform synchronous SQLite reads or filesystem operations complete without blocking the Node.js event loop beyond the documented interactive-latency budget.
+
+**Plans**: TBD
+
+---
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -1111,5 +1282,14 @@ Plans:
 | 107-113 | v0.1.3 | 14/14 | Complete | 2026-04-25 |
 | 114-122 | v0.1.4 | 21/21 | Complete | 2026-04-27 |
 | 123-127 | v0.1.5 | 5/5 | Complete | 2026-04-30 |
-| 129-130 | v0.1.9 | 0/? | Planning | - |
-| 131-132 | v0.1.9 fixes | 4/4 | 132 complete; 131-02 human-verify pending | - |
+| 128 | v0.1.8 | 3/3 | Complete | 2026-06-20 |
+| 129-134 | v0.1.9 | 13/13 | Complete | 2026-06-29 |
+| 135 | v0.2.0 | 0/? | Not started | - |
+| 136 | v0.2.0 | 0/? | Not started | - |
+| 137 | v0.2.0 | 0/? | Not started | - |
+| 138 | v0.2.0 | 0/? | Not started | - |
+| 139 | v0.2.0 | 0/? | Not started | - |
+| 140 | v0.2.0 | 0/? | Not started | - |
+| 141 | v0.2.0 | 0/? | Not started | - |
+| 142 | v0.2.0 | 0/? | Not started | - |
+| 143 | v0.2.0 | 0/? | Not started | - |
