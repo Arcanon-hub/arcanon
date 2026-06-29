@@ -1185,7 +1185,10 @@ Plans:
   3. A project-level run/map identifier groups all per-repo scan records created during one `/arcanon:map` invocation — the identifier is visible in scan metadata and usable for project-level version comparisons.
   4. Graph drift output references the correct column names (`scan_versions.started_at`, `scan_versions.completed_at`, `target_service_id`) and produces correct change sets between two retained versions.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+- [ ] 139-01-PLAN.md — Wire snapshot history into scan completion: migration 021 (map_versions kind + repos_json), extend createSnapshot(db, label, kind, repos), once-per-run post-commit snapshot in manager.js, remove dead duplicate map-version path, ISO-07 roundtrip test (ISO-06, ISO-07, ISO-09)
+- [ ] 139-02-PLAN.md — Reconcile the four child tables on successful scan: in-transaction pre-wipes for exposed_endpoints + actor_connections, post-bracket node_metadata pre-wipe + service_dependencies stale sweep, two-repo isolation test (ISO-08)
 
 ---
 
