@@ -1205,7 +1205,11 @@ Plans:
   3. Submitting a finding with an invalid crossing value, unrecognized protocol, or missing required field is caught at the contract validation layer — the error is logged and the finding is skipped, not written with corrupt or default-filled data.
   4. All existing persistence entry points (scanning manager, MCP handler, HTTP route) pass findings through the single canonical validator before any write — no direct call to `persistFindings()` with unvalidated input exists.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+- [ ] 140-01-PLAN.md — Canonical contract.js module (cross-service crossing, connection_index, source_file/source_symbol split) + findings.js shim + agent-schema/prompts sync [CTR-01, CTR-02, CTR-03]
+- [ ] 140-02-PLAN.md — Migration 022 (source_symbol/target_symbol) + persistFindings schema-attach-by-connection_index fix + symbol writes [CTR-02, CTR-03]
+- [ ] 140-03-PLAN.md — POST /scan validateFindings gate (validate before any DB write) [CTR-04]
 
 ---
 
@@ -1223,7 +1227,12 @@ Plans:
   4. An incremental scan preserves unchanged findings and removes only the findings owned by deleted or renamed files — a changed-files-only report does not wipe the full project snapshot.
   5. End-to-end tests confirm that scan initiation via the command, MCP, and HTTP transports all produce consistent, correct graph state.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 141-01-PLAN.md — scan-service.js: persistScanResult write pipeline + PIPE-04 incremental preserve/remove + real-DB E2E suite [PIPE-01, PIPE-03, PIPE-04, CTR-05]
+- [ ] 141-02-PLAN.md — command + worker adapters: map.md/rescan.md Step 5 + manager.js Phase B route through persistScanResult [PIPE-01, PIPE-03, PIPE-04, CTR-05]
+- [ ] 141-03-PLAN.md — HTTP /scan adapter + queryScan response.ok fix (PIPE-02 false-success) + transport tests [PIPE-01, PIPE-02, CTR-05]
 
 ---
 
@@ -1240,7 +1249,9 @@ Plans:
   3. A semantic search query scoped to project A returns zero results from project B's services — Chroma records are namespaced by project identity so identical service names across projects do not overwrite each other.
   4. The graph UI never renders an edge whose required source or target node is excluded by the active filter — invisible nodes produce no dangling half-drawn edges in the canvas.
 
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 142-01-PLAN.md — Wave 1: INTG-04 dangling-edge/invisible-node renderer fix + INTG-01 drift SQL-column fix (no cross-phase deps)
+- [ ] 142-02-PLAN.md — Wave 2: INTG-01 snapshot routing via diffScanVersions + INTG-02 Chroma sync in Phase B + INTG-03 project-namespaced Chroma (depends on 139, 141)
 **UI hint**: yes
 
 ---
@@ -1260,7 +1271,12 @@ Plans:
   5. The DB pool evicts idle handles after a configurable timeout and closes all open handles on worker shutdown — no project database file descriptor remains open after the worker process exits.
   6. Fastify routes that perform synchronous SQLite reads or filesystem operations complete without blocking the Node.js event loop beyond the documented interactive-latency budget.
 
-**Plans**: TBD
+**Plans**: 5 plans (2 waves)
+- [ ] 143-01-PLAN.md — PERF-03: perf-indexes migration (next-free >=023) + EXPLAIN QUERY PLAN tests [Wave 1]
+- [ ] 143-02-PLAN.md — PERF-04 bounded scan concurrency + PERF-02 dep-collector rootPath dedup [Wave 1]
+- [ ] 143-03-PLAN.md — PERF-05 pool idle eviction + closeAll + shutdown wiring [Wave 1]
+- [ ] 143-04-PLAN.md — PERF-02 detectMismatches/actor batching + evidence file cache [Wave 1]
+- [ ] 143-05-PLAN.md — PERF-01 getGraph pagination/summary + PERF-06 route observability/TTL caches + benchmark [Wave 2]
 
 ---
 
