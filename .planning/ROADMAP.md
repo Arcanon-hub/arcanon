@@ -1165,7 +1165,9 @@ Plans:
   3. Running a full scan for repo A never deletes or modifies endpoints, actors, service-dependencies, or node-metadata owned by repo B — cross-repo contamination is structurally impossible.
   4. An abandoned scan (process killed mid-scan) leaves the database in a recoverable state — the next scan for that project completes successfully without manual intervention.
 
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 138-01-PLAN.md — Transaction-ready DB primitives: applyPendingOverridesSync; endScan completed_at-last (ISO-04) + repo-scoped cleanup (ISO-05); beginScan startedAt + abandoned-scan recovery (ISO-10); query-engine-txn.test.js proving ISO-03/04/05/10
+- [ ] 138-02-PLAN.md — Wire manager.js Phase B write path into one db.transaction (ISO-03), beginScan inside tx + per-repo rollback isolation (ISO-10); manager-txn.test.js end-to-end proof
 
 ---
 
