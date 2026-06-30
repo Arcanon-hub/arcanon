@@ -18,6 +18,23 @@ import { maskHomeDeep } from '../lib/path-mask.js';
 const dataDir = resolveDataDir();
 
 /**
+ * redactExecError — return a body-free metadata object for child-process errors.
+ *
+ * A child-process error's `.message`/`.stack` embed the full command line plus a
+ * captured stderr chunk; `.stdout`/`.stderr` may contain raw spec or source content.
+ * SEC-08: only non-sensitive fields (code, signal) may be logged on these paths.
+ *
+ * @param {Error & { code?: string, signal?: string }} err
+ * @returns {{ code: string|null, signal: string|null }}
+ */
+export function redactExecError(err) {
+  return {
+    code: err?.code ?? null,
+    signal: err?.signal ?? null,
+  };
+}
+
+/**
  * mcpReply — wrap a result object as an MCP `content[].text` reply with
  * $HOME-masked JSON . Highest-priority egress seam: only egress to
  * a third party (Anthropic).
@@ -1041,21 +1058,18 @@ function findOpenApiSpec(repoPath) {
  * @param {string} repoB - Repo name for second spec
  * @returns {{ findings: Array, tool_used: string }}
  */
-function compareOpenApiSpecs(specA, specB, repoA, repoB) {
+export function compareOpenApiSpecs(specA, specB, repoA, repoB) {
   const findings = [];
   let toolUsed = 'none';
 
   try {
-    execSync('which oasdiff', { stdio: 'ignore', timeout: 2000 });
+    execFileSync("which", ["oasdiff"], { stdio: "ignore", timeout: 2000 });
     toolUsed = 'oasdiff';
 
-    // Breaking changes
+    // Breaking changes — spec paths passed as discrete argv elements (SEC-02)
     let breaking = '';
     try {
-      breaking = execSync(`oasdiff breaking "${specA}" "${specB}"`, {
-        encoding: 'utf8',
-        timeout: 5000,
-      }).trim();
+      breaking = execFileSync("oasdiff", ["breaking", specA, specB], { encoding: "utf8", timeout: 5000 }).trim();
     } catch (err) {
       if (err.code === 'ETIMEDOUT') {
         findings.push({
@@ -1079,13 +1093,10 @@ function compareOpenApiSpecs(specA, specB, repoA, repoB) {
       });
     }
 
-    // Non-breaking diffs
+    // Non-breaking diffs — spec paths as discrete argv elements (SEC-02)
     let diffOut = '';
     try {
-      diffOut = execSync(`oasdiff diff "${specA}" "${specB}" --format text`, {
-        encoding: 'utf8',
-        timeout: 5000,
-      }).trim();
+      diffOut = execFileSync("oasdiff", ["diff", specA, specB, "--format", "text"], { encoding: "utf8", timeout: 5000 }).trim();
     } catch (err) {
       diffOut = (err.stdout || '').trim();
     }
@@ -1145,10 +1156,10 @@ export async function queryDriftOpenapi(db, { severity = "WARN" } = {}) {
     }
   }
 
-  // Check oasdiff availability once
+  // Check oasdiff availability once — argv form, no shell (SEC-02)
   let oasdiffAvailable = false;
   try {
-    execSync('which oasdiff', { stdio: 'ignore', timeout: 2000 });
+    execFileSync("which", ["oasdiff"], { stdio: "ignore", timeout: 2000 });
     oasdiffAvailable = true;
   } catch { /* not available */ }
 
@@ -1357,7 +1368,7 @@ server.tool(
       const result = { ...raw, affected: enrichedAffected };
       return mcpReply(result);
     } catch (err) {
-      logger.error('impact_changed failed', { error: err.message, stack: err.stack });
+      logger.error('impact_changed failed', redactExecError(err));
       return mcpReply({ error: err.message });
     }
   },
@@ -1544,7 +1555,7 @@ server.tool(
       const result = await queryDriftOpenapi(qe?._db ?? null, params);
       return mcpReply(result);
     } catch (err) {
-      logger.error('drift_openapi failed', { error: err.message, stack: err.stack });
+      logger.error('drift_openapi failed', redactExecError(err));
       return mcpReply({ error: err.message });
     }
   },
