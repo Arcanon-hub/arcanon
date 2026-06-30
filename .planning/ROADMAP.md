@@ -1131,10 +1131,10 @@ Plans:
   3. A drain attempt that receives a non-retriable 4xx response (401, 403, 404, 410) transitions the row to `dead` in a single attempt — no retry loop is entered, and the row state is visible in queue status output.
   4. Queue status counters (pending / uploading / dead / complete) match the actual persisted row states — no discrepancy between in-memory tracking and database state.
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans complete
 
 - [x] 136-01-PLAN.md — Bind queue rows to immutable (hub_url, org_id) at enqueue; hold legacy rows (SEC-04, SEC-06)
-- [ ] 136-02-PLAN.md — Drain to per-row destination; dead-on-non-retriable 4xx in one attempt (SEC-05, SEC-07)
+- [x] 136-02-PLAN.md — Drain to per-row destination; dead-on-non-retriable 4xx in one attempt (SEC-05, SEC-07)
 
 ---
 
@@ -1318,7 +1318,7 @@ Plans:
 | 128 | v0.1.8 | 3/3 | Complete | 2026-06-20 |
 | 129-134 | v0.1.9 | 13/13 | Complete | 2026-06-29 |
 | 135 | v0.2.0 | 1/1 | Complete   | 2026-06-30 |
-| 136 | v0.2.0 | 1/2 | In Progress|  |
+| 136 | v0.2.0 | 2/2 | Complete   | 2026-06-30 |
 | 137 | v0.2.0 | 0/? | Not started | - |
 | 138 | v0.2.0 | 0/? | Not started | - |
 | 139 | v0.2.0 | 0/? | Not started | - |
