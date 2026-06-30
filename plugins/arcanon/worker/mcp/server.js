@@ -1051,7 +1051,7 @@ function findOpenApiSpec(repoPath) {
 /**
  * Compare two OpenAPI spec files using oasdiff (with graceful degradation).
  * Port of compare_openapi() from scripts/drift-openapi.sh.
- * Uses 5-second timeout on execSync calls (research Pitfall 3).
+ * Uses 5-second timeout on execFileSync calls (research Pitfall 3).
  * @param {string} specA - Absolute path to first spec
  * @param {string} specB - Absolute path to second spec
  * @param {string} repoA - Repo name for first spec
