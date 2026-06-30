@@ -6,7 +6,7 @@ import crypto from "crypto";
 import os from "os";
 import path from "path";
 import fs from "fs";
-import { execSync } from "child_process";
+import { execFileSync } from "node:child_process";
 import { z } from "zod";
 import { createLogger } from '../lib/logger.js';
 import { getQueryEngine, getQueryEngineByHash, getQueryEngineByRepo } from '../db/pool.js';
@@ -245,22 +245,22 @@ export async function queryChanged(
 
   if (!changedFiles) {
     const cwd = repo || process.cwd();
+
+    // SEC-03: option-injection guard — reject any commit_range beginning with a
+    // hyphen (e.g. --upload-pack=, --output=) before it reaches git as an option.
+    if (commit_range && commit_range.startsWith("-")) {
+      return { affected: [], changed_files: [], error: "invalid commit_range" };
+    }
+
     try {
       if (commit_range) {
-        const out = execSync(`git diff --name-only ${commit_range}`, {
-          cwd,
-          encoding: "utf8",
-        });
+        // Pass commit_range as a single literal argv element; the trailing "--"
+        // separator ensures git parses it as a revision range, never as a flag.
+        const out = execFileSync("git", ["diff", "--name-only", commit_range, "--"], { cwd, encoding: "utf8" });
         changedFiles = out.trim().split("\n").filter(Boolean);
       } else {
-        const unstaged = execSync("git diff --name-only HEAD", {
-          cwd,
-          encoding: "utf8",
-        });
-        const staged = execSync("git diff --name-only --cached", {
-          cwd,
-          encoding: "utf8",
-        });
+        const unstaged = execFileSync("git", ["diff", "--name-only", "HEAD"], { cwd, encoding: "utf8" });
+        const staged = execFileSync("git", ["diff", "--name-only", "--cached"], { cwd, encoding: "utf8" });
         changedFiles = [
           ...new Set([
             ...unstaged.trim().split("\n").filter(Boolean),
