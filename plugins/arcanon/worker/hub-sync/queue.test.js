@@ -27,7 +27,7 @@ function freshQueueDir() {
 test("enqueue + listAll round-trips a single row", () => {
   const dir = freshQueueDir();
   const id = enqueueUpload(
-    { repoName: "r", commitSha: "c1", projectSlug: "p", body: "{}" },
+    { repoName: "r", commitSha: "c1", projectSlug: "p", body: "{}", hubUrl: "https://h.test", orgId: "org-test" },
     dir,
   );
   assert.ok(id);
@@ -40,11 +40,11 @@ test("enqueue + listAll round-trips a single row", () => {
 test("enqueue dedupes by (repo_name, commit_sha) — replaces body/last_error", () => {
   const dir = freshQueueDir();
   const first = enqueueUpload(
-    { repoName: "r", commitSha: "c1", body: "{}", lastError: "fail1" },
+    { repoName: "r", commitSha: "c1", body: "{}", lastError: "fail1", hubUrl: "https://h.test", orgId: "org-test" },
     dir,
   );
   const second = enqueueUpload(
-    { repoName: "r", commitSha: "c1", body: '{"v":2}', lastError: "fail2" },
+    { repoName: "r", commitSha: "c1", body: '{"v":2}', lastError: "fail2", hubUrl: "https://h.test", orgId: "org-test" },
     dir,
   );
   assert.equal(first, second); // same id
@@ -56,7 +56,7 @@ test("enqueue dedupes by (repo_name, commit_sha) — replaces body/last_error", 
 
 test("markUploadFailure moves row to dead after MAX_ATTEMPTS", () => {
   const dir = freshQueueDir();
-  const id = enqueueUpload({ repoName: "r", commitSha: "c2", body: "{}" }, dir);
+  const id = enqueueUpload({ repoName: "r", commitSha: "c2", body: "{}", hubUrl: "https://h.test", orgId: "org-test" }, dir);
   for (let i = 0; i < MAX_ATTEMPTS - 1; i++) {
     const out = markUploadFailure(id, `attempt ${i}`, dir);
     assert.equal(out.status, "pending");
@@ -70,7 +70,7 @@ test("markUploadFailure moves row to dead after MAX_ATTEMPTS", () => {
 
 test("listDueUploads only returns rows whose next_attempt_at has arrived", () => {
   const dir = freshQueueDir();
-  const id = enqueueUpload({ repoName: "r", commitSha: "c3", body: "{}" }, dir);
+  const id = enqueueUpload({ repoName: "r", commitSha: "c3", body: "{}", hubUrl: "https://h.test", orgId: "org-test" }, dir);
   // A freshly-enqueued row waits 30s before it's due.
   assert.equal(listDueUploads(50, dir).length, 0);
   // After backdating next_attempt_at, it becomes due.
@@ -85,7 +85,7 @@ test("listDueUploads only returns rows whose next_attempt_at has arrived", () =>
 
 test("deleteUpload removes the row", () => {
   const dir = freshQueueDir();
-  const id = enqueueUpload({ repoName: "r", commitSha: "c4", body: "{}" }, dir);
+  const id = enqueueUpload({ repoName: "r", commitSha: "c4", body: "{}", hubUrl: "https://h.test", orgId: "org-test" }, dir);
   deleteUpload(id, dir);
   assert.equal(listAllUploads(dir).length, 0);
 });
@@ -96,8 +96,8 @@ test("RETRY_SCHEDULE_SECONDS matches documented policy", () => {
 
 test("pruneDead deletes status='dead' rows and leaves pending rows alone", () => {
   const dir = freshQueueDir();
-  const pendingId = enqueueUpload({ repoName: "r-pending", commitSha: "c1", body: "{}" }, dir);
-  const doomedId = enqueueUpload({ repoName: "r-dead", commitSha: "c2", body: "{}" }, dir);
+  const pendingId = enqueueUpload({ repoName: "r-pending", commitSha: "c1", body: "{}", hubUrl: "https://h.test", orgId: "org-test" }, dir);
+  const doomedId = enqueueUpload({ repoName: "r-dead", commitSha: "c2", body: "{}", hubUrl: "https://h.test", orgId: "org-test" }, dir);
   // Force the doomed row to dead.
   for (let i = 0; i < MAX_ATTEMPTS; i++) markUploadFailure(doomedId, "sim", dir);
   assert.equal(queueStats(dir).dead, 1);
@@ -113,6 +113,6 @@ test("pruneDead deletes status='dead' rows and leaves pending rows alone", () =>
 
 test("pruneDead returns 0 when there are no dead rows", () => {
   const dir = freshQueueDir();
-  enqueueUpload({ repoName: "r", commitSha: "c", body: "{}" }, dir);
+  enqueueUpload({ repoName: "r", commitSha: "c", body: "{}", hubUrl: "https://h.test", orgId: "org-test" }, dir);
   assert.equal(pruneDead(dir), 0);
 });
