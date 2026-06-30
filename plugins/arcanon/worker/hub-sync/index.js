@@ -96,6 +96,8 @@ export async function syncFindings(opts = {}) {
           projectSlug: payload.metadata.project_slug,
           body,
           lastError: err.message,
+          hubUrl: creds.hubUrl,
+          orgId: creds.orgId,
         });
         log("INFO", "hub upload enqueued for retry", { queueId: id });
         return { ok: false, error: err, enqueuedId: id, warnings };
