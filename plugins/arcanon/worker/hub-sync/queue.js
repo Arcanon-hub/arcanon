@@ -211,6 +211,33 @@ export function pruneDead(dataDir) {
   return info.changes ?? 0;
 }
 
+/**
+ * Unconditionally transition a row to status='dead' in a single call (SEC-07).
+ *
+ * Used for non-retriable failures (401/400/403/404/410) where retrying is
+ * pointless. Unlike markUploadFailure there is NO MAX_ATTEMPTS gate — one call
+ * is sufficient. Increments attempts by 1 so the row records it was tried.
+ *
+ * @param {number} id — uploads row id
+ * @param {string} errorMessage
+ * @param {string} [dataDir]
+ * @returns {{ status: string, attempts: number, next_attempt_at: null }}
+ */
+export function markUploadDead(id, errorMessage, dataDir) {
+  const db = getQueueDb(dataDir);
+  const row = db.prepare(`SELECT attempts FROM uploads WHERE id = ?`).get(id);
+  if (!row) return { status: "missing", attempts: 0, next_attempt_at: null };
+  const nextAttempts = row.attempts + 1;
+  // next_attempt_at is NOT NULL in the schema; use the current timestamp to
+  // satisfy the constraint. The value is semantically "no retry" — status='dead'
+  // rows are never picked up by listDueUploads (which filters status='pending').
+  const now = new Date().toISOString();
+  db.prepare(
+    `UPDATE uploads SET status='dead', attempts=?, last_error=?, next_attempt_at=? WHERE id=?`,
+  ).run(nextAttempts, errorMessage, now, id);
+  return { status: "dead", attempts: nextAttempts, next_attempt_at: null };
+}
+
 export function markUploadFailure(id, errorMessage, dataDir) {
   const db = getQueueDb(dataDir);
   const row = db.prepare(`SELECT attempts FROM uploads WHERE id = ?`).get(id);
