@@ -23,6 +23,7 @@ import {
   enqueueUpload,
   listDueUploads,
   markUploadFailure,
+  markUploadDead,
   deleteUpload,
   queueStats,
 } from "./queue.js";
@@ -96,6 +97,8 @@ export async function syncFindings(opts = {}) {
           projectSlug: payload.metadata.project_slug,
           body,
           lastError: err.message,
+          hubUrl: creds.hubUrl,
+          orgId: creds.orgId,
         });
         log("INFO", "hub upload enqueued for retry", { queueId: id });
         return { ok: false, error: err, enqueuedId: id, warnings };
@@ -110,22 +113,35 @@ export async function syncFindings(opts = {}) {
 /**
  * Drain due rows from the offline queue by POSTing them.
  *
+ * SEC-05: each row is uploaded to ITS stored (hub_url, org_id) — never to the
+ * current org. Only the API key is resolved globally (orgIdRequired:false); the
+ * destination always comes from the row. Switching the active org after enqueue
+ * cannot retarget a queued row.
+ *
+ * SEC-07: a non-retriable 4xx (401/400/403/404/410) calls markUploadDead(),
+ * which transitions the row to status='dead' in a single UPDATE. The drain
+ * report's dead/failed counts are driven by the actual persisted transitions so
+ * they always match queueStats().
+ *
  * @param {object} [opts]
- * @param {string} [opts.apiKey]
- * @param {string} [opts.hubUrl]
- * @param {string} [opts.orgId] —  per-repo override; threaded into uploadScan as X-Org-Id.
+ * @param {string} [opts.apiKey]   — explicit API key override
  * @param {number} [opts.limit=50]
  * @param {Function} [opts.log]
+ * @param {typeof fetch} [opts.fetchImpl] — injectable fetch for tests
+ * @param {string} [opts.dataDir]  — queue DB directory; defaults to resolveDataDir()
  * @returns {Promise<{ attempted: number, succeeded: number, failed: number, dead: number, stats: object }>}
  */
 export async function drainQueue(opts = {}) {
   const log = opts.log || (() => {});
+  const dataDir = opts.dataDir;
+
   let creds;
   try {
+    // SEC-05: resolve API key only — a missing machine-default org must not
+    // block draining a fully-bound queue (each row carries its own destination).
     creds = resolveCredentials({
       apiKey: opts.apiKey,
-      hubUrl: opts.hubUrl,
-      orgId: opts.orgId,
+      orgIdRequired: false,
     });
   } catch (err) {
     if (err instanceof AuthError) {
@@ -135,45 +151,56 @@ export async function drainQueue(opts = {}) {
         succeeded: 0,
         failed: 0,
         dead: 0,
-        stats: queueStats(),
+        stats: queueStats(dataDir),
         error: err.message,
       };
     }
     throw err;
   }
 
-  const rows = listDueUploads(opts.limit ?? 50);
+  const rows = listDueUploads(opts.limit ?? 50, dataDir);
   let succeeded = 0;
   let failed = 0;
   let dead = 0;
 
   for (const row of rows) {
+    // Defense-in-depth (SEC-05): a row without a bound destination must never
+    // be routed to the current org. Leave it untouched and count as failed.
+    if (!row.hub_url || !row.org_id) {
+      log("WARN", "queue row missing destination — skipping (held)", { id: row.id });
+      failed++;
+      continue;
+    }
+
     let payload;
     try {
       payload = JSON.parse(row.body);
     } catch (err) {
       log("WARN", "queue row has unparsable body — discarding", { id: row.id });
-      deleteUpload(row.id);
+      deleteUpload(row.id, dataDir);
       failed++;
       continue;
     }
     try {
+      // SEC-05: use per-row stored destination — not creds.hubUrl / creds.orgId.
       await uploadScan(payload, {
         apiKey: creds.apiKey,
-        hubUrl: creds.hubUrl,
-        orgId: creds.orgId,
+        hubUrl: row.hub_url,
+        orgId: row.org_id,
+        fetchImpl: opts.fetchImpl,
         log,
       });
-      deleteUpload(row.id);
+      deleteUpload(row.id, dataDir);
       succeeded++;
     } catch (err) {
       if (err instanceof HubError && err.retriable) {
-        const outcome = markUploadFailure(row.id, err.message);
+        // Retriable (5xx / network / 429-exhausted): schedule for retry.
+        const outcome = markUploadFailure(row.id, err.message, dataDir);
         if (outcome.status === "dead") dead++;
         else failed++;
       } else {
-        // Non-retriable (e.g. 422 validation) — move to dead.
-        markUploadFailure(row.id, err.message);
+        // Non-retriable (401/400/403/404/410/422): dead in one attempt (SEC-07).
+        markUploadDead(row.id, err.message, dataDir);
         dead++;
       }
     }
@@ -184,6 +211,6 @@ export async function drainQueue(opts = {}) {
     succeeded,
     failed,
     dead,
-    stats: queueStats(),
+    stats: queueStats(dataDir),
   };
 }
