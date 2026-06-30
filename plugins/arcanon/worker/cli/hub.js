@@ -373,7 +373,7 @@ async function cmdStatus(flags) {
     `  project:      ${report.project_slug || "(none — set project-name in arcanon.config.json)"}`,
     `  credentials:  ${report.credentials === "present" ? "✓ present" : "✗ missing (/arcanon:login)"}`,
     `  auto-sync:    ${hubAutoSync ? "enabled" : "disabled"}`,
-    `  queue:        ${stats.pending} pending, ${stats.dead} dead${stats.oldestPending ? `, oldest ${stats.oldestPending}` : ""}`,
+    `  queue:        ${stats.pending} pending, ${stats.dead} dead${typeof stats.held === "number" && stats.held > 0 ? `, ${stats.held} held` : ""}${stats.oldestPending ? `, oldest ${stats.oldestPending}` : ""}`,
     `  data dir:     ${report.data_dir}`,
   ];
 
