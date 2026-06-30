@@ -1112,8 +1112,9 @@ Plans:
   3. Git revision/range inputs containing `--option-like-strings` or shell metacharacters are validated and either rejected with a clear error or passed literally as data — no input can be interpreted as a git flag.
   4. Response bodies and payload fragments that may contain source-file evidence are absent from worker log output after a scan or sync operation.
 
-**Plans**: 1 plan
-- [ ] 135-01-PLAN.md — git + oasdiff calls to execFileSync argv; commit_range validation (reject option-injection, `--` separator); redactExecError so logs carry no command lines/bodies (SEC-01, SEC-02, SEC-03, SEC-08)
+**Plans**: 1/1 plans complete
+
+- [x] 135-01-PLAN.md — git + oasdiff calls to execFileSync argv; commit_range validation (reject option-injection, `--` separator); redactExecError so logs carry no command lines/bodies (SEC-01, SEC-02, SEC-03, SEC-08)
 
 ---
 
@@ -1131,6 +1132,7 @@ Plans:
   4. Queue status counters (pending / uploading / dead / complete) match the actual persisted row states — no discrepancy between in-memory tracking and database state.
 
 **Plans**: 2 plans
+
 - [ ] 136-01-PLAN.md — Bind queue rows to immutable (hub_url, org_id) at enqueue; hold legacy rows (SEC-04, SEC-06)
 - [ ] 136-02-PLAN.md — Drain to per-row destination; dead-on-non-retriable 4xx in one attempt (SEC-05, SEC-07)
 
@@ -1149,6 +1151,7 @@ Plans:
   3. Integration tests exercise real pool resolution against real per-project databases (no mocked resolvers or in-memory stubs) and confirm that a cross-project query returns zero results from the wrong project.
 
 **Plans**: 1 plan
+
 - [ ] 137-01-PLAN.md — openDb() factory + pool keyed by resolved dbPath + ISO-11 isolation tests (ISO-01, ISO-02, ISO-11)
 
 ---
@@ -1167,6 +1170,7 @@ Plans:
   4. An abandoned scan (process killed mid-scan) leaves the database in a recoverable state — the next scan for that project completes successfully without manual intervention.
 
 **Plans**: 2 plans
+
 - [ ] 138-01-PLAN.md — Transaction-ready DB primitives: applyPendingOverridesSync; endScan completed_at-last (ISO-04) + repo-scoped cleanup (ISO-05); beginScan startedAt + abandoned-scan recovery (ISO-10); query-engine-txn.test.js proving ISO-03/04/05/10
 - [ ] 138-02-PLAN.md — Wire manager.js Phase B write path into one db.transaction (ISO-03), beginScan inside tx + per-repo rollback isolation (ISO-10); manager-txn.test.js end-to-end proof
 
@@ -1230,6 +1234,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
+
 - [ ] 141-01-PLAN.md — scan-service.js: persistScanResult write pipeline + PIPE-04 incremental preserve/remove + real-DB E2E suite [PIPE-01, PIPE-03, PIPE-04, CTR-05]
 - [ ] 141-02-PLAN.md — command + worker adapters: map.md/rescan.md Step 5 + manager.js Phase B route through persistScanResult [PIPE-01, PIPE-03, PIPE-04, CTR-05]
 - [ ] 141-03-PLAN.md — HTTP /scan adapter + queryScan response.ok fix (PIPE-02 false-success) + transport tests [PIPE-01, PIPE-02, CTR-05]
@@ -1250,8 +1255,10 @@ Plans:
   4. The graph UI never renders an edge whose required source or target node is excluded by the active filter — invisible nodes produce no dangling half-drawn edges in the canvas.
 
 **Plans**: 2 plans
+
 - [ ] 142-01-PLAN.md — Wave 1: INTG-04 dangling-edge/invisible-node renderer fix + INTG-01 drift SQL-column fix (no cross-phase deps)
 - [ ] 142-02-PLAN.md — Wave 2: INTG-01 snapshot routing via diffScanVersions + INTG-02 Chroma sync in Phase B + INTG-03 project-namespaced Chroma (depends on 139, 141)
+
 **UI hint**: yes
 
 ---
@@ -1272,6 +1279,7 @@ Plans:
   6. Fastify routes that perform synchronous SQLite reads or filesystem operations complete without blocking the Node.js event loop beyond the documented interactive-latency budget.
 
 **Plans**: 5 plans (2 waves)
+
 - [ ] 143-01-PLAN.md — PERF-03: perf-indexes migration (next-free >=023) + EXPLAIN QUERY PLAN tests [Wave 1]
 - [ ] 143-02-PLAN.md — PERF-04 bounded scan concurrency + PERF-02 dep-collector rootPath dedup [Wave 1]
 - [ ] 143-03-PLAN.md — PERF-05 pool idle eviction + closeAll + shutdown wiring [Wave 1]
@@ -1309,7 +1317,7 @@ Plans:
 | 123-127 | v0.1.5 | 5/5 | Complete | 2026-04-30 |
 | 128 | v0.1.8 | 3/3 | Complete | 2026-06-20 |
 | 129-134 | v0.1.9 | 13/13 | Complete | 2026-06-29 |
-| 135 | v0.2.0 | 0/? | Not started | - |
+| 135 | v0.2.0 | 1/1 | Complete   | 2026-06-30 |
 | 136 | v0.2.0 | 0/? | Not started | - |
 | 137 | v0.2.0 | 0/? | Not started | - |
 | 138 | v0.2.0 | 0/? | Not started | - |
