@@ -21,7 +21,7 @@ import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 
-import { queryChanged } from "./server.js";
+import { queryChanged, compareOpenApiSpecs, redactExecError } from "./server.js";
 
 // ─────────────────────────────────────────────────────────────
 // Helpers
@@ -177,4 +177,102 @@ test("queryChanged: option-injection commit_range is rejected before reaching gi
   } finally {
     rmrf(dir);
   }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Task 2 — compareOpenApiSpecs: argv oasdiff + redactExecError
+// ─────────────────────────────────────────────────────────────
+
+test("compareOpenApiSpecs: command-substitution / metacharacter spec paths execute NO shell command (SEC-02, SEC-03)", async () => {
+  const sentinel1 = path.join(
+    os.tmpdir(),
+    `arcanon-sec2-${process.pid}-${Date.now()}`,
+  );
+  const sentinel2 = path.join(
+    os.tmpdir(),
+    `arcanon-sec2-${process.pid}-${Date.now()}-2`,
+  );
+  assert.ok(!fs.existsSync(sentinel1), "sentinel1 must not exist before test");
+  assert.ok(!fs.existsSync(sentinel2), "sentinel2 must not exist before test");
+  try {
+    // specA contains a command-substitution payload; specB contains a quote-escape payload.
+    // With argv form neither is ever interpreted by a shell.
+    const specA = `$(touch ${sentinel1})`;
+    const specB = `/tmp/also"; touch ${sentinel2}`;
+    const { findings } = compareOpenApiSpecs(specA, specB, "repoA", "repoB");
+    assert.ok(Array.isArray(findings), "findings must be an array");
+    assert.ok(
+      !fs.existsSync(sentinel1),
+      "sentinel1 must NOT exist — no shell execution for specA",
+    );
+    assert.ok(
+      !fs.existsSync(sentinel2),
+      "sentinel2 must NOT exist — no shell execution for specB",
+    );
+  } finally {
+    if (fs.existsSync(sentinel1)) fs.unlinkSync(sentinel1);
+    if (fs.existsSync(sentinel2)) fs.unlinkSync(sentinel2);
+  }
+});
+
+test("compareOpenApiSpecs: absent oasdiff degrades to INFO finding (guarded — skipped when oasdiff is installed)", () => {
+  // Guard: only assert when oasdiff is NOT available in the test environment.
+  // Do not hard-fail CI machines that have oasdiff installed.
+  let oasdiffPresent = false;
+  try {
+    execFileSync("which", ["oasdiff"], { stdio: "ignore", timeout: 2000 });
+    oasdiffPresent = true;
+  } catch {
+    /* not installed */
+  }
+
+  if (oasdiffPresent) {
+    // Skip this assertion — oasdiff is installed, degradation path is not taken.
+    return;
+  }
+
+  const { findings } = compareOpenApiSpecs("/tmp/a.yaml", "/tmp/b.yaml", "repoA", "repoB");
+  assert.ok(Array.isArray(findings), "findings must be an array");
+  const installFinding = findings.find(
+    (f) => f.detail && f.detail.includes("Install oasdiff"),
+  );
+  assert.ok(
+    installFinding,
+    `expected Install oasdiff INFO finding, got: ${JSON.stringify(findings)}`,
+  );
+});
+
+test("redactExecError: strips message, stdout, stderr, stack — only code/signal remain (SEC-08)", () => {
+  const SENTINEL = "SOURCE-EVIDENCE-SENTINEL";
+  const err = new Error(`cmd failed: ${SENTINEL}`);
+  err.stdout = `stdout content: ${SENTINEL}`;
+  err.stderr = `stderr content: ${SENTINEL}`;
+  err.code = "ENOENT";
+  err.signal = null;
+
+  const redacted = redactExecError(err);
+  const serialized = JSON.stringify(redacted);
+
+  assert.ok(
+    !serialized.includes(SENTINEL),
+    `serialized must not contain SENTINEL, got: ${serialized}`,
+  );
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(redacted, "message"),
+    "must not have 'message' key",
+  );
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(redacted, "stack"),
+    "must not have 'stack' key",
+  );
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(redacted, "stdout"),
+    "must not have 'stdout' key",
+  );
+  assert.ok(
+    !Object.prototype.hasOwnProperty.call(redacted, "stderr"),
+    "must not have 'stderr' key",
+  );
+  assert.equal(redacted.code, "ENOENT", "code must be preserved");
+  assert.equal(redacted.signal, null, "signal must be preserved");
 });
