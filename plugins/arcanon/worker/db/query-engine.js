@@ -95,7 +95,7 @@ export const _stmtCache = new StmtCache(50);
 
 // ---------------------------------------------------------------------------
 // Module-level db handle for standalone search() export
-// (injected via setSearchDb for testing; production uses getDb())
+// (injected via setSearchDb; the handle comes from the per-project pool (getQueryEngine), not the removed getDb() singleton — Phase 137/ISO-01)
 // ---------------------------------------------------------------------------
 
 /** @type {import('better-sqlite3').Database | null} */
@@ -103,7 +103,7 @@ let _searchDb = null;
 
 /**
  * Inject a database instance for the standalone search() function.
- * Used by tests for isolation; production callers set this via setSearchDb(getDb()).
+ * Used by tests for isolation; production callers set this from a per-project pool handle (getQueryEngine), not the removed getDb() singleton (Phase 137/ISO-01).
  *
  * @param {import('better-sqlite3').Database | null} db
  */
