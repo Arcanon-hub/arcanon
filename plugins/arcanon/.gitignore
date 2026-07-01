@@ -1,3 +1,10 @@
 node_modules/
 *.log
 .npm-install.log
+
+# Runtime data — never tracked or shipped. Created by openDb/createSnapshot when
+# ARCANON_DATA_DIR is unset and the data dir resolves into the plugin tree (e.g.
+# under `npm test`). Snapshot DBs (VACUUM INTO output) and the per-project SQLite
+# store are user runtime artifacts, not source.
+snapshots/
+impact-map.db*
