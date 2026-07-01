@@ -873,6 +873,26 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
         .all(r.repoId);
       let totalDeps = 0;
       const ecosystemsSeen = new Set();
+
+      // ISO-08 (D-09 deviation): pre-wipe node_metadata for this repo before
+      // the enrichment loop so stale keys from prior scans don't persist.
+      // node_metadata has no scan_version_id — pre-wipe + full re-write by
+      // enrichers is the only clean staleness signal. Post-bracket by design
+      // (enrichment is architecturally outside the scan transaction). Best-effort
+      // try/catch so a pre-migration-008 DB or transient error never fails the scan.
+      try {
+        queryEngine._db
+          .prepare(
+            'DELETE FROM node_metadata WHERE service_id IN (SELECT id FROM services WHERE repo_id = ?)',
+          )
+          .run(r.repoId);
+      } catch (err) {
+        slog('WARN', 'node-metadata pre-wipe failed (pre-mig-008?)', {
+          repoPath: r.repoPath,
+          error: err.message,
+        });
+      }
+
       for (const service of services) {
         await runEnrichmentPass(service, queryEngine._db, _logger, r.repoPath);
 
@@ -913,6 +933,26 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
           });
         }
       }
+
+      // ISO-08 (D-09 deviation): stale sweep for service_dependencies for this
+      // repo. Dep rows from the current scan have scan_version_id = scanVersionId;
+      // any row from a prior scan still carries the old id and is now stale.
+      // Post-bracket by design (dep collection is architecturally outside the
+      // scan transaction). Best-effort try/catch so a pre-migration-010 DB or
+      // transient error never fails the scan.
+      try {
+        queryEngine._db
+          .prepare(
+            'DELETE FROM service_dependencies WHERE service_id IN (SELECT id FROM services WHERE repo_id = ?) AND (scan_version_id != ? OR scan_version_id IS NULL)',
+          )
+          .run(r.repoId, scanVersionId);
+      } catch (err) {
+        slog('WARN', 'service-dependencies stale sweep failed (pre-mig-010?)', {
+          repoPath: r.repoPath,
+          error: err.message,
+        });
+      }
+
       // per-repo actor labeling pass.
       // Runs after the per-service enrichment loop (so any future per-service
       // enrichers that touch actors have already done so) and BEFORE the
