@@ -1430,14 +1430,45 @@ export class QueryEngine {
   }
 
   /**
-   * Opens a new scan bracket for the given repo.
-   * Inserts a scan_versions row with the current ISO timestamp and returns
-   * its integer ID. Pass this ID to persistFindings and endScan.
+   * Removes orphaned scan_versions rows for the given repo that were never
+   * completed (completed_at IS NULL) and were started more than 5 minutes ago.
+   * These are pre-138 abandoned scans left by a crashed worker that started a
+   * bracket but never called endScan. Idempotent and graceful if the table is
+   * absent.
+   *
+   * ISO-10: With Phase 138's transaction wrapping, new-style scans cannot
+   * produce orphaned rows (ROLLBACK removes the scan_versions INSERT). This
+   * recovery guard handles pre-138 DBs that may already have such rows.
    *
    * @param {number} repoId
+   */
+  cleanupAbandonedScanVersions(repoId) {
+    try {
+      this._db.prepare(`
+        DELETE FROM scan_versions
+        WHERE repo_id = ?
+          AND completed_at IS NULL
+          AND started_at < datetime('now', '-5 minutes')
+      `).run(repoId);
+    } catch { /* graceful — scan_versions table must exist */ }
+  }
+
+  /**
+   * Opens a new scan bracket for the given repo.
+   * Inserts a scan_versions row and returns its integer ID.
+   * Pass this ID to persistFindings and endScan.
+   *
+   * As the first action, calls cleanupAbandonedScanVersions to remove any
+   * pre-138 orphaned rows (completed_at IS NULL, started_at older than 5
+   * minutes) before the new bracket opens (ISO-10).
+   *
+   * @param {number} repoId
+   * @param {string} [startedAt] - ISO timestamp; defaults to now. Pass a
+   *   pre-captured timestamp so the bracket start is recorded at the moment
+   *   Phase A began (Phase 138-02 manager restructure).
    * @returns {number} The new scan_versions row ID
    */
-  beginScan(repoId) {
+  beginScan(repoId, startedAt = new Date().toISOString()) {
     // Pre-guard: better-sqlite3 throws "Too few parameter values were provided"
     // when handed an undefined / non-integer bind value. Catch it here with
     // a clearer message. (#8)
@@ -1446,15 +1477,26 @@ export class QueryEngine {
         `beginScan: repoId must be an integer, got ${typeof repoId} (${JSON.stringify(repoId)}).`,
       );
     }
-    const result = this._stmtBeginScan.run(repoId, new Date().toISOString());
+    // ISO-10: clean up any abandoned pre-138 orphaned rows before opening a new bracket.
+    this.cleanupAbandonedScanVersions(repoId);
+    const result = this._stmtBeginScan.run(repoId, startedAt);
     return result.lastInsertRowid;
   }
 
   /**
-   * Closes a scan bracket. Does three things in order:
-   *   1. UPDATE scan_versions SET completed_at = now WHERE id = scanVersionId
-   *   2. DELETE stale connections (referencing stale service rows)
-   *   3. DELETE stale services (scan_version_id != scanVersionId AND NOT NULL)
+   * Closes a scan bracket. Runs all cleanup in order, then stamps completed_at
+   * as the FINAL write so the row is visible as "completed" only after all
+   * cleanup is committed (ISO-04).
+   *
+   * Order:
+   *   1. quality_score compute + write (best-effort)
+   *   2. schema/field cleanup — scoped to this repo's connections (ISO-05)
+   *   3. DELETE stale connections (referencing stale service rows)
+   *   4. DELETE stale services (scan_version_id != scanVersionId AND NOT NULL)
+   *   5. DELETE legacy NULL scan_version_id rows for this repo
+   *   6. DELETE orphaned actor_connections (global orphan-only — safe)
+   *   7. Belt-and-suspenders schema/field orphan cleanup (global orphan-only — safe)
+   *   8. UPDATE scan_versions SET completed_at = now  ← LAST (ISO-04)
    *
    * Rows with scan_version_id IS NULL are NOT deleted — they are legacy
    * pre-bracket rows that survive until a subsequent scan replaces them.
@@ -1472,7 +1514,6 @@ export class QueryEngine {
     if (!Number.isInteger(scanVersionId)) {
       throw new TypeError(`endScan: scanVersionId must be an integer, got ${typeof scanVersionId} (${JSON.stringify(scanVersionId)}). Pass the value returned by beginScan().`);
     }
-    this._stmtEndScan.run(new Date().toISOString(), scanVersionId);
 
     // compute quality_score = (high + 0.5 * low) / total and persist
     // it on the scan_versions row. NULL when total = 0 (no connections in this
@@ -1495,24 +1536,29 @@ export class QueryEngine {
     }
 
     // Clean up orphaned schema rows BEFORE deleting stale connections
-    // (schemas FK references connections — must delete child rows first to avoid FK violation)
+    // (schemas FK references connections — must delete child rows first to avoid FK violation).
     //
-    // Only keep schemas for connections belonging to the CURRENT scan version.
-    // Both stale (scan_version_id != current) AND legacy NULL scan_version_id
-    // connections will be deleted below, so their schemas must go first.
+    // ISO-05: scope by source_service.repo_id so scanning repo A cannot delete
+    // repo B's schemas. The unscoped NOT IN (SELECT id FROM connections WHERE
+    // scan_version_id = ?) form crossed repos — see 138-RESEARCH.md §Q3.
     try {
       this._db.prepare(`
         DELETE FROM fields WHERE schema_id IN (
-          SELECT id FROM schemas WHERE connection_id NOT IN (
-            SELECT id FROM connections WHERE scan_version_id = ?
-          )
+          SELECT s.id FROM schemas s
+          JOIN connections c ON c.id = s.connection_id
+          JOIN services src ON src.id = c.source_service_id
+          WHERE src.repo_id = ?
+            AND (c.scan_version_id != ? OR c.scan_version_id IS NULL)
         )
-      `).run(scanVersionId);
+      `).run(repoId, scanVersionId);
       this._db.prepare(`
-        DELETE FROM schemas WHERE connection_id NOT IN (
-          SELECT id FROM connections WHERE scan_version_id = ?
+        DELETE FROM schemas WHERE connection_id IN (
+          SELECT c.id FROM connections c
+          JOIN services src ON src.id = c.source_service_id
+          WHERE src.repo_id = ?
+            AND (c.scan_version_id != ? OR c.scan_version_id IS NULL)
         )
-      `).run(scanVersionId);
+      `).run(repoId, scanVersionId);
     } catch { /* schemas/fields tables may not exist */ }
 
     // Delete stale connections before stale services — no CASCADE on FK
@@ -1530,7 +1576,10 @@ export class QueryEngine {
       `).run();
     } catch { /* actors table may not exist — migration 008 not applied */ }
 
-    // Clean up any remaining orphaned schema rows (belt-and-suspenders cleanup)
+    // Clean up any remaining orphaned schema rows (belt-and-suspenders cleanup).
+    // These only remove rows with broken FK references and are repo-safe —
+    // repo B's schemas still have valid connection references after the
+    // repo-scoped cleanup above (§Q3 note).
     try {
       this._db.prepare(`
         DELETE FROM fields WHERE schema_id NOT IN (SELECT id FROM schemas)
@@ -1539,6 +1588,12 @@ export class QueryEngine {
         DELETE FROM schemas WHERE connection_id NOT IN (SELECT id FROM connections)
       `).run();
     } catch { /* schemas/fields tables may not exist */ }
+
+    // ISO-04: completed_at is intentionally the LAST write — a reader or
+    // transaction sees "completed" only after all cleanup is committed.
+    // A crash or rollback before this line leaves completed_at NULL,
+    // signaling an in-progress or abandoned scan rather than a stale-complete.
+    this._stmtEndScan.run(new Date().toISOString(), scanVersionId);
   }
 
   /**

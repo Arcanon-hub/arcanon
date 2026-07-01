@@ -43,7 +43,7 @@ import { up as up016 } from '../db/migrations/016_enrichment_log.js';
 import { up as up017 } from '../db/migrations/017_scan_overrides.js';
 import { QueryEngine } from '../db/query-engine.js';
 
-import { applyPendingOverrides } from './overrides.js';
+import { applyPendingOverrides, applyPendingOverridesSync } from './overrides.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -482,5 +482,62 @@ describe('applyPendingOverrides — empty + idempotent', () => {
     // BEGIN log shows count=0.
     const begin = calls2.find((c) => c.msg === 'overrides apply BEGIN');
     assert.equal(begin.extra.count, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyPendingOverridesSync — ISO-03 enabler (Phase 138-01)
+// ---------------------------------------------------------------------------
+
+describe('applyPendingOverridesSync — sync export (ISO-03 enabler)', () => {
+  it('Test 15 — return value is a plain object, NOT a Promise', () => {
+    const { db, svId } = freshDb();
+    const qe = new QueryEngine(db);
+    const { slog } = makeSlog();
+
+    const result = applyPendingOverridesSync(svId, qe, slog);
+
+    // Must NOT be a Promise — a thenable cannot be awaited inside a
+    // synchronous db.transaction(fn) body (Phase 138 §Q7 Pitfall 2).
+    assert.equal(typeof result.then, 'undefined', 'result must not be a Promise/thenable');
+    assert.deepEqual(result, { applied: 0, skipped: 0, errors: 0 });
+  });
+
+  it('Test 16 — sync variant applies overrides identically to async path (service|rename + stamp)', () => {
+    const { db, svId, webId } = freshDb();
+    const qe = new QueryEngine(db);
+    const id = qe.upsertOverride({
+      kind: 'service', target_id: webId, action: 'rename',
+      payload: { new_name: 'frontend-sync' },
+    });
+    const { slog, calls } = makeSlog();
+
+    const result = applyPendingOverridesSync(svId, qe, slog);
+
+    // Identical counters to the async path.
+    assert.equal(result.applied, 1);
+    assert.equal(result.skipped, 0);
+    assert.equal(result.errors, 0);
+
+    // Mutation applied.
+    const name = db.prepare('SELECT name FROM services WHERE id = ?').get(webId).name;
+    assert.equal(name, 'frontend-sync', 'service renamed synchronously');
+
+    // Override stamped.
+    assert.ok(isStamped(db, id), 'override stamped by sync variant');
+
+    // INFO logs emitted (BEGIN + applied + DONE).
+    assert.equal(warnCount(calls), 0, 'no WARN logs');
+  });
+
+  it('Test 17 — sync no-op guard: queryEngine without helpers returns zero counters synchronously', () => {
+    const stubQe = { beginScan: () => {}, persistFindings: () => {}, endScan: () => {} };
+    const { slog, calls } = makeSlog();
+
+    const result = applyPendingOverridesSync(1, stubQe, slog);
+
+    assert.equal(typeof result.then, 'undefined', 'guard path also returns plain object');
+    assert.deepEqual(result, { applied: 0, skipped: 0, errors: 0 });
+    assert.equal(infoCount(calls), 2, 'INFO BEGIN + INFO DONE');
   });
 });

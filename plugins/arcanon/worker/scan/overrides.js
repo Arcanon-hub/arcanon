@@ -43,17 +43,21 @@ const KIND_ACTION_MATRIX = {
 };
 
 /**
- * Apply all pending operator overrides against the live `connections` /
- * `services` tables, stamping each row with the supplied scanVersionId on
- * success. Pure async function; the only side effects are the SQL writes
- * dispatched via the supplied queryEngine handle plus the slog calls.
+ * Synchronous variant — identical mutation logic as applyPendingOverrides but
+ * declared without `async` so it is callable inside a synchronous
+ * `db.transaction(fn)` body (ISO-03 enabler, Phase 138).
+ *
+ * The function body contains no real `await` expressions; the original async
+ * declaration was for API-surface consistency only. Extracting it sync lets
+ * Wave-2 (138-02) call it directly inside the write transaction without
+ * returning a Promise that the synchronous transaction wrapper cannot inspect.
  *
  * @param {number} scanVersionId
  * @param {import('../db/query-engine.js').QueryEngine} queryEngine
  * @param {(level: string, msg: string, extra?: object) => void} slog
- * @returns {Promise<{applied: number, skipped: number, errors: number}>}
+ * @returns {{applied: number, skipped: number, errors: number}}
  */
-export async function applyPendingOverrides(scanVersionId, queryEngine, slog) {
+export function applyPendingOverridesSync(scanVersionId, queryEngine, slog) {
   // Defensive no-op for queryEngine handles that lack the 117-01 helpers
   // (pre-mig-017 db where the constructor try/catch left the statements
   // disabled, OR test stubs that supply only beginScan/persistFindings/
@@ -132,6 +136,21 @@ export async function applyPendingOverrides(scanVersionId, queryEngine, slog) {
 
   slog('INFO', 'overrides apply DONE', counters);
   return counters;
+}
+
+/**
+ * Apply all pending operator overrides against the live `connections` /
+ * `services` tables, stamping each row with the supplied scanVersionId on
+ * success. Thin async wrapper around applyPendingOverridesSync — preserved for
+ * all existing callers outside a synchronous transaction context.
+ *
+ * @param {number} scanVersionId
+ * @param {import('../db/query-engine.js').QueryEngine} queryEngine
+ * @param {(level: string, msg: string, extra?: object) => void} slog
+ * @returns {Promise<{applied: number, skipped: number, errors: number}>}
+ */
+export async function applyPendingOverrides(scanVersionId, queryEngine, slog) {
+  return applyPendingOverridesSync(scanVersionId, queryEngine, slog);
 }
 
 /**

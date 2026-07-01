@@ -281,17 +281,23 @@ describe("scanRepos", () => {
    * Build a minimal mock queryEngine for scanRepos tests.
    * repoState=null means no prior scan (first scan → full).
    * Includes beginScan/persistFindings/endScan for the scan version bracket.
+   * _db.transaction mirrors the sqlite-adapter API: returns a callable that
+   * invokes fn() and returns its result — sufficient for unit tests that mock
+   * the individual QueryEngine methods.
    */
   function makeQueryEngine({ repoState = null } = {}) {
     return {
-      upsertRepo: (repoData) => 42,
+      upsertRepo: (_repoData) => 42,
       getRepoState: (_id) => repoState,
       setRepoState: (_id, _commit) => {},
       getRepoByPath: (_path) => null,
-      beginScan: (_repoId) => 1,
+      beginScan: (_repoId, _startedAt) => 1,
       persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
       endScan: (_repoId, _scanVersionId) => {},
-      _db: { prepare: () => ({ all: () => [] }) },
+      _db: {
+        transaction: (fn) => () => fn(),
+        prepare: () => ({ all: () => [] }),
+      },
     };
   }
 
@@ -502,14 +508,17 @@ describe("scanRepos — retry-once on agentRunner failure", () => {
 
   function makeQueryEngine({ repoState = null } = {}) {
     return {
-      upsertRepo: (repoData) => 42,
+      upsertRepo: (_repoData) => 42,
       getRepoState: (_id) => repoState,
       setRepoState: (_id, _commit) => {},
       getRepoByPath: (_path) => null,
-      beginScan: (_repoId) => 1,
+      beginScan: (_repoId, _startedAt) => 1,
       persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
       endScan: (_repoId, _scanVersionId) => {},
-      _db: { prepare: () => ({ all: () => [] }) },
+      _db: {
+        transaction: (fn) => () => fn(),
+        prepare: () => ({ all: () => [] }),
+      },
     };
   }
 
@@ -655,10 +664,11 @@ describe("scanRepos — incremental prompt constraint", () => {
       beginScan: (_repoId) => 7,
       persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
       endScan: (_repoId, _scanVersionId) => {},
-      // _db stub for the post-persist service-id backfill (manager.js:805)
-      // and the enrichment-pass SELECT (manager.js:820). Returns empty rows
-      // so the loops are no-ops; this test only asserts on the agent prompt.
+      // _db stub for the post-persist service-id backfill and enrichment-pass
+      // SELECT. Returns empty rows so the loops are no-ops; this test only
+      // asserts on the agent prompt.  transaction() mirrors sqlite-adapter API.
       _db: {
+        transaction: (fn) => () => fn(),
         prepare: () => ({ all: () => [], get: () => null, run: () => ({}) }),
       },
     };
@@ -815,10 +825,13 @@ describe("scanRepos — prompt content", () => {
     getRepoState: (_id) => null,
     setRepoState: (_id, _commit) => {},
     getRepoByPath: (_path) => null,
-    beginScan: (_repoId) => 1,
+    beginScan: (_repoId, _startedAt) => 1,
     persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
     endScan: (_repoId, _scanVersionId) => {},
-    _db: { prepare: () => ({ all: () => [] }) },
+    _db: {
+      transaction: (fn) => () => fn(),
+      prepare: () => ({ all: () => [] }),
+    },
   };
 
   test("service prompt contains multi-language examples and DISCOVERY_JSON", async () => {
@@ -1188,10 +1201,13 @@ describe("scanRepos — discovery wiring", () => {
       getRepoState: (_id) => repoState,
       setRepoState: (_id, _commit) => {},
       getRepoByPath: (_path) => null,
-      beginScan: (_repoId) => 1,
+      beginScan: (_repoId, _startedAt) => 1,
       persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
       endScan: (_repoId, _scanVersionId) => {},
-      _db: { prepare: () => ({ all: () => [] }) },
+      _db: {
+        transaction: (fn) => () => fn(),
+        prepare: () => ({ all: () => [] }),
+      },
     };
   }
 
@@ -1441,7 +1457,10 @@ describe("concurrent scan locking", () => {
       beginScan: () => 1,
       persistFindings: () => {},
       endScan: () => {},
-      _db: { prepare: () => ({ all: () => [] }) },
+      _db: {
+        transaction: (fn) => () => fn(),
+        prepare: () => ({ all: () => [] }),
+      },
     };
   }
 
@@ -1606,10 +1625,13 @@ describe("scanRepos — scan lifecycle logging", () => {
       getRepoState: (_id) => null,
       setRepoState: (_id, _commit) => {},
       getRepoByPath: (_path) => null,
-      beginScan: (_repoId) => 1,
+      beginScan: (_repoId, _startedAt) => 1,
       persistFindings: (_repoId, _findings, _commit, _scanVersionId) => {},
       endScan: (_repoId, _scanVersionId) => {},
-      _db: { prepare: () => ({ all: () => [] }) },
+      _db: {
+        transaction: (fn) => () => fn(),
+        prepare: () => ({ all: () => [] }),
+      },
     };
   }
 

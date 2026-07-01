@@ -38,7 +38,7 @@ import { resolveDataDir } from "../lib/data-dir.js";
 import { resolveConfigPath } from "../lib/config-path.js";
 import { readHubAutoSync as _readHubAutoSync } from "../lib/hub-config.js";
 import { extractAuthAndDb } from "./enrichment/auth-db-extractor.js";
-import { applyPendingOverrides } from "./overrides.js";
+import { applyPendingOverridesSync } from "./overrides.js";
 import { syncFindings, hasCredentials } from "../hub-sync/index.js";
 // externals catalog + user merge + per-repo actor labeling
 import { loadMergedCatalog } from "./enrichment/externals-catalog.js";
@@ -575,13 +575,15 @@ export function releaseScanLock(lockPath) {
  * with retry-once on agentRunner throw. DB writes remain sequential after all
  * agent calls resolve.
  *
- * Each non-skip, non-noop repo is wrapped in a scan version bracket:
- *   beginScan() is called before agent invocation.
- *   persistFindings() is called on success with the scan version ID.
- *   endScan() is called after persistFindings on the success path only.
- *   On parse failure, endScan is NOT called — prior scan data remains intact.
- *   On agentRunner throw (after retry), endScan is NOT called — bracket stays open,
- *   prior data is preserved.
+ * Each non-skip, non-noop repo runs its entire write phase inside a single
+ * db.transaction() per repo (ISO-03):
+ *   Phase A: captures scanStartedAt timestamp before agent invocation.
+ *   Phase B: beginScan(), persistFindings(), applyPendingOverridesSync(), and
+ *     endScan() all run inside one queryEngine._db.transaction(fn)() call.
+ *   beginScan is INSIDE the transaction — a rollback removes the scan_versions
+ *     row so no orphaned bracket can exist (ISO-10).
+ *   On parse failure, the write transaction is never opened — prior data is intact.
+ *   On agentRunner throw (after retry), same — no bracket opened in Phase A.
  *
  * Incremental scans inject a changed-files constraint into the prompt.
  *   When modified.length === 0, the scan is a no-op (no agent, no bracket).
@@ -591,9 +593,10 @@ export function releaseScanLock(lockPath) {
  * @param {{
  *   upsertRepo: (repoData: object) => number,
  *   getRepoState: (id: number) => object|null,
- *   beginScan: (repoId: number) => number,
+ *   beginScan: (repoId: number, startedAt?: string) => number,
  *   persistFindings: (repoId: number, findings: object, commit: string, scanVersionId: number) => void,
  *   endScan: (repoId: number, scanVersionId: number) => void,
+ *   _db: { transaction: (fn: Function) => Function },
  * }} queryEngine
  * @returns {Promise<ScanResult[]>}
  */
@@ -680,9 +683,6 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       frameworks: Array.isArray(discoveryContext.frameworks) ? discoveryContext.frameworks : [],
     });
 
-    // 5. Open scan version bracket — records scan start in scan_versions table
-    const scanVersionId = queryEngine.beginScan(repoId);
-
     // 6. Detect repo type and select type-specific prompt
     const repoType = detectRepoType(repoPath);
     slog('DEBUG', 'repo type detected', { repoPath, repoType });
@@ -706,7 +706,11 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       finalPrompt = interpolatedPrompt + buildIncrementalConstraint(ctx.files.modified);
     }
 
-    // 8. Invoke agent — with retry-once on agentRunner throw 
+    // 8. Invoke agent — with retry-once on agentRunner throw
+    // Capture scan start timestamp here (Phase A) so beginScan can record the
+    // precise moment Phase A began. beginScan itself runs inside the Phase B
+    // write transaction (ISO-10: a rolled-back write removes the bracket too).
+    const scanStartedAt = new Date().toISOString();
     slog('INFO', 'scan started', { repoPath, mode: ctx.mode });
     let rawResponse;
     try {
@@ -716,7 +720,8 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       try {
         rawResponse = await agentRunner(finalPrompt, repoPath);
       } catch (retryErr) {
-        // Second attempt also threw — skip repo with WARN, bracket stays open (prior data preserved)
+        // Second attempt also threw — skip repo with WARN, prior data preserved.
+        // No scan bracket was opened in Phase A (beginScan is inside Phase B transaction).
         slog('WARN', 'scan failed after retry — repo skipped', {
           repoPath,
           repoName: basename(repoPath),
@@ -753,13 +758,16 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       slog('WARN', 'findings validation warning', { repoPath, warning: w });
     }
 
-    // Return all data needed for Phase B (sequential DB writes)
+    // Return all data needed for Phase B (sequential DB writes).
+    // scanStartedAt (not scanVersionId) is returned here — beginScan runs inside
+    // the Phase B write transaction so the scan_versions row is atomic with the
+    // rest of the write (ISO-10). scanVersionId is the transaction return value.
     return {
       repoPath,
       mode: ctx.mode,
       findings: result.findings,
       repoId,
-      scanVersionId,
+      scanStartedAt,
       currentHead: getCurrentHead(repoPath),
       _writeDb: true,
     };
@@ -799,17 +807,45 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       continue;
     }
 
-    // 10. Persist findings and close scan bracket — success path only
-    queryEngine.persistFindings(r.repoId, r.findings, r.currentHead, r.scanVersionId);
+    // 10. Write phase — one atomic transaction per repo (ISO-03).
+    //
+    //   beginScan is INSIDE the transaction: a ROLLBACK removes the
+    //   scan_versions INSERT too — no orphaned bracket (ISO-10).
+    //
+    //   applyPendingOverridesSync is the synchronous variant of
+    //   applyPendingOverrides — safe to call inside db.transaction(fn)
+    //   because db.transaction() is synchronous.
+    //
+    //   endScan stamps completed_at as its LAST write (ISO-04), so the
+    //   scan is visible as "complete" only after all cleanup is committed.
+    //
+    //   agentRunner, discovery, enrichment, dep-collect, and Hub sync
+    //   remain OUTSIDE this transaction (async / best-effort).
+    const writeTx = queryEngine._db.transaction(() => {
+      const scanVersionId = queryEngine.beginScan(r.repoId, r.scanStartedAt);
+      queryEngine.persistFindings(r.repoId, r.findings, r.currentHead, scanVersionId);
+      // Sync override apply — reads scan_overrides WHERE applied_in_scan_version_id
+      // IS NULL, applies each UPDATE/DELETE, stamps row with scanVersionId.
+      applyPendingOverridesSync(scanVersionId, queryEngine, slog);
+      queryEngine.endScan(r.repoId, scanVersionId);
+      return scanVersionId;
+    });
 
-    // 10b. : apply pending operator overrides BEFORE endScan finalizes.
-    //      Reads scan_overrides WHERE applied_in_scan_version_id IS NULL, applies
-    //      each via direct UPDATE/DELETE on connections/services, stamps the row
-    //      with r.scanVersionId. Idempotent re-apply: already-stamped rows are
-    //      filtered by the SELECT WHERE clause.
-    await applyPendingOverrides(r.scanVersionId, queryEngine, slog);
-
-    queryEngine.endScan(r.repoId, r.scanVersionId);
+    let scanVersionId;
+    try {
+      scanVersionId = writeTx();
+    } catch (txErr) {
+      // writeTx() threw — SQLite adapter has already issued ROLLBACK.
+      // beginScan's scan_versions INSERT is rolled back too (ISO-10).
+      // Log, push an error result, and continue so sibling repos still
+      // commit (§Q7 Pitfall 6 / ISO-03 per-repo isolation).
+      slog('ERROR', 'scan write transaction failed — rolled back', {
+        repoPath: r.repoPath,
+        error: txErr.message,
+      });
+      results.push({ repoPath: r.repoPath, mode: r.mode, findings: null, error: txErr.message });
+      continue;
+    }
 
     // 10a. Back-fill DB ids onto r.findings.services so the hub auto-sync
     // loop (step ) can call getDependenciesForService(svc.id).
@@ -854,7 +890,7 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
               queryEngine.upsertDependency({
                 ...row,
                 service_id: service.id,
-                scan_version_id: r.scanVersionId,
+                scan_version_id: scanVersionId,
               });
               totalDeps++;
             } catch (err) {
