@@ -2,10 +2,13 @@
  * worker/db.js — Database lifecycle module for Arcanon v2.0
  *
  * Opens (or creates) the SQLite database for a project, applies WAL mode and
- * performance pragmas, runs pending migrations, and exposes the singleton
- * database handle via openDb() / getDb().
+ * performance pragmas, and runs pending migrations.
  *
- * DB path: ~/.arcanon/projects/<sha256(projectRoot).slice(0,12)>/impact-map.db
+ * Phase 137 / ISO-01: openDb() is a STATELESS FACTORY — each call opens a
+ * fresh DatabaseSync handle for the requested project root. The pool (pool.js)
+ * owns caching; this module owns opening. There is no module-level singleton.
+ *
+ * DB path: <dataDir>/projects/<sha256(path.resolve(projectRoot)).slice(0,12)>/impact-map.db
  *
  * IMPORTANT: This module uses top-level await to preload migration modules.
  * Callers that import this module from an ES module context get the fully
@@ -25,9 +28,6 @@ import { fileURLToPath, pathToFileURL } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-/** Module-level singleton database instance */
-let _db = null;
 
 /** Preloaded migration modules, sorted by version */
 const _migrations = await loadMigrationsAsync();
@@ -83,16 +83,20 @@ function projectHashDir(projectRoot) {
 
 /**
  * Opens (or creates) the SQLite database for the given project root.
- * Runs pending migrations before returning. Idempotent — safe to call
- * multiple times; returns the same instance on subsequent calls.
+ * Runs pending migrations before returning.
+ *
+ * Phase 137 / ISO-01: this is a PURE FACTORY — each call opens a fresh
+ * DatabaseSync handle. No module-level state is consulted or written.
+ * Caching is the caller's (pool.js's) responsibility.
+ *
+ * The projectRoot is resolved via path.resolve() before hashing, so trailing
+ * slashes and symlink variants all map to the same DB directory.
  *
  * @param {string} [projectRoot] - Project root directory. Defaults to process.cwd().
- * @returns {import('./sqlite-adapter.js').default} The open database instance.
+ * @returns {import('./sqlite-adapter.js').default} A fresh open database handle.
  */
 export function openDb(projectRoot = process.cwd()) {
-  if (_db) return _db;
-
-  const dataDir = projectHashDir(projectRoot);
+  const dataDir = projectHashDir(path.resolve(projectRoot));
   fs.mkdirSync(dataDir, { recursive: true });
 
   const dbPath = path.join(dataDir, "impact-map.db");
@@ -107,41 +111,37 @@ export function openDb(projectRoot = process.cwd()) {
 
   runMigrations(db);
 
-  _db = db;
-  return _db;
+  return db;
 }
 
 /**
- * Reset the module-level _db singleton — used by tests and pool eviction paths.
+ * No-op stub retained for export-surface compatibility.
  *
- * The pool's cached QueryEngine wraps the same Database instance that `openDb`
- * cached in the module-level `_db` slot. If a caller closes the QE's handle but
- * leaves `_db` pointing at the now-closed instance, the next `openDb()` call
- * returns the closed handle and `getQueryEngine` blows up at next-statement
- * time. This helper closes `_db` (best-effort) and clears the slot so the
- * next `openDb()` opens a fresh handle.
+ * Phase 137 / ISO-01: the module-level _db singleton has been removed; openDb()
+ * is now a stateless factory. There is no module state to reset. This function
+ * always returns false.
  *
- * Idempotent. Returns true if a slot was cleared, false if already null.
- *
- * @returns {boolean}
+ * @returns {false}
  */
 export function _resetDbSingleton() {
-  if (!_db) return false;
-  try { _db.close(); } catch { /* already closed */ }
-  _db = null;
-  return true;
+  // No module state to reset — openDb() is a pure factory since Phase 137.
+  return false;
 }
 
 /**
- * Returns the already-opened database instance.
- * @throws {Error} If openDb() has not been called yet.
- * @returns {import('./sqlite-adapter.js').default}
+ * Deprecated stub — always throws.
+ *
+ * Phase 137 / ISO-01: the process-global DB singleton has been removed.
+ * Pass the db handle explicitly (thread it from your openDb() call) or
+ * obtain a handle through pool.getQueryEngine(projectRoot).
+ *
+ * @throws {Error} Always — directs callers to the new API.
  */
 export function getDb() {
-  if (!_db) {
-    throw new Error("Database not initialized. Call openDb() first.");
-  }
-  return _db;
+  throw new Error(
+    "Phase 137 / ISO-01: DB singleton removed. " +
+    "Pass the db handle explicitly or use pool.getQueryEngine(projectRoot).",
+  );
 }
 
 /**
@@ -275,10 +275,12 @@ export function writeScan(findings, queryEngine, repoId) {
  * Returns true if no map versions have been recorded yet (i.e., this is the first scan).
  * Call before writeScan() to detect the first-map-build scenario.
  *
+ * Phase 137 / ISO-01: takes an explicit db handle instead of using the removed singleton.
+ *
+ * @param {import('./sqlite-adapter.js').default} db - Open database handle.
  * @returns {boolean}
  */
-export function isFirstScan() {
-  const db = getDb();
+export function isFirstScan(db) {
   const row = db.prepare("SELECT COUNT(*) as cnt FROM map_versions").get();
   return (row?.cnt ?? 0) === 0;
 }
@@ -292,12 +294,14 @@ export function isFirstScan() {
  * VACUUM INTO is used (not cp) because it creates an atomic, consistent copy
  * even during active writes, without copying WAL/SHM sidecar files.
  *
+ * Phase 137 / ISO-01: takes an explicit db handle instead of using the removed singleton.
+ *
+ * @param {import('./sqlite-adapter.js').default} db - Open database handle.
  * @param {string} [label=''] - Optional label stored in map_versions.
  * @returns {string} Absolute path to the created snapshot file.
  * @throws {Error} If VACUUM INTO fails.
  */
-export function createSnapshot(label = "") {
-  const db = getDb();
+export function createSnapshot(db, label = "") {
 
   // Determine the DB file path from the open database
   const dbFilePath = db.name; // adapter exposes the DB path as db.name
