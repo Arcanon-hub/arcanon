@@ -2156,6 +2156,20 @@ export class QueryEngine {
       serviceIdMap.set(svc.name, id);
     }
 
+    // ISO-08: pre-wipe actor_connections for this repo so dropped external actor
+    // edges are removed after a re-scan. Runs inside Phase 138's writeTx() so
+    // the DELETE and the _upsertActorEdge re-inserts below are atomic.
+    // Guard mirrors _upsertActorEdge: skip on pre-migration-008 DBs where the
+    // actors / actor_connections tables don't exist yet.
+    // The actors table itself is NOT deleted — only the join rows.
+    if (this._stmtUpsertActorConnection) {
+      this._db
+        .prepare(
+          'DELETE FROM actor_connections WHERE service_id IN (SELECT id FROM services WHERE repo_id = ?)',
+        )
+        .run(repoId);
+    }
+
     // 2. Upsert connections (resolve source/target names to IDs)
     for (const conn of findings.connections || []) {
       const sourceId =
@@ -2290,6 +2304,17 @@ export class QueryEngine {
     }
 
     // 5. Store exposed endpoints from the service scan
+    // ISO-08: pre-wipe exposed_endpoints for this repo so stale endpoints are
+    // removed after a re-scan. Runs inside Phase 138's writeTx() so the DELETE
+    // and the INSERT OR IGNORE loop below are atomic. Try/catch guards
+    // pre-migration-003 DBs where the table may not yet exist.
+    try {
+      this._db
+        .prepare(
+          'DELETE FROM exposed_endpoints WHERE service_id IN (SELECT id FROM services WHERE repo_id = ?)',
+        )
+        .run(repoId);
+    } catch { /* exposed_endpoints table absent — pre-migration-003 DB */ }
     for (const svc of findings.services || []) {
       const svcId = serviceIdMap.get(svc.name);
       if (!svcId || !svc.exposes) continue;
