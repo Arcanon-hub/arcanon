@@ -40,6 +40,7 @@ import { readHubAutoSync as _readHubAutoSync } from "../lib/hub-config.js";
 import { extractAuthAndDb } from "./enrichment/auth-db-extractor.js";
 import { applyPendingOverridesSync } from "./overrides.js";
 import { syncFindings, hasCredentials } from "../hub-sync/index.js";
+import { createSnapshot } from "../db/database.js";
 // externals catalog + user merge + per-repo actor labeling
 import { loadMergedCatalog } from "./enrichment/externals-catalog.js";
 import { runActorLabeling } from "./enrichment/actor-labeler.js";
@@ -951,7 +952,9 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     }
 
     slog('INFO', 'scan complete', { repoPath: r.repoPath, mode: r.mode });
-    results.push({ repoPath: r.repoPath, mode: r.mode, findings: r.findings });
+    // _scanVersionId is internal — underscore-prefixed per the _writeDb convention.
+    // Consumed by the post-hub-sync snapshot call (D-06, ISO-09) to populate repos_json.
+    results.push({ repoPath: r.repoPath, mode: r.mode, findings: r.findings, _scanVersionId: scanVersionId });
   }
 
   // Callers that suppress upload of synthetic / sandboxed scan data set
@@ -1034,6 +1037,38 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
     slog('WARN', 'hub sync skipped', { error: err.message });
   }
   } // end else (options.skipHubSync) —
+
+  // ---------------------------------------------------------------------------
+  // Once-per-run immutable snapshot (D-06, ISO-06, ISO-09)
+  //
+  // Fires AFTER ALL Phase B writes commit AND after hub sync, while still
+  // inside the try { } finally { releaseScanLock } block (Pitfall 6 — the
+  // scan lock prevents a concurrent VACUUM INTO race for the same project).
+  //
+  // Guard (Pitfall 3): skip if every repo failed — no new data was written.
+  // A partial-failure run (≥1 repo succeeded) DOES snapshot so the partial
+  // result is preserved in the diff history.
+  //
+  // D-03 hard constraint (VACUUM INTO cannot run inside a transaction): this
+  // site is structurally outside all db.transaction() calls — the Phase B
+  // writeTx per repo has already committed before this line executes.
+  // ---------------------------------------------------------------------------
+  if (results.some(r => r.findings !== null)) {
+    try {
+      const kind = repoPaths.length === 1 ? 'rescan' : 'map';
+      const coveredRepos = results
+        .filter(r => r.findings !== null)
+        .map(r => ({ path: r.repoPath, scan_version_id: r._scanVersionId }));
+      createSnapshot(queryEngine._db, `${kind} ${new Date().toISOString()}`, kind, coveredRepos);
+      slog('INFO', 'snapshot created', { kind, repoCount: coveredRepos.length });
+    } catch (err) {
+      // Snapshot failures are non-fatal — scan results are already committed.
+      // Log prominently so the ops team can investigate disk/permission issues.
+      slog('WARN', 'snapshot creation failed — scan results committed but no history entry', {
+        error: err.message,
+      });
+    }
+  }
 
   // Emit END event with totals and wall-clock duration
   const totalServices = results.reduce((n, r) => n + (Array.isArray(r.findings?.services) ? r.findings.services.length : 0), 0);
