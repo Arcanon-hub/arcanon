@@ -570,10 +570,6 @@ export class QueryEngine {
       SELECT id, path, name FROM repos WHERE path = ?
     `);
 
-    this._stmtInsertMapVersion = db.prepare(`
-      INSERT INTO map_versions (label, snapshot_path) VALUES (?, ?)
-    `);
-
     // --- Actor statements (migration 008) ---
     // Wrapped in try/catch for backward compatibility with pre-migration-008 databases.
     this._stmtUpsertActor = null;
@@ -2423,25 +2419,6 @@ export class QueryEngine {
     return rows[0].id;
   }
 
-  /**
-   * The snapshot directory is created automatically.
-   *
-   * @param {string} label - Human-readable label for this version.
-   * @returns {number} The new map_versions row id.
-   */
-  createMapVersion(label) {
-    const dataDir = this._db.name ? path.dirname(this._db.name) : os.tmpdir();
-    const snapshotsDir = path.join(dataDir, "snapshots");
-    fs.mkdirSync(snapshotsDir, { recursive: true });
-
-    const ts = new Date().toISOString().replace(/[:.]/g, "-");
-    const snapshotPath = path.join(snapshotsDir, `${ts}.db`);
-
-    this._db.exec(`VACUUM INTO '${snapshotPath.replace(/'/g, "''")}'`);
-
-    const result = this._stmtInsertMapVersion.run(label, snapshotPath);
-    return result.lastInsertRowid;
-  }
 }
 
 // ---------------------------------------------------------------------------

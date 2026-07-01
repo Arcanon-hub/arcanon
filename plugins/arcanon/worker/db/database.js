@@ -295,13 +295,18 @@ export function isFirstScan(db) {
  * even during active writes, without copying WAL/SHM sidecar files.
  *
  * Phase 137 / ISO-01: takes an explicit db handle instead of using the removed singleton.
+ * Phase 139 / ISO-06: extended with kind and repos params so each map_versions row
+ * is self-describing (D-07). MUST be called OUTSIDE any open transaction (D-03 hard
+ * constraint — SQLite raises "cannot VACUUM from within a transaction" otherwise).
  *
  * @param {import('./sqlite-adapter.js').default} db - Open database handle.
  * @param {string} [label=''] - Optional label stored in map_versions.
+ * @param {string} [kind='map'] - Run kind: 'map' (multi-repo) or 'rescan' (single-repo).
+ * @param {Array<{path: string, scan_version_id: number}>} [repos=[]] - Repos covered.
  * @returns {string} Absolute path to the created snapshot file.
  * @throws {Error} If VACUUM INTO fails.
  */
-export function createSnapshot(db, label = "") {
+export function createSnapshot(db, label = "", kind = "map", repos = []) {
 
   // Determine the DB file path from the open database
   const dbFilePath = db.name; // adapter exposes the DB path as db.name
@@ -316,10 +321,19 @@ export function createSnapshot(db, label = "") {
   // Unlike cp which copies wal + shm sidecars (potentially inconsistent)
   db.exec(`VACUUM INTO '${snapshotFile}'`);
 
-  // Record in map_versions table
-  db.prepare(
-    "INSERT INTO map_versions (created_at, label, snapshot_path) VALUES (?, ?, ?)",
-  ).run(new Date().toISOString(), label, relPath);
+  // Record in map_versions table — 5-column form requires migration 021.
+  // Fall back to the legacy 4-column INSERT for pre-021 DBs (test environments
+  // that openDb on a DB that hasn't run all migrations yet).
+  try {
+    db.prepare(
+      "INSERT INTO map_versions (created_at, label, snapshot_path, kind, repos_json) VALUES (?, ?, ?, ?, ?)",
+    ).run(new Date().toISOString(), label, relPath, kind, JSON.stringify(repos));
+  } catch (_) {
+    // Pre-021 DB: fall back to legacy 4-column form
+    db.prepare(
+      "INSERT INTO map_versions (created_at, label, snapshot_path) VALUES (?, ?, ?)",
+    ).run(new Date().toISOString(), label, relPath);
+  }
 
   // Retention cleanup: remove oldest snapshots beyond limit
   const limit = getHistoryLimit();
