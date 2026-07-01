@@ -5,6 +5,10 @@
  * Phase 137 / ISO-01: isFirstScan(db) and createSnapshot(db, label) now take
  * an explicit db handle (the singleton was removed). Each describe block opens
  * its own handle via openDb() and threads it through all assertions.
+ *
+ * Phase 139 / ISO-06: createSnapshot extended to createSnapshot(db, label, kind, repos).
+ * Tests verify that the new columns (kind, repos_json) are correctly populated
+ * and round-trip through the map_versions table.
  */
 
 import { describe, it, before, after } from "node:test";
@@ -82,7 +86,7 @@ describe("createSnapshot()", () => {
   });
 
   it("returns a path to a .db file that exists after creation", () => {
-    const snapshotPath = importedDb2.createSnapshot(db2, "test-label");
+    const snapshotPath = importedDb2.createSnapshot(db2, "test-label", "map", []);
     assert.ok(
       typeof snapshotPath === "string",
       "createSnapshot must return a string path",
@@ -105,7 +109,7 @@ describe("createSnapshot()", () => {
   });
 
   it("snapshot file is in a snapshots/ subdirectory", () => {
-    const snapshotPath = importedDb2.createSnapshot(db2, "second-snapshot");
+    const snapshotPath = importedDb2.createSnapshot(db2, "second-snapshot", "rescan", []);
     const snapshotDirName = path.basename(path.dirname(snapshotPath));
     assert.strictEqual(
       snapshotDirName,
@@ -129,6 +133,38 @@ describe("createSnapshot()", () => {
       rows[0].snapshot_path.startsWith("snapshots/"),
       "snapshot_path must be relative (starts with snapshots/)",
     );
+  });
+
+  it("kind column is populated correctly for map and rescan", () => {
+    const snapshotPath = importedDb2.createSnapshot(db2, "map-run", "map", []);
+    const row = db2
+      .prepare("SELECT * FROM map_versions ORDER BY id DESC LIMIT 1")
+      .get();
+    assert.strictEqual(row.kind, "map", "kind must be 'map' when specified");
+
+    importedDb2.createSnapshot(db2, "rescan-run", "rescan", []);
+    const row2 = db2
+      .prepare("SELECT * FROM map_versions ORDER BY id DESC LIMIT 1")
+      .get();
+    assert.strictEqual(row2.kind, "rescan", "kind must be 'rescan' when specified");
+  });
+
+  it("repos_json round-trips a [{path, scan_version_id}] array", () => {
+    const repos = [
+      { path: "/repo/a", scan_version_id: 42 },
+      { path: "/repo/b", scan_version_id: 99 },
+    ];
+    importedDb2.createSnapshot(db2, "repos-test", "map", repos);
+    const row = db2
+      .prepare("SELECT * FROM map_versions ORDER BY id DESC LIMIT 1")
+      .get();
+    assert.ok(row.repos_json, "repos_json must be set");
+    const parsed = JSON.parse(row.repos_json);
+    assert.equal(parsed.length, 2, "repos_json has 2 entries");
+    assert.equal(parsed[0].path, "/repo/a");
+    assert.equal(parsed[0].scan_version_id, 42);
+    assert.equal(parsed[1].path, "/repo/b");
+    assert.equal(parsed[1].scan_version_id, 99);
   });
 });
 
@@ -158,7 +194,7 @@ describe("createSnapshot() retention cleanup", () => {
     for (let i = 0; i < 12; i++) {
       // Small delay to ensure different timestamps in snapshot filenames.
       await new Promise((r) => setTimeout(r, 5));
-      paths.push(importedDb3.createSnapshot(db3, `retention-test-${i}`));
+      paths.push(importedDb3.createSnapshot(db3, `retention-test-${i}`, "map", []));
     }
 
     // Use the explicit db3 handle instead of the removed getDb().

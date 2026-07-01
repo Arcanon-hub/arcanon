@@ -570,10 +570,6 @@ export class QueryEngine {
       SELECT id, path, name FROM repos WHERE path = ?
     `);
 
-    this._stmtInsertMapVersion = db.prepare(`
-      INSERT INTO map_versions (label, snapshot_path) VALUES (?, ?)
-    `);
-
     // --- Actor statements (migration 008) ---
     // Wrapped in try/catch for backward compatibility with pre-migration-008 databases.
     this._stmtUpsertActor = null;
@@ -2160,6 +2156,20 @@ export class QueryEngine {
       serviceIdMap.set(svc.name, id);
     }
 
+    // ISO-08: pre-wipe actor_connections for this repo so dropped external actor
+    // edges are removed after a re-scan. Runs inside Phase 138's writeTx() so
+    // the DELETE and the _upsertActorEdge re-inserts below are atomic.
+    // Guard mirrors _upsertActorEdge: skip on pre-migration-008 DBs where the
+    // actors / actor_connections tables don't exist yet.
+    // The actors table itself is NOT deleted — only the join rows.
+    if (this._stmtUpsertActorConnection) {
+      this._db
+        .prepare(
+          'DELETE FROM actor_connections WHERE service_id IN (SELECT id FROM services WHERE repo_id = ?)',
+        )
+        .run(repoId);
+    }
+
     // 2. Upsert connections (resolve source/target names to IDs)
     for (const conn of findings.connections || []) {
       const sourceId =
@@ -2294,6 +2304,17 @@ export class QueryEngine {
     }
 
     // 5. Store exposed endpoints from the service scan
+    // ISO-08: pre-wipe exposed_endpoints for this repo so stale endpoints are
+    // removed after a re-scan. Runs inside Phase 138's writeTx() so the DELETE
+    // and the INSERT OR IGNORE loop below are atomic. Try/catch guards
+    // pre-migration-003 DBs where the table may not yet exist.
+    try {
+      this._db
+        .prepare(
+          'DELETE FROM exposed_endpoints WHERE service_id IN (SELECT id FROM services WHERE repo_id = ?)',
+        )
+        .run(repoId);
+    } catch { /* exposed_endpoints table absent — pre-migration-003 DB */ }
     for (const svc of findings.services || []) {
       const svcId = serviceIdMap.get(svc.name);
       if (!svcId || !svc.exposes) continue;
@@ -2423,25 +2444,6 @@ export class QueryEngine {
     return rows[0].id;
   }
 
-  /**
-   * The snapshot directory is created automatically.
-   *
-   * @param {string} label - Human-readable label for this version.
-   * @returns {number} The new map_versions row id.
-   */
-  createMapVersion(label) {
-    const dataDir = this._db.name ? path.dirname(this._db.name) : os.tmpdir();
-    const snapshotsDir = path.join(dataDir, "snapshots");
-    fs.mkdirSync(snapshotsDir, { recursive: true });
-
-    const ts = new Date().toISOString().replace(/[:.]/g, "-");
-    const snapshotPath = path.join(snapshotsDir, `${ts}.db`);
-
-    this._db.exec(`VACUUM INTO '${snapshotPath.replace(/'/g, "''")}'`);
-
-    const result = this._stmtInsertMapVersion.run(label, snapshotPath);
-    return result.lastInsertRowid;
-  }
 }
 
 // ---------------------------------------------------------------------------
