@@ -4,6 +4,12 @@
  * The worker is project-agnostic. It resolves the correct DB based on
  * a project root path passed in each request (?project=/path/to/repo).
  * DBs are opened on first access and cached for the worker's lifetime.
+ *
+ * Phase 137 / ISO-02: the pool Map is keyed by the resolved dbPath
+ * (absolute path to impact-map.db) in ALL three entry points so a given
+ * DB file can have at most one QueryEngine, no matter which entry point
+ * opened it. Trailing-slash / unnormalized variants fold to the same
+ * entry via path.resolve() before hashing.
  */
 
 import crypto from "crypto";
@@ -17,7 +23,7 @@ import { resolveDataDir } from "../lib/data-dir.js";
 
 const dataDir = resolveDataDir();
 
-/** Cache: projectRoot → QueryEngine */
+/** Cache: resolved dbPath → QueryEngine (Phase 137 / ISO-02: keyed by DB file path, not projectRoot) */
 const pool = new Map();
 
 /**
@@ -44,32 +50,47 @@ export function projectHashDir(projectRoot) {
  * Get or create a QueryEngine for the given project root.
  * Opens the SQLite DB on first access, caches for subsequent requests.
  *
+ * Phase 137 / ISO-02: the pool Map is keyed by the resolved dbPath (not the
+ * raw projectRoot string). path.resolve() is applied before hashing so that
+ * trailing-slash and unnormalized variants always resolve to the same entry.
+ * A cached entry whose _db.name no longer matches its key is evicted and
+ * re-opened (defends against a poisoned entry surviving from a prior run).
+ *
  * @param {string} projectRoot - Absolute path to the project root.
  * @returns {QueryEngine|null} Null if no DB exists for this project.
  */
 export function getQueryEngine(projectRoot) {
   if (!projectRoot) return null;
 
-  if (pool.has(projectRoot)) {
-    return pool.get(projectRoot);
-  }
-
-  const dir = projectHashDir(projectRoot);
+  const resolved = path.resolve(projectRoot);
+  const dir = projectHashDir(resolved);
   const dbPath = path.join(dir, "impact-map.db");
+
+  if (pool.has(dbPath)) {
+    const qe = pool.get(dbPath);
+    // Invariant: cached handle must point to the expected file.
+    // If it doesn't (stale/poisoned entry), evict and fall through to re-open.
+    if (qe._db && qe._db.name !== dbPath) {
+      pool.delete(dbPath);
+    } else {
+      return qe;
+    }
+  }
 
   if (!fs.existsSync(dbPath)) {
     return null;
   }
 
   try {
-    // Use openDb() to ensure migrations run (e.g., adding 'type' column)
-    const db = openDb(projectRoot);
+    // openDb() is now a pure factory (Phase 137); pass the resolved root so
+    // its internal path.resolve() call folds to the same canonical directory.
+    const db = openDb(resolved);
     const qe = new QueryEngine(db, null); // logger injected at higher level in future phases
-    pool.set(projectRoot, qe);
+    pool.set(dbPath, qe);
     return qe;
   } catch (err) {
     process.stderr.write(
-      `[db-pool] Failed to open DB for ${projectRoot}: ${err.message}\n`,
+      `[db-pool] Failed to open DB for ${resolved}: ${err.message}\n`,
     );
     return null;
   }
@@ -193,6 +214,11 @@ function commonParent(paths) {
 /**
  * Get a QueryEngine by project hash (instead of project root).
  * Used by the UI when it only knows the hash from /projects.
+ *
+ * Phase 137 / ISO-02: the pool entry is now keyed by dbPath (not by
+ * `__hash__${hash}`) so a hash lookup and a root lookup for the same file
+ * share a single pool entry — preventing two handles to one DB file.
+ *
  * @param {string} hash
  * @returns {QueryEngine|null}
  */
@@ -205,15 +231,12 @@ export function getQueryEngineByHash(hash) {
 
   if (!fs.existsSync(dbPath)) return null;
 
-  // Check if already cached by any project root
-  for (const [, qe] of pool) {
-    if (qe._db && qe._db.name === dbPath) return qe;
-  }
+  // Check if already cached (pool is keyed by dbPath — covers both root and hash lookups)
+  if (pool.has(dbPath)) return pool.get(dbPath);
 
   try {
-    // Open with migrations via a temporary openDb call
-    // openDb uses projectRoot for hashing, but we already have the DB path.
-    // Open directly but run migrations manually.
+    // Open directly (we already have the DB path, not a project root to hash).
+    // Run pragmas + migrations to match the openDb() contract.
     const db = new Database(dbPath);
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
@@ -221,7 +244,9 @@ export function getQueryEngineByHash(hash) {
     // Run all pending migrations using the same files as openDb()
     runMigrations(db);
     const qe = new QueryEngine(db, null); // logger injected at higher level in future phases
-    pool.set(`__hash__${hash}`, qe);
+    // Key by dbPath so a subsequent getQueryEngine(root) call for this file
+    // finds this entry rather than opening a second handle.
+    pool.set(dbPath, qe);
     return qe;
   } catch (err) {
     process.stderr.write(
