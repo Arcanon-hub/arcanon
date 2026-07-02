@@ -580,7 +580,7 @@ test("POST /scan 500 — logger.error called with stack when persistFindings thr
     url: "/scan",
     payload: {
       repo_path: "/tmp/test-repo",
-      findings: { services: [], connections: [], schemas: [] },
+      findings: { service_name: "test-repo", confidence: "high", services: [], connections: [], schemas: [] },
     },
   });
   assert.equal(res.statusCode, 500);
