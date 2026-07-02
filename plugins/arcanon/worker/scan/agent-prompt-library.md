@@ -62,11 +62,16 @@ fold into `rest`. Name the specific technology in `evidence` if useful.
 | `events` | `"events.published"` | Topic name (kafka/rabbitmq/nats/sqs/sse) |
 | `db` | `"orders"` | Datastore dependency — table/collection/key namespace |
 
-## source_file Requirement
+## source_file + source_symbol Requirement
 
 `source_file` on every connection is **REQUIRED**. This field enables file-level impact analysis. Do not emit `null` unless you have exhaustively searched all source files and found no call site.
 
-**Format:** `"path/to/caller.ts:functionName"` or `"path/to/caller.ts:42"` (line number fallback).
+**Format:** emit the path and symbol as SEPARATE fields:
+
+- `"source_file": "path/to/caller.ts"` — the relative file path ONLY (no colon, no symbol suffix)
+- `"source_symbol": "functionName"` — the function or symbol name at the call site (optional; omit or null if not applicable)
+
+For a line-number fallback, use `"source_symbol": "42"`.
 
 - Use the file that contains the call — not the file that defines the target.
 - For SDK connections, use the file that imports and invokes the SDK function.
@@ -105,13 +110,25 @@ fold into `rest`. Name the specific technology in `evidence` if useful.
       "crossing": "cross-service",
       "method": "POST",
       "path": "/events",
-      "source_file": "src/client.ts:publishEvent",
+      "source_file": "src/client.ts",
+      "source_symbol": "publishEvent",
       "target_file": null,
       "confidence": "high",
       "evidence": "await this.http.post(`${this.baseUrl}/events`, { topic, payload })"
     }
   ],
-  "schemas": []
+  "schemas": [
+    {
+      "connection_index": 0,
+      "name": "PublishEventPayload",
+      "role": "request",
+      "file": "src/types/event.ts",
+      "fields": [
+        { "name": "topic", "type": "string", "required": true },
+        { "name": "payload", "type": "object", "required": true }
+      ]
+    }
+  ]
 }
 ```
 

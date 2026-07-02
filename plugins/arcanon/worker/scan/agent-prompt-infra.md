@@ -27,7 +27,7 @@ If discovery context is empty or `{{DISCOVERY_JSON}}` was not replaced, fall bac
 1. **The infra entry** — as a single `"type": "infra"` entry
 2. **Exposed resources** — every k8s resource, Terraform output, or Helm release managed
 3. **Connections to services** — each configmap, secret, env var, or deployment that wires to a service
-4. **No schemas** — infra repos don't have request/response schemas (return empty array)
+4. **No schemas** — infra repos don't have request/response schemas (return empty array `[]`). Note: if a schema were included in any scan type, it **must** carry a `connection_index` integer referencing its position in `connections[]`.
 
 ## Exposes Format
 
