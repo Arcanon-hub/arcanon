@@ -1209,11 +1209,11 @@ Plans:
   3. Submitting a finding with an invalid crossing value, unrecognized protocol, or missing required field is caught at the contract validation layer — the error is logged and the finding is skipped, not written with corrupt or default-filled data.
   4. All existing persistence entry points (scanning manager, MCP handler, HTTP route) pass findings through the single canonical validator before any write — no direct call to `persistFindings()` with unvalidated input exists.
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans complete
 
 - [x] 140-01-PLAN.md — Canonical contract.js module (cross-service crossing, connection_index, source_file/source_symbol split) + findings.js shim + agent-schema/prompts sync [CTR-01, CTR-02, CTR-03]
 - [x] 140-02-PLAN.md — Migration 022 (source_symbol/target_symbol) + persistFindings schema-attach-by-connection_index fix + symbol writes [CTR-02, CTR-03]
-- [ ] 140-03-PLAN.md — POST /scan validateFindings gate (validate before any DB write) [CTR-04]
+- [x] 140-03-PLAN.md — POST /scan validateFindings gate (validate before any DB write) [CTR-04]
 
 ---
 
@@ -1322,7 +1322,7 @@ Plans:
 | 137 | v0.2.0 | 1/1 | Complete   | 2026-07-01 |
 | 138 | v0.2.0 | 2/2 | Complete   | 2026-07-01 |
 | 139 | v0.2.0 | 2/2 | Complete   | 2026-07-01 |
-| 140 | v0.2.0 | 2/3 | In Progress|  |
+| 140 | v0.2.0 | 3/3 | Complete   | 2026-07-02 |
 | 141 | v0.2.0 | 0/? | Not started | - |
 | 142 | v0.2.0 | 0/? | Not started | - |
 | 143 | v0.2.0 | 0/? | Not started | - |
