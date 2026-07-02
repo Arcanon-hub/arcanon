@@ -430,47 +430,68 @@ export class QueryEngine {
         scanned_at = COALESCE(excluded.scanned_at, scanned_at)
     `);
 
-    // Try with base_path column (migration 014). Fall back through
-    // migration-011 (boundary_entry only), then pre-011 plain shape for older
-    // databases. Mirrors the connections.path_template multi-tier fallback.
+    // Try with source_file column (migration 023). Fall back through base_path
+    // (migration 014), boundary_entry (migration 011), then pre-011 plain shape
+    // for older databases. Mirrors the connections.path_template multi-tier
+    // fallback. source_file enables PIPE-04 deleted-file cleanup in scan-service.js
+    // (_deleteDeletedFileFindings uses WHERE source_file = ? on services).
+    this._hasSourceFile = false;
     this._hasBasePath = false;
     try {
       this._stmtUpsertService = db.prepare(`
-        INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id, boundary_entry, base_path)
-        VALUES (@repo_id, @name, @root_path, @language, @type, @scan_version_id, @boundary_entry, @base_path)
+        INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id, boundary_entry, base_path, source_file)
+        VALUES (@repo_id, @name, @root_path, @language, @type, @scan_version_id, @boundary_entry, @base_path, @source_file)
         ON CONFLICT(repo_id, name) DO UPDATE SET
           root_path = excluded.root_path,
           language = excluded.language,
           type = excluded.type,
           scan_version_id = excluded.scan_version_id,
           boundary_entry = excluded.boundary_entry,
-          base_path = excluded.base_path
+          base_path = excluded.base_path,
+          source_file = excluded.source_file
       `);
+      this._hasSourceFile = true;
       this._hasBasePath = true;
     } catch {
-      // base_path column not present — try migration-011 shape
+      // source_file column not present — try migration-014 shape (base_path only)
       try {
         this._stmtUpsertService = db.prepare(`
-          INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id, boundary_entry)
-          VALUES (@repo_id, @name, @root_path, @language, @type, @scan_version_id, @boundary_entry)
+          INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id, boundary_entry, base_path)
+          VALUES (@repo_id, @name, @root_path, @language, @type, @scan_version_id, @boundary_entry, @base_path)
           ON CONFLICT(repo_id, name) DO UPDATE SET
             root_path = excluded.root_path,
             language = excluded.language,
             type = excluded.type,
             scan_version_id = excluded.scan_version_id,
-            boundary_entry = excluded.boundary_entry
+            boundary_entry = excluded.boundary_entry,
+            base_path = excluded.base_path
         `);
+        this._hasBasePath = true;
       } catch {
-        // boundary_entry column not present — pre-migration-011 database
-        this._stmtUpsertService = db.prepare(`
-          INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id)
-          VALUES (@repo_id, @name, @root_path, @language, @type, @scan_version_id)
-          ON CONFLICT(repo_id, name) DO UPDATE SET
-            root_path = excluded.root_path,
-            language = excluded.language,
-            type = excluded.type,
-            scan_version_id = excluded.scan_version_id
-        `);
+        // base_path column not present — try migration-011 shape
+        try {
+          this._stmtUpsertService = db.prepare(`
+            INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id, boundary_entry)
+            VALUES (@repo_id, @name, @root_path, @language, @type, @scan_version_id, @boundary_entry)
+            ON CONFLICT(repo_id, name) DO UPDATE SET
+              root_path = excluded.root_path,
+              language = excluded.language,
+              type = excluded.type,
+              scan_version_id = excluded.scan_version_id,
+              boundary_entry = excluded.boundary_entry
+          `);
+        } catch {
+          // boundary_entry column not present — pre-migration-011 database
+          this._stmtUpsertService = db.prepare(`
+            INSERT INTO services (repo_id, name, root_path, language, type, scan_version_id)
+            VALUES (@repo_id, @name, @root_path, @language, @type, @scan_version_id)
+            ON CONFLICT(repo_id, name) DO UPDATE SET
+              root_path = excluded.root_path,
+              language = excluded.language,
+              type = excluded.type,
+              scan_version_id = excluded.scan_version_id
+          `);
+        }
       }
     }
 
@@ -954,8 +975,11 @@ export class QueryEngine {
       scan_version_id: null,
       boundary_entry: null,
       base_path: null,
+      source_file: null,
       ...serviceData,
     });
+    // Strip columns not present in the prepared statement for pre-migration DBs.
+    if (!this._hasSourceFile) delete sanitized.source_file;
     // If the prepared statement does NOT include base_path (pre-migration-014),
     // strip the key so better-sqlite3 doesn't reject the extra named param.
     if (!this._hasBasePath) delete sanitized.base_path;
@@ -2173,6 +2197,7 @@ export class QueryEngine {
         scan_version_id: scanVersionId ?? null,
         boundary_entry: svc.boundary_entry || null,
         base_path: svc.base_path || null,
+        source_file: svc.source_file || null,  // PIPE-04: persist for deleted-file cleanup
       });
       serviceIdMap.set(svc.name, id);
     }

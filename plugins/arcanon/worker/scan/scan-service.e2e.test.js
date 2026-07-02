@@ -226,10 +226,11 @@ describe('Task 1: core persistScanResult pipeline', () => {
     ).run();
     const overrideId = ovRow.lastInsertRowid;
 
-    // Monkey-patch endScan to throw inside the transaction
+    // Monkey-patch endScan to throw inside the transaction.
+    // Use rest params — `arguments` is not available in ES module scope.
     const realEndScan = qe.endScan.bind(qe);
-    qe.endScan = () => {
-      realEndScan.apply(qe, arguments);
+    qe.endScan = (...args) => {
+      realEndScan(...args);
       throw new Error('forced failure — rollback proof');
     };
 
