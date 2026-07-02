@@ -14,6 +14,13 @@ node_modules/
 .claude/
 AGENTS.md
 
+# Runtime data — never tracked or shipped. Created by openDb/createSnapshot when
+# ARCANON_DATA_DIR is unset and the data dir resolves into the repo tree (e.g. a
+# test/suite run). Pattern has no leading slash, so it matches a `snapshots/` dir
+# or `impact-map.db*` at ANY depth (repo root, plugins/arcanon/, etc.).
+snapshots/
+impact-map.db*
+
 # Credentials / secrets — never commit
 .env
 .env.local
