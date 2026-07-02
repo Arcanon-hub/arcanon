@@ -474,13 +474,25 @@ export class QueryEngine {
       }
     }
 
-    // Try with protocol_raw column (migration 019) AND path_template (013).
-    // Falls back through path_template-only, then migration-009
+    // Try with source_symbol + target_symbol (migration 022) AND protocol_raw
+    // (migration 019) AND path_template (migration 013). Falls back through
+    // protocol_raw+path_template, path_template-only, migration-009
     // (confidence+evidence), migration-008 (crossing), then pre-008 plain
-    // columns for legacy DBs. protocol_raw preserves the agent's original token
-    // while protocol holds the canonical bucket (#42).
+    // columns for legacy DBs. source_symbol/target_symbol persist CTR-03 splits;
+    // protocol_raw preserves the agent's original token while protocol holds the
+    // canonical bucket (#42).
     this._hasPathTemplate = false;
     this._hasProtocolRaw = false;
+    this._hasSourceSymbol = false;
+    try {
+      this._stmtUpsertConnection = db.prepare(`
+        INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, protocol_raw, method, path, path_template, source_file, target_file, source_symbol, target_symbol, scan_version_id, crossing, confidence, evidence)
+        VALUES (@source_service_id, @target_service_id, @protocol, @protocol_raw, @method, @path, @path_template, @source_file, @target_file, @source_symbol, @target_symbol, @scan_version_id, @crossing, @confidence, @evidence)
+      `);
+      this._hasPathTemplate = true;
+      this._hasProtocolRaw = true;
+      this._hasSourceSymbol = true;
+    } catch {
     try {
       this._stmtUpsertConnection = db.prepare(`
         INSERT OR REPLACE INTO connections (source_service_id, target_service_id, protocol, protocol_raw, method, path, path_template, source_file, target_file, scan_version_id, crossing, confidence, evidence)
@@ -517,6 +529,7 @@ export class QueryEngine {
           `);
         }
       }
+    }
     }
     }
 
@@ -974,6 +987,8 @@ export class QueryEngine {
       path: null,
       source_file: null,
       target_file: null,
+      source_symbol: null,   // CTR-03: symbol extracted from source_file (migration 022)
+      target_symbol: null,   // CTR-03: symbol extracted from target_file (migration 022)
       scan_version_id: null,
       crossing: null,
       confidence: null,
@@ -982,11 +997,16 @@ export class QueryEngine {
       protocol_raw: null,
       ...connData,
     });
-    // If the prepared statement does NOT include path_template (pre-migration-013)
-    // or protocol_raw (pre-migration-019), strip the key so the node:sqlite
-    // adapter doesn't reject an extra named param.
+    // If the prepared statement does NOT include path_template (pre-migration-013),
+    // protocol_raw (pre-migration-019), or source_symbol/target_symbol
+    // (pre-migration-022), strip the keys so the node:sqlite adapter doesn't
+    // reject extra named params on older DBs.
     if (!this._hasPathTemplate) delete sanitized.path_template;
     if (!this._hasProtocolRaw) delete sanitized.protocol_raw;
+    if (!this._hasSourceSymbol) {
+      delete sanitized.source_symbol;
+      delete sanitized.target_symbol;
+    }
     const result = this._stmtUpsertConnection.run(sanitized);
     return result.lastInsertRowid;
   }
@@ -2140,6 +2160,7 @@ export class QueryEngine {
    */
   persistFindings(repoId, findings, commit, scanVersionId) {
     const serviceIdMap = new Map(); // name → id
+    const connIdByIndex = new Map(); // CTR-02: 0-based connection array index → connId
 
     // 1. Upsert services
     for (const svc of findings.services || []) {
@@ -2170,8 +2191,10 @@ export class QueryEngine {
         .run(repoId);
     }
 
-    // 2. Upsert connections (resolve source/target names to IDs)
-    for (const conn of findings.connections || []) {
+    // 2. Upsert connections (resolve source/target names to IDs).
+    // connIdx tracks the 0-based position in findings.connections[] so schemas
+    // can be routed to exactly one connection via connection_index (CTR-02).
+    for (const [connIdx, conn] of (findings.connections || []).entries()) {
       const sourceId =
         serviceIdMap.get(conn.source) || this._resolveServiceId(conn.source, repoId);
       if (!sourceId) continue; // can't link an unknown source
@@ -2269,37 +2292,48 @@ export class QueryEngine {
         path_template: mergedTemplate,
         source_file: conn.source_file || null,
         target_file: conn.target_file || null,
+        source_symbol: conn.source_symbol || null,  // CTR-03: split symbol from source_file
+        target_symbol: conn.target_symbol || null,  // CTR-03: split symbol from target_file
         scan_version_id: scanVersionId ?? null,
         crossing: conn.crossing || null,
         confidence: conn.confidence || null,
         evidence: conn.evidence || null,
       });
 
+      // CTR-02: record this connection's index so schemas can be routed to it.
+      connIdByIndex.set(connIdx, connId);
+
       // Defensive: if the target IS a known service AND was tagged external,
       // we've already inserted the regular connection above. Don't also create
       // an actor — the existing service row is the authoritative endpoint.
       // (Pre-#9 the actor block also fired here; the SBUG-01 check skipped it
       // for known services. Behavior unchanged for this case.)
+    }
 
-      // 3. Upsert schemas for this connection
-      // Find schemas that belong to this connection path
-      for (const schema of findings.schemas || []) {
-        const schemaId = this.upsertSchema({
-          connection_id: connId,
-          role: schema.role,
-          name: schema.name,
-          file: schema.file || null,
+    // 3. Upsert schemas — CTR-02: each schema attaches ONLY to its declared
+    // connection_index connection. The former nested-in-connection-loop approach
+    // caused every schema to be written against every connection (fan-out bug).
+    // connIdByIndex maps 0-based connection array position → connId so each
+    // schema is routed to exactly one row. Schemas without a numeric
+    // connection_index are skipped (the contract validator already warned).
+    for (const schema of findings.schemas || []) {
+      if (typeof schema.connection_index !== 'number') continue;
+      const schemaConnId = connIdByIndex.get(schema.connection_index);
+      if (!schemaConnId) continue; // connection was skipped (unknown source/target)
+      const schemaId = this.upsertSchema({
+        connection_id: schemaConnId,
+        role: schema.role,
+        name: schema.name,
+        file: schema.file || null,
+      });
+      // 4. Upsert fields for this schema
+      for (const field of schema.fields || []) {
+        this.upsertField({
+          schema_id: schemaId,
+          name: field.name,
+          type: field.type || "unknown",
+          required: field.required ? 1 : 0,
         });
-
-        // 4. Upsert fields for this schema
-        for (const field of schema.fields || []) {
-          this.upsertField({
-            schema_id: schemaId,
-            name: field.name,
-            type: field.type || "unknown",
-            required: field.required ? 1 : 0,
-          });
-        }
       }
     }
 

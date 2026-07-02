@@ -185,6 +185,20 @@ async function freshEngine() {
     db.prepare("INSERT INTO schema_versions(version) VALUES(?)").run(13);
   })();
 
+  // Migration 019 - connections.protocol_raw (needed for _hasProtocolRaw)
+  const { up: up019 } = await import("./migrations/019_connections_protocol_raw.js");
+  db.transaction(() => {
+    up019(db);
+    db.prepare("INSERT INTO schema_versions(version) VALUES(?)").run(19);
+  })();
+
+  // Migration 022 - connections.source_symbol + target_symbol (CTR-03)
+  const { up: up022 } = await import("./migrations/022_connections_source_target_symbol.js");
+  db.transaction(() => {
+    up022(db);
+    db.prepare("INSERT INTO schema_versions(version) VALUES(?)").run(22);
+  })();
+
   const repoId = db
     .prepare(
       "INSERT INTO repos (path, name, type) VALUES ('/tmp/r-canon', 'r', 'single')"
@@ -349,5 +363,132 @@ describe("path canonicalization in persistFindings", () => {
       .map((s) => s.trim())
       .sort();
     assert.deepEqual(parts, ["/api/users/{id}", "/api/users/{userId}"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CTR-01b: cross-service crossing round-trips through persistFindings
+// ---------------------------------------------------------------------------
+
+describe("CTR-01b: cross-service crossing persisted correctly", () => {
+  it("crossing:'cross-service' is stored verbatim in the connections row", async () => {
+    const { db, repoId, qe } = await freshEngine();
+    const findings = {
+      service_name: "svc-a",
+      confidence: "high",
+      services: [
+        { name: "svc-a", root_path: ".", language: "js", confidence: "high" },
+        { name: "svc-b", root_path: ".", language: "js", confidence: "high" },
+      ],
+      connections: [
+        {
+          source: "svc-a",
+          target: "svc-b",
+          protocol: "rest",
+          method: "POST",
+          path: "/api/bridge",
+          source_file: null,
+          target_file: null,
+          crossing: "cross-service",
+          confidence: "high",
+          evidence: "",
+        },
+      ],
+      schemas: [],
+    };
+    qe.persistFindings(repoId, findings);
+
+    const row = db
+      .prepare("SELECT crossing FROM connections WHERE protocol='rest' AND path='/api/bridge'")
+      .get();
+    assert.ok(row, "connection with cross-service crossing was persisted");
+    assert.equal(row.crossing, "cross-service", "crossing:'cross-service' round-trips through persistFindings");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CTR-03b: source_symbol + target_symbol written to the connections row
+// ---------------------------------------------------------------------------
+
+describe("CTR-03b: source_symbol and target_symbol persisted via upsertConnection ladder", () => {
+  it("source_symbol and target_symbol are written when migration 022 columns are present", async () => {
+    const { db, repoId, qe } = await freshEngine();
+    const findings = {
+      service_name: "svc-a",
+      confidence: "high",
+      services: [
+        { name: "svc-a", root_path: ".", language: "ts", confidence: "high" },
+        { name: "svc-b", root_path: ".", language: "ts", confidence: "high" },
+      ],
+      connections: [
+        {
+          source: "svc-a",
+          target: "svc-b",
+          protocol: "rest",
+          method: "GET",
+          path: "/api/users",
+          source_file: "src/middleware/auth.ts",   // path-only (already split by contract)
+          source_symbol: "validateToken",           // CTR-03: symbol in separate field
+          target_file: "src/handlers/users.ts",
+          target_symbol: "getUser",
+          confidence: "high",
+          evidence: "",
+        },
+      ],
+      schemas: [],
+    };
+    qe.persistFindings(repoId, findings);
+
+    const row = db
+      .prepare("SELECT source_file, source_symbol, target_file, target_symbol FROM connections WHERE protocol='rest'")
+      .get();
+    assert.ok(row, "connection row exists");
+    assert.equal(row.source_file, "src/middleware/auth.ts", "source_file is path-only");
+    assert.equal(row.source_symbol, "validateToken", "source_symbol persisted correctly (CTR-03)");
+    assert.equal(row.target_file, "src/handlers/users.ts", "target_file is path-only");
+    assert.equal(row.target_symbol, "getUser", "target_symbol persisted correctly (CTR-03)");
+  });
+
+  it("schema with connection_index attaches to exactly that connection (CTR-02 via persistFindings)", async () => {
+    const { db, repoId, qe } = await freshEngine();
+    const findings = {
+      service_name: "svc-a",
+      confidence: "high",
+      services: [
+        { name: "svc-a", root_path: ".", language: "ts", confidence: "high" },
+        { name: "svc-b", root_path: ".", language: "ts", confidence: "high" },
+      ],
+      connections: [
+        {
+          source: "svc-a",
+          target: "svc-b",
+          protocol: "rest",
+          method: "GET",
+          path: "/api/users",
+          source_file: null,
+          target_file: null,
+          confidence: "high",
+          evidence: "",
+        },
+      ],
+      schemas: [
+        {
+          connection_index: 0,
+          name: "UserList",
+          role: "response",
+          file: "src/types/user.ts",
+          fields: [{ name: "users", type: "array", required: true }],
+        },
+      ],
+    };
+    qe.persistFindings(repoId, findings);
+
+    const schemaRows = db.prepare("SELECT name FROM schemas").all();
+    assert.equal(schemaRows.length, 1, "exactly 1 schema row (no fan-out)");
+    assert.equal(schemaRows[0].name, "UserList", "schema name matches");
+
+    const fieldRows = db.prepare("SELECT name FROM fields").all();
+    assert.equal(fieldRows.length, 1, "exactly 1 field row");
+    assert.equal(fieldRows[0].name, "users", "field name matches");
   });
 });
