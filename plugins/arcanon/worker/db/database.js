@@ -310,6 +310,13 @@ export function createSnapshot(db, label = "", kind = "map", repos = []) {
 
   // Determine the DB file path from the open database
   const dbFilePath = db.name; // adapter exposes the DB path as db.name
+
+  // In-memory databases have no on-disk location: path.dirname(":memory:") is
+  // ".", which would VACUUM a stray snapshots/ dir into CWD (test-suite runs that
+  // drive scanRepos on a :memory: DB, e.g. manager-txn.test.js). Snapshots are only
+  // meaningful for real file-backed project DBs, so skip in-memory handles.
+  if (!dbFilePath || dbFilePath === ":memory:") return null;
+
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const snapshotsDir = path.join(path.dirname(dbFilePath), "snapshots");
   fs.mkdirSync(snapshotsDir, { recursive: true });
