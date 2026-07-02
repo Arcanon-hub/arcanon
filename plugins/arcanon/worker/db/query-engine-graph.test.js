@@ -12,7 +12,7 @@ import { QueryEngine } from "./query-engine.js";
 // Helper: build a fully-migrated in-memory DB (migrations 001-009)
 // ---------------------------------------------------------------------------
 
-async function buildTestDb({ withMigration009 = true } = {}) {
+async function buildTestDb({ withMigration009 = true, withMigration022 = false } = {}) {
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
 
@@ -196,6 +196,20 @@ async function buildTestDb({ withMigration009 = true } = {}) {
     })();
   }
 
+  if (withMigration022) {
+    // Migrations 011, 013, 019, 022 — needed for full upsertConnection ladder
+    // (services.boundary_entry, connections.path_template, connections.protocol_raw,
+    //  connections.source_symbol + target_symbol).
+    const { up: up011 } = await import("./migrations/011_services_boundary_entry.js");
+    db.transaction(() => { up011(db); db.prepare("INSERT INTO schema_versions(version) VALUES(?)").run(11); })();
+    const { up: up013 } = await import("./migrations/013_connections_path_template.js");
+    db.transaction(() => { up013(db); db.prepare("INSERT INTO schema_versions(version) VALUES(?)").run(13); })();
+    const { up: up019 } = await import("./migrations/019_connections_protocol_raw.js");
+    db.transaction(() => { up019(db); db.prepare("INSERT INTO schema_versions(version) VALUES(?)").run(19); })();
+    const { up: up022 } = await import("./migrations/022_connections_source_target_symbol.js");
+    db.transaction(() => { up022(db); db.prepare("INSERT INTO schema_versions(version) VALUES(?)").run(22); })();
+  }
+
   return db;
 }
 
@@ -353,7 +367,93 @@ describe("getGraph() extended response", () => {
     db.close();
   });
 
-  test("Test 6: stale schema rows are deleted when their connection is removed by endScan", async () => {
+  test("Test 6 (CTR-02): schemas attach ONLY to their connection_index connection — no fan-out", async () => {
+    // A findings with 3 connections and 2 schemas (each with a different
+    // connection_index) must produce exactly 1 schema per declared connection,
+    // not 6 rows (the fan-out bug). Connection at index 0 gets no schema.
+    const db = await buildTestDb({ withMigration022: true });
+    const qe = new QueryEngine(db);
+
+    const repoId = db
+      .prepare("INSERT INTO repos(path, name, type) VALUES(?,?,?)")
+      .run("/tmp/test-ctr02-" + Date.now(), "ctr02-repo", "single").lastInsertRowid;
+
+    const findings = {
+      services: [
+        { name: "svc-a", root_path: ".", language: "typescript", type: "service" },
+        { name: "svc-b", root_path: ".", language: "python", type: "service" },
+        { name: "svc-c", root_path: ".", language: "go", type: "service" },
+      ],
+      connections: [
+        // index 0 — no schema
+        { source: "svc-a", target: "svc-b", protocol: "rest", method: "GET", path: "/api/v1",
+          source_file: null, target_file: null, confidence: "high", evidence: "" },
+        // index 1 — owns schema[0]
+        { source: "svc-b", target: "svc-c", protocol: "rest", method: "POST", path: "/data",
+          source_file: "src/b.ts", source_symbol: "callC", target_file: null,
+          confidence: "high", evidence: "" },
+        // index 2 — owns schema[1]
+        { source: "svc-a", target: "svc-c", protocol: "grpc", method: null, path: "/svc.Service/Method",
+          source_file: null, target_file: null, confidence: "medium", evidence: "" },
+      ],
+      schemas: [
+        {
+          connection_index: 1,
+          name: "DataPayload",
+          role: "request",
+          file: "src/types/data.ts",
+          fields: [{ name: "id", type: "string", required: true }],
+        },
+        {
+          connection_index: 2,
+          name: "ServiceMethod",
+          role: "request",
+          file: "src/proto/svc.proto",
+          fields: [{ name: "query", type: "string", required: false }],
+        },
+      ],
+    };
+
+    qe.persistFindings(repoId, findings);
+
+    // Total schema rows: exactly 2 (one per declared schema, not 3×2=6)
+    const totalSchemas = db.prepare("SELECT COUNT(*) AS cnt FROM schemas").get().cnt;
+    assert.strictEqual(totalSchemas, 2, "exactly 2 schema rows — no fan-out");
+
+    // connection at index 0 must have ZERO schemas
+    const conn0 = db
+      .prepare("SELECT c.id FROM connections c JOIN services s ON c.source_service_id = s.id WHERE s.name='svc-a' AND c.protocol='rest'")
+      .get();
+    assert.ok(conn0, "connection 0 (svc-a→svc-b rest) exists");
+    const conn0Schemas = db.prepare("SELECT COUNT(*) AS cnt FROM schemas WHERE connection_id = ?").get(conn0.id).cnt;
+    assert.strictEqual(conn0Schemas, 0, "connection at index 0 has zero schemas");
+
+    // connection at index 1 must have exactly 1 schema (DataPayload)
+    const conn1 = db
+      .prepare("SELECT c.id FROM connections c JOIN services s ON c.source_service_id = s.id WHERE s.name='svc-b'")
+      .get();
+    assert.ok(conn1, "connection 1 (svc-b→svc-c) exists");
+    const conn1Schemas = db.prepare("SELECT name FROM schemas WHERE connection_id = ?").all(conn1.id);
+    assert.strictEqual(conn1Schemas.length, 1, "connection at index 1 has exactly 1 schema");
+    assert.strictEqual(conn1Schemas[0].name, "DataPayload", "schema for index 1 is DataPayload");
+
+    // connection at index 2 must have exactly 1 schema (ServiceMethod)
+    const conn2 = db
+      .prepare("SELECT c.id FROM connections c WHERE c.protocol='grpc'")
+      .get();
+    assert.ok(conn2, "connection 2 (svc-a→svc-c grpc) exists");
+    const conn2Schemas = db.prepare("SELECT name FROM schemas WHERE connection_id = ?").all(conn2.id);
+    assert.strictEqual(conn2Schemas.length, 1, "connection at index 2 has exactly 1 schema");
+    assert.strictEqual(conn2Schemas[0].name, "ServiceMethod", "schema for index 2 is ServiceMethod");
+
+    // source_symbol persisted on connection 1 (CTR-03)
+    const conn1Row = db.prepare("SELECT source_symbol FROM connections WHERE id = ?").get(conn1.id);
+    assert.strictEqual(conn1Row.source_symbol, "callC", "source_symbol written to connection row (CTR-03)");
+
+    db.close();
+  });
+
+  test("Test 7: stale schema rows are deleted when their connection is removed by endScan", async () => {
     const db = await buildTestDb();
     const qe = new QueryEngine(db);
 

@@ -9,6 +9,7 @@ import { resolveConfigPath } from "../lib/config-path.js";
 import { getCommitsSince } from "../scan/git-state.js";
 import { extractEvidenceLocation } from "../hub-sync/evidence-location.js";
 import { maskHomeDeep } from "../lib/path-mask.js";
+import { validateFindings } from "../scan/contract.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -641,6 +642,15 @@ async function createHttpServer(queryEngine, options = {}) {
         .code(400)
         .send({ error: "Missing repo_path or findings in request body" });
     }
+    // CTR-04: validate findings against the canonical contract before any DB write.
+    // An invalid payload returns 400 immediately — upsertRepo/beginScan/persistFindings
+    // are never called, so no scan bracket is opened on bad input.
+    const validation = validateFindings(findings);
+    if (!validation.valid) {
+      return reply
+        .code(400)
+        .send({ error: `Invalid findings: ${validation.error}` });
+    }
     try {
       const repoId = qe.upsertRepo({
         path: repo_path,
@@ -649,7 +659,7 @@ async function createHttpServer(queryEngine, options = {}) {
       });
       const scanVersionId = qe.beginScan(repoId);
       try {
-        qe.persistFindings(repoId, findings, commit || null, scanVersionId);
+        qe.persistFindings(repoId, validation.findings, commit || null, scanVersionId);
         qe.endScan(repoId, scanVersionId);
       } catch (innerErr) {
         // persistFindings failed — do NOT call endScan (bracket stays open / incomplete)

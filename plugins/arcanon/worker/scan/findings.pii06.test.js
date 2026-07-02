@@ -81,13 +81,16 @@ test('absolute source_file is dropped with masked WARN, connection persists', ()
   assert.equal(result.findings.connections[0].evidence, 'inline call site');
   assert.equal(result.findings.connections[0].confidence, 'high');
 
-  // Warning is emitted with the offending path masked via maskHome.
-  // HOME = "/Users/me", so /Users/me/proj/src/auth.ts:42 → ~/proj/src/auth.ts:42
+  // CTR-03: the colon-split fires first, extracting the symbol suffix "42" and
+  // leaving source_file = "/Users/me/proj/src/auth.ts". The absolute-path guard
+  // then fires on the cleaned path, so the masked rejection warning shows the
+  // path WITHOUT the ":42" suffix.
+  // HOME = "/Users/me", so /Users/me/proj/src/auth.ts → ~/proj/src/auth.ts
   const rejectionWarn = result.warnings.find((w) =>
     /source_file is absolute.*dropping/.test(w),
   );
   assert.ok(rejectionWarn, 'expected a rejection warning matching the rejection contract');
-  assert.match(rejectionWarn, /~\/proj\/src\/auth\.ts:42/);
+  assert.match(rejectionWarn, /~\/proj\/src\/auth\.ts/);
   assert.doesNotMatch(
     rejectionWarn,
     /\/Users\/me\//,
@@ -112,8 +115,10 @@ test('relative source_file passes through unchanged, no rejection warning', () =
   );
 
   assert.equal(result.valid, true);
-  assert.equal(result.findings.connections[0].source_file, 'src/auth.ts:42');
-  // No rejection warning fires for relative paths.
+  // CTR-03: "src/auth.ts:42" is split — source_file = path only, source_symbol = "42"
+  assert.equal(result.findings.connections[0].source_file, 'src/auth.ts');
+  assert.equal(result.findings.connections[0].source_symbol, '42');
+  // No REJECTION warning fires for relative paths (split warning is distinct).
   const rejectionWarn = result.warnings.find((w) =>
     /source_file is absolute.*dropping/.test(w),
   );
@@ -176,7 +181,8 @@ test('scan does NOT fail; mixed connections persist (absolute dropped, relative 
   // First connection: absolute → source_file dropped, rest intact.
   assert.equal(result.findings.connections[0].source_file, null);
   assert.equal(result.findings.connections[0].path, '/x');
-  // Second connection: relative → untouched.
-  assert.equal(result.findings.connections[1].source_file, 'src/b.ts:2');
+  // Second connection: relative "src/b.ts:2" → CTR-03 splits into path + symbol.
+  assert.equal(result.findings.connections[1].source_file, 'src/b.ts');
+  assert.equal(result.findings.connections[1].source_symbol, '2');
   assert.equal(result.findings.connections[1].path, '/y');
 });

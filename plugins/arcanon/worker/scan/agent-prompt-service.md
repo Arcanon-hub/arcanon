@@ -91,11 +91,16 @@ rendered under an "other" bucket (never dropped), so prefer a canonical token.
 
 For `sdk` connections: the `path` must be the specific exported function(s) the caller uses — NOT the module import path. This enables precise impact analysis.
 
-## source_file Requirement
+## source_file + source_symbol Requirement
 
 `source_file` on every connection is **REQUIRED**. This field enables file-level impact analysis. Do not emit `null` unless you have exhaustively searched all source files and found no call site.
 
-**Format:** `"path/to/caller.ts:functionName"` or `"path/to/caller.ts:42"` (line number fallback).
+**Format:** emit the path and symbol as SEPARATE fields:
+
+- `"source_file": "path/to/caller.ts"` — the relative file path ONLY (no colon, no symbol suffix)
+- `"source_symbol": "functionName"` — the function or symbol name at the call site (optional; omit or null if not applicable)
+
+For a line-number fallback, use `"source_symbol": "42"`.
 
 - Use the file that contains the call — not the file that defines the target.
 - For SDK connections, use the file that imports and invokes the SDK function.
@@ -171,7 +176,8 @@ example below. Do not classify by the library name alone.
       "crossing": "cross-service",
       "method": "POST",
       "path": "/api/auth/validate",
-      "source_file": "src/middleware/auth.ts:validateToken",
+      "source_file": "src/middleware/auth.ts",
+      "source_symbol": "validateToken",
       "target_file": null,
       "confidence": "high",
       "evidence": "const res = await fetch('/api/auth/validate', { method: 'POST' })"
@@ -183,13 +189,24 @@ example below. Do not classify by the library name alone.
       "crossing": "external",
       "method": "POST",
       "path": "/v1/charges",
-      "source_file": "src/billing/stripe.ts:createCharge",
+      "source_file": "src/billing/stripe.ts",
+      "source_symbol": "createCharge",
       "target_file": null,
       "confidence": "high",
       "evidence": "await stripe.charges.create({ amount, currency, source })"
     }
   ],
-  "schemas": []
+  "schemas": [
+    {
+      "connection_index": 0,
+      "name": "ValidateTokenRequest",
+      "role": "request",
+      "file": "src/types/auth.ts",
+      "fields": [
+        { "name": "token", "type": "string", "required": true }
+      ]
+    }
+  ]
 }
 ```
 

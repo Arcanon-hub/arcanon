@@ -325,7 +325,14 @@ test("validateFindings accepts valid input with connections and schemas", () => 
   obj.schemas = [validSchema()];
   const result = validateFindings(obj);
   assert.equal(result.valid, true);
-  assert.deepEqual(result.findings, obj);
+  // CTR-02: schema without connection_index is warn-skipped — result.findings.schemas is []
+  assert.equal(result.findings.schemas.length, 0, "Schema without connection_index is warn-skipped");
+  // CTR-03: default source_file "src/client.ts:callHealth" is split into path + symbol
+  assert.equal(result.findings.connections[0].source_file, "src/client.ts");
+  assert.equal(result.findings.connections[0].source_symbol, "callHealth");
+  // Top-level fields are preserved
+  assert.equal(result.findings.service_name, obj.service_name);
+  assert.equal(result.findings.confidence, obj.confidence);
 });
 
 test("validateFindings accepts all valid schema roles", () => {
@@ -511,13 +518,27 @@ test("warns for each null source_file", () => {
   assert.ok(result.warnings[1].includes("connection[1].source_file is null"));
 });
 
-test("no warnings when source_file is non-null", () => {
+test("CTR-03: combined source_file colon-value generates a split warning (no null-source warning)", () => {
+  // A combined "path:symbol" source_file is valid — it is split by CTR-03 and
+  // generates a split warning, not a null-source warning.
   const obj = minimalValid();
   obj.connections = [validConnection({ source_file: "src/api.ts:callTarget" })];
   const result = validateFindings(obj);
   assert.equal(result.valid, true);
   assert.ok(Array.isArray(result.warnings), "warnings should be an array");
-  assert.equal(result.warnings.length, 0);
+  // Exactly one warning: the CTR-03 colon-split notification
+  assert.equal(
+    result.warnings.length,
+    1,
+    `Expected 1 split warning, got: ${JSON.stringify(result.warnings)}`,
+  );
+  assert.ok(
+    result.warnings[0].includes("source_file") && result.warnings[0].includes("callTarget"),
+    `Expected split warning mentioning source_file and callTarget, got: ${result.warnings[0]}`,
+  );
+  // The connection is split into path + symbol
+  assert.equal(result.findings.connections[0].source_file, "src/api.ts");
+  assert.equal(result.findings.connections[0].source_symbol, "callTarget");
 });
 
 // ---------------------------------------------------------------------------
@@ -598,4 +619,125 @@ describe("validateFindings — service field validation (SVAL-01)", () => {
   test("VALID_SERVICE_TYPES contains expected values", () => {
     assert.deepEqual(VALID_SERVICE_TYPES, ["service", "library", "sdk", "infra"]);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Contract behaviour tests (CTR-01, CTR-02, CTR-03)
+// ---------------------------------------------------------------------------
+
+// CTR-01: cross-service crossing must be accepted as a valid first-class value.
+// Currently FAILS: findings.js VALID_CROSSINGS only has external|sdk|internal, so
+// crossing:'cross-service' causes validateFindings to return valid:false.
+test("CTR-01: validateFindings accepts crossing:'cross-service' (valid:true)", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ crossing: "cross-service", source_file: "src/a.ts" })];
+  const result = validateFindings(obj);
+  assert.equal(
+    result.valid,
+    true,
+    `Expected valid:true for cross-service, got error: ${result.error ?? "(none)"}`,
+  );
+  assert.equal(result.findings.connections[0].crossing, "cross-service");
+});
+
+// CTR-02: schema missing connection_index must be warn-and-skipped, not hard-errored.
+// Currently FAILS: no connection_index check exists — the schema is passed through
+// unchanged and no warning is emitted.
+test("CTR-02: validateFindings warns-and-skips a schema missing connection_index", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ source_file: "src/a.ts" })];
+  obj.schemas = [validSchema()]; // no connection_index field
+  const result = validateFindings(obj);
+  assert.equal(
+    result.valid,
+    true,
+    `Expected valid:true (warn-and-skip, not hard error), got error: ${result.error ?? "(none)"}`,
+  );
+  assert.ok(
+    result.warnings.some((w) => w.includes("connection_index")),
+    `Expected a warning about missing connection_index, got: ${JSON.stringify(result.warnings)}`,
+  );
+  // Schema without connection_index must NOT appear in result.findings.schemas
+  assert.equal(
+    result.findings.schemas.length,
+    0,
+    "Schema without connection_index must be warn-skipped from the result",
+  );
+});
+
+// CTR-02: schema with an out-of-bounds connection_index is also warn-and-skipped.
+// Currently FAILS: no bounds check exists.
+test("CTR-02: validateFindings warns-and-skips a schema with out-of-bounds connection_index", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ source_file: "src/a.ts" })]; // connections.length = 1
+  obj.schemas = [validSchema({ connection_index: 5 })]; // index 5 is out of bounds
+  const result = validateFindings(obj);
+  assert.equal(
+    result.valid,
+    true,
+    `Expected valid:true, got error: ${result.error ?? "(none)"}`,
+  );
+  assert.ok(
+    result.warnings.some(
+      (w) => w.includes("connection_index") && (w.includes("out of bounds") || w.includes("5")),
+    ),
+    `Expected out-of-bounds warning, got: ${JSON.stringify(result.warnings)}`,
+  );
+  assert.equal(
+    result.findings.schemas.length,
+    0,
+    "Out-of-bounds schema must be warn-skipped from the result",
+  );
+});
+
+// CTR-03: a combined "path:symbol" source_file must be split into separate fields.
+// Currently FAILS: the validator does not parse the colon; source_symbol is never set.
+test("CTR-03: validateFindings splits legacy combined source_file into source_file + source_symbol", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ source_file: "src/a.ts:validateToken" })];
+  const result = validateFindings(obj);
+  assert.equal(result.valid, true);
+  assert.equal(
+    result.findings.connections[0].source_file,
+    "src/a.ts",
+    "source_file should contain the path only after split",
+  );
+  assert.equal(
+    result.findings.connections[0].source_symbol,
+    "validateToken",
+    "source_symbol should contain the extracted symbol",
+  );
+});
+
+// CTR-03 (negative): a plain source_file path with no colon is left unchanged.
+// source_symbol must remain absent or null after validation.
+test("CTR-03: validateFindings leaves plain source_file (no colon) unchanged", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ source_file: "src/a.ts" })];
+  const result = validateFindings(obj);
+  assert.equal(result.valid, true);
+  assert.equal(
+    result.findings.connections[0].source_file,
+    "src/a.ts",
+    "Plain path must be left unchanged",
+  );
+  const sym = result.findings.connections[0].source_symbol;
+  assert.ok(
+    sym === undefined || sym === null,
+    `source_symbol should be absent or null for a plain path, got: ${sym}`,
+  );
+});
+
+// CTR-#42 regression guard: the fallback-not-reject protocol behavior must survive
+// the contract refactor. An unrecognized protocol token must still return valid:true.
+test("CTR-#42 regression: unknown protocol keeps valid:true with warning after refactor", () => {
+  const obj = minimalValid();
+  obj.connections = [validConnection({ protocol: "grpc-web", source_file: "src/a.ts" })];
+  const result = validateFindings(obj);
+  assert.equal(result.valid, true, "Unknown protocol must not reject findings (fallback-not-reject)");
+  assert.equal(result.findings.connections.length, 1, "Connection must be kept");
+  assert.ok(
+    result.warnings.some((w) => w.includes("grpc-web") || w.includes("protocol")),
+    `Expected a protocol-normalization warning, got: ${JSON.stringify(result.warnings)}`,
+  );
 });

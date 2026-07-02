@@ -301,7 +301,7 @@ test("POST /scan persists findings and returns 200", async () => {
     payload: {
       repo_path: "/tmp/test-repo",
       repo_name: "test-repo",
-      findings: { services: [], connections: [], schemas: [] },
+      findings: { service_name: "test-repo", confidence: "high", services: [], connections: [], schemas: [] },
     },
   });
   assert.equal(res.statusCode, 200);
@@ -328,7 +328,7 @@ test("POST /scan applies beginScan/endScan bracket with correct scanVersionId", 
     url: "/scan",
     payload: {
       repo_path: "/tmp/test-repo",
-      findings: { services: [], connections: [], schemas: [] },
+      findings: { service_name: "test-repo", confidence: "high", services: [], connections: [], schemas: [] },
     },
   });
   assert.equal(res.statusCode, 200);
@@ -355,7 +355,7 @@ test("POST /scan does not call endScan when persistFindings throws", async () =>
     url: "/scan",
     payload: {
       repo_path: "/tmp/test-repo",
-      findings: { services: [], connections: [], schemas: [] },
+      findings: { service_name: "test-repo", confidence: "high", services: [], connections: [], schemas: [] },
     },
   });
   assert.equal(res.statusCode, 500, "should return 500 on persistFindings failure");
@@ -367,6 +367,33 @@ test("POST /scan returns 400 when repo_path missing", async () => {
   const server = await makeServer();
   const res = await server.inject({ method: "POST", url: "/scan", payload: {} });
   assert.equal(res.statusCode, 400);
+  await server.close();
+});
+
+// CTR-04: POST /scan must validate findings before any DB write
+test("POST /scan returns 400 and makes no DB calls when findings is structurally invalid (CTR-04)", async () => {
+  const calls = { beginScan: 0, persistFindings: 0 };
+  const server = await makeServer({
+    ...mockQE,
+    upsertRepo: () => 1,
+    beginScan: () => { calls.beginScan++; return 1; },
+    persistFindings: () => { calls.persistFindings++; },
+    endScan: () => {},
+  });
+  // findings missing service_name and confidence — fails validateFindings
+  const res = await server.inject({
+    method: "POST",
+    url: "/scan",
+    payload: {
+      repo_path: "/tmp/test-repo",
+      findings: { services: [], connections: [], schemas: [] },
+    },
+  });
+  assert.equal(res.statusCode, 400, "invalid findings must return 400");
+  const body = JSON.parse(res.payload);
+  assert.ok(typeof body.error === "string" && body.error.length > 0, "400 body must carry an error string");
+  assert.equal(calls.beginScan, 0, "beginScan must NOT be called on invalid findings (CTR-04)");
+  assert.equal(calls.persistFindings, 0, "persistFindings must NOT be called on invalid findings (CTR-04)");
   await server.close();
 });
 
@@ -553,7 +580,7 @@ test("POST /scan 500 — logger.error called with stack when persistFindings thr
     url: "/scan",
     payload: {
       repo_path: "/tmp/test-repo",
-      findings: { services: [], connections: [], schemas: [] },
+      findings: { service_name: "test-repo", confidence: "high", services: [], connections: [], schemas: [] },
     },
   });
   assert.equal(res.statusCode, 500);
