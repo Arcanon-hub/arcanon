@@ -325,7 +325,14 @@ test("validateFindings accepts valid input with connections and schemas", () => 
   obj.schemas = [validSchema()];
   const result = validateFindings(obj);
   assert.equal(result.valid, true);
-  assert.deepEqual(result.findings, obj);
+  // CTR-02: schema without connection_index is warn-skipped — result.findings.schemas is []
+  assert.equal(result.findings.schemas.length, 0, "Schema without connection_index is warn-skipped");
+  // CTR-03: default source_file "src/client.ts:callHealth" is split into path + symbol
+  assert.equal(result.findings.connections[0].source_file, "src/client.ts");
+  assert.equal(result.findings.connections[0].source_symbol, "callHealth");
+  // Top-level fields are preserved
+  assert.equal(result.findings.service_name, obj.service_name);
+  assert.equal(result.findings.confidence, obj.confidence);
 });
 
 test("validateFindings accepts all valid schema roles", () => {
@@ -511,13 +518,27 @@ test("warns for each null source_file", () => {
   assert.ok(result.warnings[1].includes("connection[1].source_file is null"));
 });
 
-test("no warnings when source_file is non-null", () => {
+test("CTR-03: combined source_file colon-value generates a split warning (no null-source warning)", () => {
+  // A combined "path:symbol" source_file is valid — it is split by CTR-03 and
+  // generates a split warning, not a null-source warning.
   const obj = minimalValid();
   obj.connections = [validConnection({ source_file: "src/api.ts:callTarget" })];
   const result = validateFindings(obj);
   assert.equal(result.valid, true);
   assert.ok(Array.isArray(result.warnings), "warnings should be an array");
-  assert.equal(result.warnings.length, 0);
+  // Exactly one warning: the CTR-03 colon-split notification
+  assert.equal(
+    result.warnings.length,
+    1,
+    `Expected 1 split warning, got: ${JSON.stringify(result.warnings)}`,
+  );
+  assert.ok(
+    result.warnings[0].includes("source_file") && result.warnings[0].includes("callTarget"),
+    `Expected split warning mentioning source_file and callTarget, got: ${result.warnings[0]}`,
+  );
+  // The connection is split into path + symbol
+  assert.equal(result.findings.connections[0].source_file, "src/api.ts");
+  assert.equal(result.findings.connections[0].source_symbol, "callTarget");
 });
 
 // ---------------------------------------------------------------------------
