@@ -300,20 +300,19 @@ First, write the confirmed findings JSON to a temp file to avoid shell escaping 
 FINDINGS_FILE=$(mktemp /tmp/arcanon-findings-XXXXXX.json)
 ```
 
-Then save to SQLite using the beginScan/endScan bracket to garbage-collect stale data:
+Then save to SQLite via `persistScanResult` — applies pending overrides and garbage-collects stale data:
 
 ```bash
 node --input-type=module -e "
   import fs from 'fs';
   import { openDb } from '${CLAUDE_PLUGIN_ROOT}/worker/db/database.js';
   import { QueryEngine } from '${CLAUDE_PLUGIN_ROOT}/worker/db/query-engine.js';
+  import { persistScanResult } from '${CLAUDE_PLUGIN_ROOT}/worker/scan/scan-service.js';
   const db = openDb('${PROJECT_ROOT}');
   const qe = new QueryEngine(db);
   const findings = JSON.parse(fs.readFileSync('${FINDINGS_FILE}', 'utf8'));
   const repoId = qe.upsertRepo({ path: findings.repo_path, name: findings.repo_name, type: 'single' });
-  const scanVersionId = qe.beginScan(repoId);
-  qe.persistFindings(repoId, findings, findings.commit || null, scanVersionId);
-  qe.endScan(repoId, scanVersionId);
+  const { scanVersionId } = persistScanResult(repoId, findings.repo_path, findings, findings.commit || null, { mode: 'full' }, qe);
   console.log('saved');
   // surface scan quality at end-of-output. Format string locked in
   // CONTEXT D-01 — \"Scan quality: NN% high-confidence, M prose-evidence warnings\".
