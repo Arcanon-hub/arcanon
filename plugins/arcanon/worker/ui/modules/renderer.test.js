@@ -193,6 +193,29 @@ check(
   "n.boundary !== state.boundaryFilter"
 );
 
+// ── INTG-04: Edge visibility OR predicate + invisible-node skip ───────────
+
+// (1) Edge filter drops an edge when EITHER endpoint is invisible (logical OR)
+check(
+  src.includes('!visibleIds.has(edge.source_service_id) || !visibleIds.has(edge.target_service_id)'),
+  "INTG-04 — edge filter uses OR: drop edge when either endpoint is invisible",
+  "!visibleIds.has(edge.source_service_id) || !visibleIds.has(edge.target_service_id)"
+);
+
+// (2) Node draw loop contains an early `if (!isVisible) continue` to skip invisible nodes entirely
+check(
+  src.includes('if (!isVisible) continue'),
+  "INTG-04 — node loop skips invisible nodes with early continue (not drawn dimmed)",
+  "if (!isVisible) continue"
+);
+
+// (3) The OR form is present — the old AND-of-both-invisible form is gone
+check(
+  !src.includes('!visibleIds.has(edge.source_service_id) && !visibleIds.has(edge.target_service_id)'),
+  "INTG-04 — old AND-of-both-invisible predicate is not present (replaced by OR form)",
+  null
+);
+
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   process.exit(1);
