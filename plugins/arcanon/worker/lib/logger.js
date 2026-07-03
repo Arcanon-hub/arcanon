@@ -67,8 +67,18 @@ export function createLogger({ dataDir, port, logLevel = "INFO", component }) {
 
     const line = JSON.stringify(masked);
     const logPath = path.join(dataDir, "logs", "worker.log");
-    rotateIfNeeded(logPath);
-    fs.appendFileSync(logPath, line + "\n");
+    // Logging MUST NOT throw into the caller. On a fresh install (or a clean CI
+    // runner) <dataDir>/logs/ may not exist yet, and a disk/permission error
+    // must never crash the code that emitted the log line — e.g. queryScan's
+    // error path would otherwise fail with ENOENT before returning its result.
+    // Ensure the directory exists, then treat the file write as best-effort.
+    try {
+      fs.mkdirSync(path.dirname(logPath), { recursive: true });
+      rotateIfNeeded(logPath);
+      fs.appendFileSync(logPath, line + "\n");
+    } catch {
+      /* best-effort file logging — never propagate a write failure */
+    }
     if (process.stderr.isTTY) {
       process.stderr.write(line + "\n");
     }
