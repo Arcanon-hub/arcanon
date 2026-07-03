@@ -21,7 +21,6 @@ import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { syncFindings } from "../server/chroma.js";
 import { resolveConfigPath } from "../lib/config-path.js";
 import { resolveDataDir } from "../lib/data-dir.js";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -196,84 +195,8 @@ function getHistoryLimit() {
 }
 
 /**
- * Persist confirmed scan findings to SQLite using the QueryEngine, then
- * fire-and-forget ChromaDB sync.
- *
- * This is the ONLY allowed persist gate — SQLite writes complete first,
- * then syncFindings() is called as fire-and-forget via .catch().
- * A ChromaDB outage never prevents SQLite persistence.
- *
- * @param {{ services: Array, connections?: Array }} findings - Confirmed findings from 
- * @param {import('./query-engine.js').QueryEngine} queryEngine - QueryEngine instance
- * @param {number} repoId - ID of the repo row in the repos table
- * @returns {void}
- */
-export function writeScan(findings, queryEngine, repoId) {
-  // Write services to SQLite (synchronous)
-  for (const svc of findings.services || []) {
-    queryEngine.upsertService({
-      repo_id: repoId,
-      name: svc.name,
-      root_path: svc.root_path || ".",
-      language: svc.language || "unknown",
-    });
-  }
-
-  // Write connections to SQLite (synchronous)
-  for (const conn of findings.connections || []) {
-    queryEngine.upsertConnection({
-      source_service_id: conn.source_service_id,
-      target_service_id: conn.target_service_id,
-      protocol: conn.protocol || "unknown",
-      method: conn.method || null,
-      path: conn.path || null,
-      source_file: conn.source_file || null,
-      target_file: conn.target_file || null,
-      crossing: conn.crossing || null,
-    });
-  }
-
-  // Build boundary map from arcanon.config.json.
-  // Gracefully skip when config is absent or has no boundaries key
-  const boundaryMap = new Map();
-  try {
-    const configPath = resolveConfigPath(process.cwd());
-    const cfg = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    const boundaries = cfg.boundaries || {};
-    for (const [boundaryName, members] of Object.entries(boundaries)) {
-      for (const memberName of members) {
-        boundaryMap.set(memberName, boundaryName);
-      }
-    }
-  } catch { /* config absent or no boundaries key — boundaryMap stays empty */ }
-
-  // Build actor map from DB (actors + actor_connections tables)
-  // Gracefully skip if tables don't exist yet ( migration may not have run)
-  const actorMap = new Map();
-  try {
-    const rows = queryEngine._db.prepare(`
-      SELECT s.name AS service_name, a.name AS actor_name
-      FROM actor_connections ac
-      JOIN actors a ON a.id = ac.actor_id
-      JOIN services s ON s.id = ac.service_id
-      WHERE s.repo_id = ?
-    `).all(repoId);
-    for (const row of rows) {
-      if (!actorMap.has(row.service_name)) actorMap.set(row.service_name, []);
-      actorMap.get(row.service_name).push(row.actor_name);
-    }
-  } catch { /* actors table not yet created — skip enrichment */ }
-
-  // Fire-and-forget ChromaDB sync with enrichment — NEVER await in persist path
-  // A ChromaDB outage generates a stderr warning only — SQLite writes already committed
-  syncFindings(findings, { boundaryMap, actorMap }).catch((err) =>
-    process.stderr.write("[chroma] sync failed: " + err.message + "\n"),
-  );
-}
-
-/**
  * Returns true if no map versions have been recorded yet (i.e., this is the first scan).
- * Call before writeScan() to detect the first-map-build scenario.
+ * Call before the unified persist+sync path to detect the first-map-build scenario.
  *
  * Phase 137 / ISO-01: takes an explicit db handle instead of using the removed singleton.
  *

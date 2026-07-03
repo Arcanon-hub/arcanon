@@ -51,4 +51,4 @@ Create or update `.mcp.json` at your project root:
 ## After saving, fully restart Claude Code for MCP changes to take effect.
 
 The `/arcanon:map` skill reads this section and outputs it verbatim after the first successful persist.
-The check `isFirstScan()` from `worker/db/database.js` is called before `writeScan()` to determine whether to show this.
+The check `isFirstScan()` from `worker/db/database.js` is called before the persist+sync path in `worker/scan/scan-service.js` to determine whether to show this.
