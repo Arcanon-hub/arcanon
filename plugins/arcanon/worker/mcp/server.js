@@ -1239,7 +1239,12 @@ export async function queryScan({ repo, full = false } = {}) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
     try {
-      const res = await fetch(`http://localhost:${port}/api/readiness`, {
+      // Connect to 127.0.0.1 (not "localhost") to match where the worker binds
+      // (http.js listens on host "127.0.0.1"). On IPv6-preferring hosts —
+      // notably CI runners — "localhost" resolves to ::1 first and the loopback
+      // fetch is refused, so queryScan would spuriously report the worker
+      // unreachable. IPv4-literal loopback is unambiguous.
+      const res = await fetch(`http://127.0.0.1:${port}/api/readiness`, {
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -1262,7 +1267,7 @@ export async function queryScan({ repo, full = false } = {}) {
     // Body key is repo_path (not repo) to match the /scan route contract (Pitfall 5).
     let scanRes;
     try {
-      scanRes = await fetch(`http://localhost:${port}/scan`, {
+      scanRes = await fetch(`http://127.0.0.1:${port}/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ repo_path: repo, full }),
