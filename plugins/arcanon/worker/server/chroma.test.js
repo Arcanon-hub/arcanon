@@ -7,6 +7,15 @@
  *   - syncFindings(findings) → skips silently when unavailable; never throws
  *   - chromaSearch(query, limit) → throws Error when unavailable (triggers fallback)
  *   - isChromaAvailable() → returns current flag state
+ *   [INTG-03] Namespace + where-filter + deleteRepoRecords (142-02):
+ *   - syncFindings ids are project+repo prefixed
+ *   - two different projectHash values yield distinct ids for same service name
+ *   - metadata carries project_id and repo_id
+ *   - chromaSearch forwards where clause to collection.query
+ *   - deleteRepoRecords issues $and filter and no-ops when unavailable
+ *   [INTG-02] syncFindingsToChroma delete-then-upsert (142-02 Task 3):
+ *   - delete precedes upsert in mock call sequence
+ *   - syncFindingsToChroma is a no-op (no delete, no upsert, no throw) when unavailable
  *
  * Uses node:test + node:assert/strict — zero external dependencies.
  * ChromaDB network calls are mocked via module-level injection (setChromaClient).
@@ -18,7 +27,9 @@ import assert from "node:assert/strict";
 import {
   initChromaSync,
   syncFindings,
+  syncFindingsToChroma,
   chromaSearch,
+  deleteRepoRecords,
   isChromaAvailable,
   _resetForTest,
 } from "./chroma.js";
@@ -368,5 +379,183 @@ describe("chromaSearch", () => {
       score: 0.3,
       metadata: { type: "endpoint" },
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// INTG-03 — Project/repo namespace, where-filter, deleteRepoRecords
+// ---------------------------------------------------------------------------
+
+describe("INTG-03 — Chroma record namespacing", () => {
+  /** Helper: init with a mock collection that records upsert/query/delete calls. */
+  async function setupMockCollectionRecording() {
+    const calls = [];
+    const mockCollection = {
+      upsert: async (args) => { calls.push({ op: "upsert", args }); },
+      query: async (args) => {
+        calls.push({ op: "query", args });
+        return { ids: [[]], documents: [[]], distances: [[]], metadatas: [[]] };
+      },
+      delete: async (args) => { calls.push({ op: "delete", args }); },
+    };
+    const mockClient = {
+      heartbeat: async () => ({}),
+      getOrCreateCollection: async () => mockCollection,
+    };
+    await initChromaSync({ ARCANON_CHROMA_MODE: "local" }, mockClient);
+    return calls;
+  }
+
+  test("service id is project+repo namespaced: {projectHash}:r{repoId}:svc:{name}", async () => {
+    const calls = await setupMockCollectionRecording();
+    const findings = { services: [{ name: "api-gateway", endpoints: [] }] };
+    await syncFindings(findings, {}, { projectHash: "abc123def456", repoId: 7 });
+    const upsert = calls.find((c) => c.op === "upsert");
+    assert.ok(upsert, "upsert must have been called");
+    assert.ok(
+      upsert.args.ids.includes("abc123def456:r7:svc:api-gateway"),
+      `expected namespaced id, got: ${JSON.stringify(upsert.args.ids)}`,
+    );
+  });
+
+  test("endpoint id is project+repo namespaced: {projectHash}:r{repoId}:ep:{svc}:{path}", async () => {
+    const calls = await setupMockCollectionRecording();
+    const findings = { services: [{ name: "api-gateway", endpoints: [{ path: "/health" }] }] };
+    await syncFindings(findings, {}, { projectHash: "abc123def456", repoId: 7 });
+    const upsert = calls.find((c) => c.op === "upsert");
+    assert.ok(upsert, "upsert must have been called");
+    assert.ok(
+      upsert.args.ids.includes("abc123def456:r7:ep:api-gateway:/health"),
+      `expected namespaced endpoint id, got: ${JSON.stringify(upsert.args.ids)}`,
+    );
+  });
+
+  test("two syncs with different projectHash produce distinct ids for same service name", async () => {
+    const calls = await setupMockCollectionRecording();
+    const findings = { services: [{ name: "api-gateway", endpoints: [] }] };
+    await syncFindings(findings, {}, { projectHash: "project-aaa", repoId: 1 });
+    await syncFindings(findings, {}, { projectHash: "project-bbb", repoId: 1 });
+    const upserts = calls.filter((c) => c.op === "upsert");
+    assert.equal(upserts.length, 2, "two upserts should have been called");
+    const idsA = upserts[0].args.ids;
+    const idsB = upserts[1].args.ids;
+    assert.ok(idsA[0] !== idsB[0], "ids for the same service name must differ across projects");
+    assert.ok(idsA[0].startsWith("project-aaa:"), "first id must be prefixed with project-aaa");
+    assert.ok(idsB[0].startsWith("project-bbb:"), "second id must be prefixed with project-bbb");
+  });
+
+  test("service metadata includes project_id and repo_id", async () => {
+    const calls = await setupMockCollectionRecording();
+    const findings = { services: [{ name: "payments-api", endpoints: [] }] };
+    await syncFindings(findings, {}, { projectHash: "ph12345", repoId: 3 });
+    const upsert = calls.find((c) => c.op === "upsert");
+    const meta = upsert.args.metadatas.find((m) => m.type === "service");
+    assert.ok(meta, "service metadata must exist");
+    assert.equal(meta.project_id, "ph12345", "project_id must be set");
+    assert.equal(meta.repo_id, "3", "repo_id must be stringified");
+  });
+
+  test("endpoint metadata includes project_id and repo_id", async () => {
+    const calls = await setupMockCollectionRecording();
+    const findings = { services: [{ name: "payments-api", endpoints: [{ path: "/charge" }] }] };
+    await syncFindings(findings, {}, { projectHash: "ph12345", repoId: 3 });
+    const upsert = calls.find((c) => c.op === "upsert");
+    const meta = upsert.args.metadatas.find((m) => m.type === "endpoint");
+    assert.ok(meta, "endpoint metadata must exist");
+    assert.equal(meta.project_id, "ph12345", "endpoint project_id must be set");
+    assert.equal(meta.repo_id, "3", "endpoint repo_id must be stringified");
+  });
+
+  test("chromaSearch forwards where clause to collection.query", async () => {
+    const calls = await setupMockCollectionRecording();
+    const whereClause = { project_id: { $eq: "myhash" } };
+    await chromaSearch("api", 5, { where: whereClause });
+    const query = calls.find((c) => c.op === "query");
+    assert.ok(query, "query must have been called");
+    assert.deepEqual(query.args.where, whereClause, "where clause must be forwarded verbatim");
+  });
+
+  test("chromaSearch without where does not include where in query args", async () => {
+    const calls = await setupMockCollectionRecording();
+    await chromaSearch("api", 5);
+    const query = calls.find((c) => c.op === "query");
+    assert.ok(query, "query must have been called");
+    assert.ok(!("where" in query.args), "where must be absent when not provided");
+  });
+
+  test("deleteRepoRecords issues $and filter targeting project_id and repo_id", async () => {
+    const calls = await setupMockCollectionRecording();
+    await deleteRepoRecords("myhash12345", 42);
+    const del = calls.find((c) => c.op === "delete");
+    assert.ok(del, "delete must have been called");
+    const where = del.args.where;
+    assert.ok(where, "delete must include a where clause");
+    assert.ok(
+      Array.isArray(where.$and) && where.$and.length === 2,
+      "where must be $and of two conditions",
+    );
+    const projectCondition = where.$and.find((c) => c.project_id);
+    const repoCondition = where.$and.find((c) => c.repo_id);
+    assert.ok(projectCondition, "$and must include project_id condition");
+    assert.ok(repoCondition, "$and must include repo_id condition");
+    assert.deepEqual(projectCondition.project_id, { $eq: "myhash12345" });
+    assert.deepEqual(repoCondition.repo_id, { $eq: "42" });
+  });
+
+  test("deleteRepoRecords is a no-op when Chroma is unavailable (no delete call, no throw)", async () => {
+    // _resetForTest called in beforeEach — Chroma is unavailable
+    let deleteCalled = false;
+    const mockCollection = {
+      delete: async () => { deleteCalled = true; },
+    };
+    // Do NOT init Chroma — isChromaAvailable() is false
+    await assert.doesNotReject(
+      () => deleteRepoRecords("anyhash", 1),
+      "deleteRepoRecords must not throw when unavailable",
+    );
+    assert.equal(deleteCalled, false, "delete must not be called when unavailable");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// INTG-02 — syncFindingsToChroma delete-then-upsert wrapper
+// ---------------------------------------------------------------------------
+
+describe("INTG-02 — syncFindingsToChroma delete-then-upsert", () => {
+  test("delete precedes upsert in the call sequence", async () => {
+    const callOrder = [];
+    const mockCollection = {
+      upsert: async () => { callOrder.push("upsert"); },
+      query: async () => ({ ids: [[]], documents: [[]], distances: [[]], metadatas: [[]] }),
+      delete: async () => { callOrder.push("delete"); },
+    };
+    const mockClient = {
+      heartbeat: async () => ({}),
+      getOrCreateCollection: async () => mockCollection,
+    };
+    await initChromaSync({ ARCANON_CHROMA_MODE: "local" }, mockClient);
+
+    const findings = { services: [{ name: "api-gateway", endpoints: [] }] };
+    await syncFindingsToChroma("ph123", 1, findings, {});
+
+    assert.equal(callOrder[0], "delete", "delete must be called before upsert");
+    assert.equal(callOrder[1], "upsert", "upsert must follow delete");
+  });
+
+  test("syncFindingsToChroma is a no-op when Chroma is unavailable (no delete, no upsert, no throw)", async () => {
+    // Chroma unavailable (beforeEach resets state)
+    let deleteCalled = false;
+    let upsertCalled = false;
+    const mockCollection = {
+      delete: async () => { deleteCalled = true; },
+      upsert: async () => { upsertCalled = true; },
+    };
+    // Do NOT init Chroma — isChromaAvailable() is false
+    await assert.doesNotReject(
+      () => syncFindingsToChroma("ph123", 1, { services: [] }, {}),
+      "syncFindingsToChroma must not throw when unavailable",
+    );
+    assert.equal(deleteCalled, false, "delete must not be called when unavailable");
+    assert.equal(upsertCalled, false, "upsert must not be called when unavailable");
   });
 });

@@ -3,7 +3,7 @@
  *
  * Pure module: no I/O, no SQLite calls, no console.log.
  * All functions are stateless — caller ( command layer) drives the
- * interactive loop and calls db.writeScan() ONLY after this module returns
+ * interactive loop calls the persist+sync path ONLY after this module returns
  * confirmed findings.
  *
  * Design rationale:

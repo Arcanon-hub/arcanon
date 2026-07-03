@@ -133,7 +133,14 @@ export async function search(query, options = {}) {
   // Tier 1: ChromaDB semantic search
   if (!options.skipChroma && isChromaAvailable()) {
     try {
-      const results = await chromaSearch(query, limit);
+      // Derive projectHash from the search DB path for project-scoped search (INTG-03).
+      // Guard: :memory: DBs have no meaningful directory — use "unknown" to avoid
+      // cross-project collisions under a bare "." basename.
+      const _dbName = (db && db.name) || "";
+      const projectHash = (_dbName === ":memory:" || !_dbName)
+        ? "unknown"
+        : (path.basename(path.dirname(_dbName)) || "unknown");
+      const results = await chromaSearch(query, limit, { where: { project_id: { $eq: projectHash } } });
       process.stderr.write(
         "[search] tier=chroma results=" + results.length + "\n",
       );

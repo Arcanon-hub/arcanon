@@ -163,7 +163,7 @@ export function render() {
   const filteredEdges = state.graphData.edges.filter((edge) => {
     if (!state.activeProtocols.has(edge.protocol)) return false;
     if (state.mismatchesOnly && !edge.mismatch) return false;
-    if (!visibleIds.has(edge.source_service_id) && !visibleIds.has(edge.target_service_id)) return false;
+    if (!visibleIds.has(edge.source_service_id) || !visibleIds.has(edge.target_service_id)) return false;
     return true;
   });
   const bundles = computeEdgeBundles(filteredEdges);
@@ -324,6 +324,8 @@ export function render() {
     if (!pos) continue;
 
     const isVisible = visibleIds.has(node.id);
+    if (!isVisible) continue;   // exclude invisible nodes entirely — no shape, halo, glow, or label
+
     const isSelected = node.id === state.selectedNodeId;
     const isNeighbor = neighborIds.has(node.id);
     const isBlastNode = hasBlast && state.blastSet.has(node.id);
@@ -334,12 +336,10 @@ export function render() {
     else if (hasSelection && isNeighbor) nodeColor = COLORS.node.selected;
     else if ((hasSelection || hasBlast) && isVisible)
       nodeColor = COLORS.node.dimmed;
-    else if (!isVisible) nodeColor = COLORS.node.dimmed;
     else nodeColor = getNodeColor(node);
 
-    const alpha = !isVisible
-      ? 0.15
-      : (hasSelection || hasBlast) && !isSelected && !isNeighbor && !isBlastNode
+    const alpha =
+      (hasSelection || hasBlast) && !isSelected && !isNeighbor && !isBlastNode
         ? 0.3
         : 1;
 
@@ -455,8 +455,7 @@ export function render() {
     // Name label
     const label = truncate(node.name, LABEL_MAX_CHARS);
     const labelColor =
-      !isVisible ||
-      ((hasSelection || hasBlast) && !isSelected && !isNeighbor && !isBlastNode)
+      (hasSelection || hasBlast) && !isSelected && !isNeighbor && !isBlastNode
         ? COLORS.label.dimmed
         : COLORS.label.default;
     ctx.fillStyle = labelColor;

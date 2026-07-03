@@ -41,6 +41,7 @@ import { extractAuthAndDb } from "./enrichment/auth-db-extractor.js";
 import { persistScanResult } from './scan-service.js';
 import { syncFindings, hasCredentials } from "../hub-sync/index.js";
 import { createSnapshot } from "../db/database.js";
+import { syncFindingsToChroma } from "../server/chroma.js";
 // externals catalog + user merge + per-repo actor labeling
 import { loadMergedCatalog } from "./enrichment/externals-catalog.js";
 import { runActorLabeling } from "./enrichment/actor-labeler.js";
@@ -799,6 +800,21 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
   // DB writes are sequential — SQLite/better-sqlite3 gets SQLITE_BUSY if parallelized.
   // Enrichment is sequential — uses the same DB handle.
   // ---------------------------------------------------------------------------
+
+  // Build boundaryMap ONCE per scanRepos() invocation for the Chroma sync (INTG-02).
+  // Reads arcanon.config.json boundaries; gracefully skips when absent.
+  const _chromaBoundaryMap = new Map();
+  try {
+    const _cfgPath = resolveConfigPath(process.cwd());
+    const _cfg = JSON.parse(readFileSync(_cfgPath, "utf8"));
+    const _boundaries = _cfg.boundaries || {};
+    for (const [boundaryName, members] of Object.entries(_boundaries)) {
+      for (const memberName of members) {
+        _chromaBoundaryMap.set(memberName, boundaryName);
+      }
+    }
+  } catch { /* config absent or no boundaries key — map stays empty */ }
+
   /** @type {ScanResult[]} */
   const results = [];
 
@@ -985,6 +1001,47 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       });
     } catch (err) {
       slog('WARN', 'enrichment pass error', { repoPath: r.repoPath, error: err.message });
+    }
+
+    // Chroma sync (INTG-02): delete-then-upsert after actor labeling so actor
+    // metadata is present in the DB when we build actorMap. Runs ONCE per repo
+    // per scan — hooked ONLY here in manager.js Phase B. syncFindingsToChroma
+    // guards internally with isChromaAvailable() so this is a no-op when Chroma
+    // is absent; a Chroma error must never fail the scan (try/catch + WARN).
+    try {
+      // Derive projectHash from the DB file path (matches query-engine.js search()).
+      // Guard the :memory: / missing-name case — in-memory test DBs must never
+      // mint records under "." or an empty prefix (142-RESEARCH §Q2, INTG-03).
+      const _dbName = queryEngine._db?.name || "";
+      const _projectHash = (_dbName === ":memory:" || !_dbName)
+        ? "unknown"
+        : (basename(dirname(_dbName)) || "unknown");
+
+      // Build actorMap from actor_connections (written by runActorLabeling above).
+      // Tolerate missing actors table (pre-migration-008 DB).
+      const _actorMap = new Map();
+      try {
+        const _actorRows = queryEngine._db.prepare(`
+          SELECT s.name AS service_name, a.name AS actor_name
+          FROM actor_connections ac
+          JOIN actors a ON a.id = ac.actor_id
+          JOIN services s ON s.id = ac.service_id
+          WHERE s.repo_id = ?
+        `).all(r.repoId);
+        for (const _row of _actorRows) {
+          if (!_actorMap.has(_row.service_name)) _actorMap.set(_row.service_name, []);
+          _actorMap.get(_row.service_name).push(_row.actor_name);
+        }
+      } catch { /* actors table absent (pre-migration-008) */ }
+
+      await syncFindingsToChroma(
+        _projectHash,
+        r.repoId,
+        r.findings,
+        { boundaryMap: _chromaBoundaryMap, actorMap: _actorMap },
+      );
+    } catch (err) {
+      slog('WARN', 'chroma sync error', { repoPath: r.repoPath, error: err.message });
     }
 
     slog('INFO', 'scan complete', { repoPath: r.repoPath, mode: r.mode });
