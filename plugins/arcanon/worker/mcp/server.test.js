@@ -6,15 +6,16 @@
  * with an in-memory SQLite database, bypassing the MCP SDK layer.
  */
 
-import { test } from "node:test";
+import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import Database from "../db/sqlite-adapter.js";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
+import http from "node:http";
 
 // Import the query functions exported from mcp-server.js
-import { queryImpact, queryChanged, queryGraph } from "./server.js";
+import { queryImpact, queryChanged, queryGraph, queryScan } from "./server.js";
 
 // ─────────────────────────────────────────────────────────────
 // Test DB setup helpers
@@ -643,4 +644,150 @@ test("querySearch: falls back to SQL LIKE when FTS5 table is missing (no throw)"
   assert.ok(result !== null && typeof result === "object", "querySearch should return a result object");
   assert.ok(Array.isArray(result.results), "results should be array");
   db.close();
+});
+
+// ---------------------------------------------------------------------------
+// queryScan — PIPE-02: honors response.ok + sends repo_path (141-03)
+// ---------------------------------------------------------------------------
+
+/**
+ * Start an ephemeral HTTP server that:
+ *  - GET /api/readiness  → 200 { status: 'ok' }
+ *  - POST /scan          → scanStatus with scanBody
+ * Returns { server, port, getCapturedBody }.
+ */
+async function makeScanStub({ scanStatus = 400, scanBody = {} } = {}) {
+  let capturedBody = null;
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      if (req.url === '/api/readiness') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok' }));
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/scan') {
+        let raw = '';
+        req.on('data', (c) => { raw += c; });
+        req.on('end', () => {
+          try { capturedBody = JSON.parse(raw); } catch { capturedBody = null; }
+          res.writeHead(scanStatus, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(scanBody));
+        });
+        return;
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    server.listen(0, '127.0.0.1', () => {
+      resolve({ server, port: server.address().port, getCapturedBody: () => capturedBody });
+    });
+    server.on('error', reject);
+  });
+}
+
+/** Write a worker.port file to a temp dir and return the dir path. */
+function makeScanEnv(port) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arcanon-test-scan-'));
+  fs.writeFileSync(path.join(dir, 'worker.port'), String(port), 'utf8');
+  return dir;
+}
+
+describe("queryScan — PIPE-02: honors response.ok + sends repo_path", () => {
+  let prevDataDir;
+
+  before(() => { prevDataDir = process.env.ARCANON_DATA_DIR; });
+  after(() => {
+    if (prevDataDir === undefined) delete process.env.ARCANON_DATA_DIR;
+    else process.env.ARCANON_DATA_DIR = prevDataDir;
+  });
+
+  test("queryScan returns { status: 'error' } when /scan responds 400 (not triggered)", async () => {
+    const { server, port } = await makeScanStub({
+      scanStatus: 400,
+      scanBody: { error: 'Missing repo_path or findings in request body' },
+    });
+    const dataDir = makeScanEnv(port);
+    process.env.ARCANON_DATA_DIR = dataDir;
+
+    try {
+      const result = await queryScan({ repo: '/some/repo', full: false });
+      assert.equal(result.status, 'error',
+        `must return { status: 'error' } on non-2xx /scan — got { status: '${result.status}' }`);
+      assert.ok(typeof result.message === 'string', 'must have a message string');
+    } finally {
+      await new Promise((r) => server.close(r));
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  test("queryScan sends repo_path (not repo) in the POST body to /scan", async () => {
+    const { server, port, getCapturedBody } = await makeScanStub({
+      scanStatus: 400,
+      scanBody: { error: 'Missing repo_path or findings in request body' },
+    });
+    const dataDir = makeScanEnv(port);
+    process.env.ARCANON_DATA_DIR = dataDir;
+
+    try {
+      await queryScan({ repo: '/my/project', full: false });
+      const body = getCapturedBody();
+      assert.ok(body !== null, 'request body must have been captured by stub server');
+      assert.ok('repo_path' in body, `body must use 'repo_path' key, not 'repo'; got keys: ${Object.keys(body || {}).join(', ')}`);
+      assert.equal(body.repo_path, '/my/project', 'repo_path value must equal the repo argument');
+    } finally {
+      await new Promise((r) => server.close(r));
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  test("queryScan returns { status: 'error' } on network failure (fetch throws)", async () => {
+    // Stub passes readiness check but destroys the socket on /scan to simulate
+    // a mid-connection failure — fetch throws ECONNRESET.
+    const server = http.createServer((req, res) => {
+      if (req.url === '/api/readiness') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok' }));
+        return;
+      }
+      if (req.method === 'POST' && req.url === '/scan') {
+        req.socket.destroy(); // force network error
+        return;
+      }
+      res.writeHead(404); res.end();
+    });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const port = server.address().port;
+    const dataDir = makeScanEnv(port);
+    process.env.ARCANON_DATA_DIR = dataDir;
+
+    try {
+      const result = await queryScan({ repo: '/some/repo', full: false });
+      assert.equal(result.status, 'error',
+        `network failure must return { status: 'error' } — got { status: '${result.status}' }`);
+      assert.ok(typeof result.message === 'string', 'must have a message string');
+    } finally {
+      await new Promise((r) => server.close(r));
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
+
+  test("queryScan on 2xx /scan returns the body's status and message (not hardcoded triggered)", async () => {
+    const { server, port } = await makeScanStub({
+      scanStatus: 200,
+      scanBody: { status: 'persisted', message: 'Scan saved.', scan_version_id: 7 },
+    });
+    const dataDir = makeScanEnv(port);
+    process.env.ARCANON_DATA_DIR = dataDir;
+
+    try {
+      const result = await queryScan({ repo: '/some/repo', full: false });
+      assert.equal(result.status, 'persisted',
+        `2xx response must pass through body.status — got '${result.status}'`);
+      assert.equal(result.message, 'Scan saved.',
+        `2xx response must pass through body.message — got '${result.message}'`);
+    } finally {
+      await new Promise((r) => server.close(r));
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
 });
