@@ -38,7 +38,7 @@ import { resolveDataDir } from "../lib/data-dir.js";
 import { resolveConfigPath } from "../lib/config-path.js";
 import { readHubAutoSync as _readHubAutoSync } from "../lib/hub-config.js";
 import { extractAuthAndDb } from "./enrichment/auth-db-extractor.js";
-import { applyPendingOverridesSync } from "./overrides.js";
+import { persistScanResult } from './scan-service.js';
 import { syncFindings, hasCredentials } from "../hub-sync/index.js";
 import { createSnapshot } from "../db/database.js";
 // externals catalog + user merge + per-repo actor labeling
@@ -578,9 +578,10 @@ export function releaseScanLock(lockPath) {
  *
  * Each non-skip, non-noop repo runs its entire write phase inside a single
  * db.transaction() per repo (ISO-03):
- *   Phase A: captures scanStartedAt timestamp before agent invocation.
- *   Phase B: beginScan(), persistFindings(), applyPendingOverridesSync(), and
- *     endScan() all run inside one queryEngine._db.transaction(fn)() call.
+ *   Phase A: captures scanStartedAt + changedFiles before agent invocation.
+ *   Phase B: delegates to persistScanResult() (PIPE-01, 141-02) which wraps
+ *     beginScan(), _restampExistingRows (PIPE-04 incremental), persistFindings(),
+ *     applyPendingOverridesSync(), and endScan() in one transaction.
  *   beginScan is INSIDE the transaction — a rollback removes the scan_versions
  *     row so no orphaned bracket can exist (ISO-10).
  *   On parse failure, the write transaction is never opened — prior data is intact.
@@ -769,6 +770,7 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       findings: result.findings,
       repoId,
       scanStartedAt,
+      changedFiles: ctx.files,
       currentHead: getCurrentHead(repoPath),
       _writeDb: true,
     };
@@ -808,35 +810,29 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
       continue;
     }
 
-    // 10. Write phase — one atomic transaction per repo (ISO-03).
+    // 10. Write phase — delegates to persistScanResult (PIPE-01, 141-02).
     //
-    //   beginScan is INSIDE the transaction: a ROLLBACK removes the
-    //   scan_versions INSERT too — no orphaned bracket (ISO-10).
+    //   persistScanResult wraps the full write sequence inside one
+    //   queryEngine._db.transaction() call (ISO-03):
+    //     beginScan (ISO-10), _restampExistingRows (PIPE-04 incremental),
+    //     persistFindings, applyPendingOverridesSync (PIPE-03),
+    //     endScan (ISO-04 completed_at stamp + stale delete).
     //
-    //   applyPendingOverridesSync is the synchronous variant of
-    //   applyPendingOverrides — safe to call inside db.transaction(fn)
-    //   because db.transaction() is synchronous.
-    //
-    //   endScan stamps completed_at as its LAST write (ISO-04), so the
-    //   scan is visible as "complete" only after all cleanup is committed.
+    //   changedFiles (ctx.files) and scanStartedAt from Phase A are threaded
+    //   through r.changedFiles and r.scanStartedAt (PIPE-04).
     //
     //   agentRunner, discovery, enrichment, dep-collect, and Hub sync
-    //   remain OUTSIDE this transaction (async / best-effort).
-    const writeTx = queryEngine._db.transaction(() => {
-      const scanVersionId = queryEngine.beginScan(r.repoId, r.scanStartedAt);
-      queryEngine.persistFindings(r.repoId, r.findings, r.currentHead, scanVersionId);
-      // Sync override apply — reads scan_overrides WHERE applied_in_scan_version_id
-      // IS NULL, applies each UPDATE/DELETE, stamps row with scanVersionId.
-      applyPendingOverridesSync(scanVersionId, queryEngine, slog);
-      queryEngine.endScan(r.repoId, scanVersionId);
-      return scanVersionId;
-    });
-
+    //   remain OUTSIDE this call (async / best-effort).
     let scanVersionId;
     try {
-      scanVersionId = writeTx();
+      ({ scanVersionId } = persistScanResult(
+        r.repoId, r.repoPath, r.findings, r.currentHead,
+        { mode: r.mode, changedFiles: r.changedFiles, startedAt: r.scanStartedAt },
+        queryEngine,
+        slog,
+      ));
     } catch (txErr) {
-      // writeTx() threw — SQLite adapter has already issued ROLLBACK.
+      // persistScanResult threw — SQLite adapter has already issued ROLLBACK.
       // beginScan's scan_versions INSERT is rolled back too (ISO-10).
       // Log, push an error result, and continue so sibling repos still
       // commit (§Q7 Pitfall 6 / ISO-03 per-repo isolation).
