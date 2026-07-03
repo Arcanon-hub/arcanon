@@ -230,7 +230,7 @@ For low-confidence findings (max 10), ask individually as in `/arcanon:map`.
 
 ---
 
-## Step 5 — Persist (full scan + applyPendingOverrides)
+## Step 5 — Persist (full scan via persistScanResult)
 
 Write the confirmed findings to a temp file (avoids shell escaping):
 
@@ -239,16 +239,15 @@ FINDINGS_FILE=$(mktemp /tmp/arcanon-rescan-findings-XXXXXX.json)
 # Use the Write tool to write the confirmed findings JSON to ${FINDINGS_FILE}.
 ```
 
-Then persist with the standard scan bracket — `beginScan`,
-`persistFindings`, `applyPendingOverrides`, `endScan`. The override hook
-fires BEFORE `endScan` (matches the bracket order in `scanRepos`):
+Then persist via `persistScanResult` — applies pending overrides exactly once
+within the scan transaction (no TypeError on missing logger):
 
 ```bash
 node --input-type=module -e "
   import fs from 'fs';
   import { openDb } from '${CLAUDE_PLUGIN_ROOT}/worker/db/database.js';
   import { QueryEngine } from '${CLAUDE_PLUGIN_ROOT}/worker/db/query-engine.js';
-  import { applyPendingOverrides } from '${CLAUDE_PLUGIN_ROOT}/worker/scan/overrides.js';
+  import { persistScanResult } from '${CLAUDE_PLUGIN_ROOT}/worker/scan/scan-service.js';
   const db = openDb('${PROJECT_ROOT}');
   const qe = new QueryEngine(db);
   const findings = JSON.parse(fs.readFileSync('${FINDINGS_FILE}', 'utf8'));
@@ -257,10 +256,7 @@ node --input-type=module -e "
     name: findings.repo_name,
     type: 'single',
   });
-  const scanVersionId = qe.beginScan(repoId);
-  qe.persistFindings(repoId, findings, findings.commit || null, scanVersionId);
-  await applyPendingOverrides(scanVersionId, qe);
-  qe.endScan(repoId, scanVersionId);
+  const { scanVersionId } = persistScanResult(repoId, findings.repo_path, findings, findings.commit || null, { mode: 'full' }, qe);
   console.log('Rescanned: ' + findings.repo_name + ' (repo_id=' + repoId + ', scan_version_id=' + scanVersionId + ')');
   console.log('Mode: full (incremental skip bypassed)');
   // quality breakdown — same surface as /arcanon:map.

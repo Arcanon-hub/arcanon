@@ -10,6 +10,7 @@ import { getCommitsSince } from "../scan/git-state.js";
 import { extractEvidenceLocation } from "../hub-sync/evidence-location.js";
 import { maskHomeDeep } from "../lib/path-mask.js";
 import { validateFindings } from "../scan/contract.js";
+import { persistScanResult } from "../scan/scan-service.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -657,16 +658,16 @@ async function createHttpServer(queryEngine, options = {}) {
         name: repo_name || path.basename(repo_path),
         type: repo_type || "single",
       });
-      const scanVersionId = qe.beginScan(repoId);
-      try {
-        qe.persistFindings(repoId, validation.findings, commit || null, scanVersionId);
-        qe.endScan(repoId, scanVersionId);
-      } catch (innerErr) {
-        // persistFindings failed — do NOT call endScan (bracket stays open / incomplete)
-        // Re-throw so the outer catch logs and returns 500
-        throw innerErr;
-      }
-      return reply.code(200).send({ status: "persisted", repo_id: repoId });
+      // PIPE-01: delegate the full write sequence to persistScanResult (scan-service.js).
+      // The inline beginScan + persistFindings + endScan has been replaced by this single
+      // call so the HTTP transport uses the same atomic pipeline as map.md, rescan.md, and
+      // manager.js. The Phase 140 validateFindings gate above already validated findings;
+      // we pass validation.findings (normalised) to avoid double-validation inside the pipeline.
+      const { scanVersionId } = persistScanResult(
+        repoId, repo_path, validation.findings, commit || null,
+        { mode: 'full' }, qe, httpLog,
+      );
+      return reply.code(200).send({ status: "persisted", repo_id: repoId, scan_version_id: scanVersionId });
     } catch (err) {
       httpLog('ERROR', err.message, { route: '/scan', stack: err.stack });
       return reply.code(500).send({ error: err.message });

@@ -34,6 +34,31 @@ import {
   clearEnrichers,
 } from "./enrichment.js";
 import Database from "../db/sqlite-adapter.js";
+import { QueryEngine } from '../db/query-engine.js';
+// Migrations needed for the real-DB manager transport tests (CTR-05, PIPE-04).
+// Same set as scan-service.e2e.test.js (no 012 — reverted).
+import { up as mig001 } from '../db/migrations/001_initial_schema.js';
+import { up as mig002 } from '../db/migrations/002_service_type.js';
+import { up as mig003 } from '../db/migrations/003_exposed_endpoints.js';
+import { up as mig004 } from '../db/migrations/004_dedup_constraints.js';
+import { up as mig005 } from '../db/migrations/005_scan_versions.js';
+import { up as mig006 } from '../db/migrations/006_dedup_repos.js';
+import { up as mig007 } from '../db/migrations/007_expose_kind.js';
+import { up as mig008 } from '../db/migrations/008_actors_metadata.js';
+import { up as mig009 } from '../db/migrations/009_confidence_enrichment.js';
+import { up as mig010 } from '../db/migrations/010_service_dependencies.js';
+import { up as mig011 } from '../db/migrations/011_services_boundary_entry.js';
+import { up as mig013 } from '../db/migrations/013_connections_path_template.js';
+import { up as mig014 } from '../db/migrations/014_services_base_path.js';
+import { up as mig015 } from '../db/migrations/015_scan_versions_quality_score.js';
+import { up as mig016 } from '../db/migrations/016_enrichment_log.js';
+import { up as mig017 } from '../db/migrations/017_scan_overrides.js';
+import { up as mig018 } from '../db/migrations/018_actors_label.js';
+import { up as mig019 } from '../db/migrations/019_connections_protocol_raw.js';
+import { up as mig020 } from '../db/migrations/020_actor_connections_protocol_raw.js';
+import { up as mig021 } from '../db/migrations/021_map_versions_kind_repos.js';
+import { up as mig022 } from '../db/migrations/022_connections_source_target_symbol.js';
+import { up as mig023 } from '../db/migrations/023_services_source_file.js';
 
 // ---------------------------------------------------------------------------
 // Helpers to build temp git repos
@@ -63,6 +88,20 @@ function cleanupDir(dir) {
   try {
     rmSync(dir, { recursive: true, force: true });
   } catch (_) {}
+}
+
+/**
+ * Build a fully-migrated in-memory SQLite database (all 23 migrations, no 012).
+ * Used by manager-transport real-DB tests (CTR-05, PIPE-04).
+ */
+function freshFullDb() {
+  const db = new Database(':memory:');
+  db.pragma('foreign_keys = ON');
+  mig001(db); mig002(db); mig003(db); mig004(db); mig005(db); mig006(db);
+  mig007(db); mig008(db); mig009(db); mig010(db); mig011(db); mig013(db);
+  mig014(db); mig015(db); mig016(db); mig017(db); mig018(db); mig019(db);
+  mig020(db); mig021(db); mig022(db); mig023(db);
+  return db;
 }
 
 // ---------------------------------------------------------------------------
@@ -1968,4 +2007,176 @@ test("_readHubConfig return shape extension does not break 4-key destructures", 
       assert.equal(cfg.orgId, undefined);
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// scanRepos — manager transport uses persistScanResult (CTR-05, PIPE-04, 141-02)
+//
+// These tests use a real in-memory DB (all 23 migrations) to verify that
+// Phase B routes through persistScanResult end-to-end:
+//   CTR-05  full scan persists findings into the real DB
+//   PIPE-04 incremental scan preserves unchanged services (svc-a, svc-c
+//           survive when agent returns only svc-b on the incremental pass)
+// ---------------------------------------------------------------------------
+
+describe("scanRepos — manager transport uses persistScanResult (CTR-05, PIPE-04)", () => {
+  let fullScanRepo;
+  let incScanRepo;
+  let firstCommit;
+
+  before(() => {
+    // fullScanRepo: one commit — used for the CTR-05 full-scan test.
+    const rf = makeTempRepo();
+    fullScanRepo = rf.dir;
+    writeFileSync(join(rf.dir, "index.js"), "module.exports = {};");
+    execSync("git add index.js", { cwd: rf.dir, stdio: "pipe" });
+    execSync('git commit -m "add index.js"', { cwd: rf.dir, stdio: "pipe" });
+
+    // incScanRepo: two commits.
+    //   firstCommit (HEAD of makeTempRepo) is used as last_scanned_commit
+    //   in the incremental QE so buildScanContext returns mode='incremental'.
+    const ri = makeTempRepo();
+    incScanRepo = ri.dir;
+    firstCommit = ri.head;
+    writeFileSync(join(ri.dir, "b.js"), "module.exports = {};");
+    execSync("git add b.js", { cwd: ri.dir, stdio: "pipe" });
+    execSync('git commit -m "add b.js"', { cwd: ri.dir, stdio: "pipe" });
+  });
+
+  after(() => {
+    cleanupDir(fullScanRepo);
+    cleanupDir(incScanRepo);
+  });
+
+  beforeEach(() => {
+    setAgentRunner(null);
+    // Clear enrichers to prevent them querying tables absent in the test DB
+    // (e.g. codeowners enricher queries node_metadata, dep-collector reads fs).
+    clearEnrichers();
+  });
+
+  // Minimal discovery response — same sentinel check as other scanRepos tests.
+  const minDisc = '```json\n{"languages":["javascript"],"frameworks":[],"service_hints":[]}\n```';
+
+  test("full scan via manager transport writes findings to real DB (CTR-05)", async () => {
+    const db = freshFullDb();
+    const qe = new QueryEngine(db);
+    // Override getRepoState on the instance to force full mode.
+    qe.getRepoState = () => null;
+
+    const findingsJson = JSON.stringify({
+      service_name: "svc-full",
+      confidence: "high",
+      repo_path: fullScanRepo,
+      repo_name: "test-repo",
+      services: [
+        {
+          name: "svc-full",
+          root_path: ".",
+          language: "javascript",
+          confidence: "high",
+          source_file: "index.js",
+        },
+      ],
+      connections: [],
+      schemas: [],
+    });
+
+    setAgentRunner(async (prompt) => {
+      if (prompt.includes("Discovery Agent") || prompt.includes("structure discovery"))
+        return minDisc;
+      return `\`\`\`json\n${findingsJson}\n\`\`\``;
+    });
+
+    const results = await scanRepos([fullScanRepo], { skipHubSync: true }, qe);
+
+    assert.equal(results.length, 1, "scanRepos must return one result");
+    assert.ok(results[0].findings !== null, "full scan must return findings");
+
+    // Real-DB assertion: service written by persistScanResult via Phase B.
+    const row = db.prepare("SELECT name FROM services").get();
+    assert.ok(row !== undefined, "service must exist in DB after manager full scan (CTR-05)");
+    assert.equal(row.name, "svc-full");
+
+    db.close();
+  });
+
+  test("PIPE-04 via manager: incremental scan preserves unchanged services", async () => {
+    const db = freshFullDb();
+
+    // --- Step 1: full scan — persist svc-a, svc-b, svc-c ---
+    const qeFull = new QueryEngine(db);
+    qeFull.getRepoState = () => null; // no prior scan → full mode
+
+    const fullFindings = JSON.stringify({
+      service_name: "svc-a",
+      confidence: "high",
+      repo_path: incScanRepo,
+      repo_name: "inc-repo",
+      services: [
+        { name: "svc-a", root_path: ".", language: "javascript", confidence: "high", source_file: "src/a.js" },
+        { name: "svc-b", root_path: ".", language: "javascript", confidence: "high", source_file: "b.js" },
+        { name: "svc-c", root_path: ".", language: "javascript", confidence: "high", source_file: "src/c.js" },
+      ],
+      connections: [],
+      schemas: [],
+    });
+
+    setAgentRunner(async (prompt) => {
+      if (prompt.includes("Discovery Agent") || prompt.includes("structure discovery"))
+        return minDisc;
+      return `\`\`\`json\n${fullFindings}\n\`\`\``;
+    });
+
+    const r1 = await scanRepos([incScanRepo], { skipHubSync: true }, qeFull);
+    assert.ok(r1[0].findings !== null, "full scan must succeed");
+    assert.equal(
+      db.prepare("SELECT COUNT(*) as n FROM services").get().n,
+      3,
+      "full scan must write exactly 3 services",
+    );
+
+    // --- Step 2: incremental scan — agent returns ONLY svc-b ---
+    // getRepoState returns firstCommit (the empty commit before 'add b.js').
+    // getCurrentHead(incScanRepo) returns HEAD (second commit) → firstCommit != HEAD
+    // buildScanContext returns mode='incremental' with changedFiles=['b.js'].
+    // persistScanResult: _restampExistingRows moves all 3 services to the new
+    // scan_version_id BEFORE persistFindings writes svc-b. endScan stale-delete
+    // spares all 3 (all stamped). _deleteDeletedFileFindings: no deleted/renamed
+    // files → svc-a and svc-c remain untouched.
+    const qeInc = new QueryEngine(db);
+    qeInc.getRepoState = () => ({ last_scanned_commit: firstCommit, last_scanned_at: null });
+
+    const incFindings = JSON.stringify({
+      service_name: "svc-b",
+      confidence: "high",
+      repo_path: incScanRepo,
+      repo_name: "inc-repo",
+      services: [
+        { name: "svc-b", root_path: ".", language: "javascript", confidence: "high", source_file: "b.js" },
+      ],
+      connections: [],
+      schemas: [],
+    });
+
+    setAgentRunner(async (prompt) => {
+      if (prompt.includes("Discovery Agent") || prompt.includes("structure discovery"))
+        return minDisc;
+      return `\`\`\`json\n${incFindings}\n\`\`\``;
+    });
+
+    const r2 = await scanRepos([incScanRepo], { skipHubSync: true }, qeInc);
+    assert.ok(r2[0].findings !== null, "incremental scan must succeed");
+
+    // PIPE-04 assertion: svc-a and svc-c must survive alongside svc-b.
+    const svcs = db.prepare("SELECT name FROM services ORDER BY name").all();
+    const names = svcs.map((s) => s.name);
+    assert.deepEqual(
+      names,
+      ["svc-a", "svc-b", "svc-c"],
+      "PIPE-04 via manager: incremental scan must preserve unchanged services svc-a and svc-c",
+    );
+
+    db.close();
+  });
 });

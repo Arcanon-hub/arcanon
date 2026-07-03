@@ -1258,21 +1258,36 @@ export async function queryScan({ repo, full = false } = {}) {
       };
     }
 
-    // Trigger scan
+    // Trigger scan — PIPE-02: capture the response and surface real errors.
+    // Body key is repo_path (not repo) to match the /scan route contract (Pitfall 5).
+    let scanRes;
     try {
-      await fetch(`http://localhost:${port}/scan`, {
+      scanRes = await fetch(`http://localhost:${port}/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repo, full }),
+        body: JSON.stringify({ repo_path: repo, full }),
       });
-      return {
-        status: "triggered",
-        message: "Scan started. Results will be available after confirmation.",
-      };
     } catch (err) {
       logger.error('queryScan fetch failed', { error: err.message, stack: err.stack });
       return { status: "error", message: err.message };
     }
+
+    if (!scanRes.ok) {
+      // Non-2xx — parse the error body and surface it instead of returning triggered.
+      let errBody;
+      try { errBody = await scanRes.json(); } catch { errBody = {}; }
+      const message = errBody.error || `HTTP ${scanRes.status} from scan endpoint`;
+      logger.warn('queryScan: /scan returned non-2xx', { status: scanRes.status, message });
+      return { status: "error", message };
+    }
+
+    // 2xx — pass through the real status/message from the pipeline.
+    let body;
+    try { body = await scanRes.json(); } catch { body = {}; }
+    return {
+      status: body.status || 'triggered',
+      message: body.message || 'Scan persisted.',
+    };
   } catch (err) {
     logger.error('queryScan failed', { error: err.message, stack: err.stack });
     return { status: "error", message: err.message };
