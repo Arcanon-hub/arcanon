@@ -36,7 +36,7 @@ function parseArgs(argv) {
   return flags;
 }
 
-function servicesForVersion(db, scanVersionId) {
+export function servicesForVersion(db, scanVersionId) {
   return db
     .prepare(
       `SELECT name, language, root_path, type FROM services WHERE scan_version_id = ?`,
@@ -44,15 +44,24 @@ function servicesForVersion(db, scanVersionId) {
     .all(scanVersionId);
 }
 
-function connectionsForVersion(db, scanVersionId) {
+export function connectionsForVersion(db, scanVersionId) {
   return db
     .prepare(
-      `SELECT s.name AS source, c.target_name AS target, c.protocol, c.method, c.path
+      `SELECT src.name AS source, tgt.name AS target, c.protocol, c.method, c.path
          FROM connections c
-         LEFT JOIN services s ON s.id = c.source_service_id
+         JOIN services src ON src.id = c.source_service_id
+         JOIN services tgt ON tgt.id = c.target_service_id
          WHERE c.scan_version_id = ?`,
     )
     .all(scanVersionId);
+}
+
+export function listVersions(db) {
+  return db
+    .prepare(
+      `SELECT id, started_at FROM scan_versions WHERE completed_at IS NOT NULL ORDER BY id DESC LIMIT 10`,
+    )
+    .all();
 }
 
 function diffSets(before, after, keyFn) {
@@ -81,11 +90,7 @@ async function main() {
   }
   const db = qe._db;
 
-  const versions = db
-    .prepare(
-      `SELECT id, created_at FROM scan_versions ORDER BY id DESC LIMIT 10`,
-    )
-    .all();
+  const versions = listVersions(db);
   if (versions.length < 2) {
     process.stdout.write(
       "only one scan snapshot exists — run /arcanon:map again to capture a second point for drift.\n",
