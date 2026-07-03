@@ -307,3 +307,57 @@ describe("search() -- prepared statement cache", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// INTG-03 — search() passes project_id where-filter to chromaSearch
+// ---------------------------------------------------------------------------
+
+import { initChromaSync, _resetForTest as _chromaReset } from "../server/chroma.js";
+import { setSearchDb } from "./query-engine.js";
+
+describe("search() — INTG-03 project_id where-filter passed to chromaSearch", () => {
+  test("search() passes where:{project_id:{$eq:projectHash}} to chromaSearch when Chroma available", async () => {
+    _chromaReset();
+
+    // Capture the args passed to collection.query
+    let queryCaptured = null;
+    const mockCollection = {
+      upsert: async () => {},
+      query: async (args) => {
+        queryCaptured = args;
+        return { ids: [[]], documents: [[]], distances: [[]], metadatas: [[]] };
+      },
+      delete: async () => {},
+    };
+    const mockClient = {
+      heartbeat: async () => ({}),
+      getOrCreateCollection: async () => mockCollection,
+    };
+
+    // Wire a real on-disk-path DB so projectHash resolves to a non-"unknown" value.
+    // Use the existing in-memory `db` — its name is ":memory:" so projectHash → "unknown".
+    // That is acceptable: the important assertion is that the WHERE clause is present.
+    await initChromaSync({ ARCANON_CHROMA_MODE: "local" }, mockClient);
+    setSearchDb(db);
+
+    await search("auth");
+
+    assert.ok(queryCaptured !== null, "collection.query must have been called");
+    assert.ok(
+      queryCaptured.where !== undefined,
+      "search() must pass a where clause to chromaSearch",
+    );
+    assert.ok(
+      queryCaptured.where.project_id !== undefined,
+      "where clause must include project_id",
+    );
+    assert.deepEqual(
+      queryCaptured.where.project_id,
+      { $eq: "unknown" },
+      "project_id $eq must be the projectHash derived from the DB path",
+    );
+
+    _chromaReset();
+    setSearchDb(db); // restore for other tests
+  });
+});
