@@ -1254,10 +1254,10 @@ Plans:
   3. A semantic search query scoped to project A returns zero results from project B's services — Chroma records are namespaced by project identity so identical service names across projects do not overwrite each other.
   4. The graph UI never renders an edge whose required source or target node is excluded by the active filter — invisible nodes produce no dangling half-drawn edges in the canvas.
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans complete
 
 - [x] 142-01-PLAN.md — Wave 1: INTG-04 dangling-edge/invisible-node renderer fix + INTG-01 drift SQL-column fix (no cross-phase deps)
-- [ ] 142-02-PLAN.md — Wave 2: INTG-01 snapshot routing via diffScanVersions + INTG-02 Chroma sync in Phase B + INTG-03 project-namespaced Chroma (depends on 139, 141)
+- [x] 142-02-PLAN.md — Wave 2: INTG-01 snapshot routing via diffScanVersions + INTG-02 Chroma sync in Phase B + INTG-03 project-namespaced Chroma (depends on 139, 141)
 
 **UI hint**: yes
 
@@ -1324,5 +1324,5 @@ Plans:
 | 139 | v0.2.0 | 2/2 | Complete   | 2026-07-01 |
 | 140 | v0.2.0 | 3/3 | Complete   | 2026-07-02 |
 | 141 | v0.2.0 | 3/3 | Complete   | 2026-07-03 |
-| 142 | v0.2.0 | 1/2 | In Progress|  |
+| 142 | v0.2.0 | 2/2 | Complete   | 2026-07-03 |
 | 143 | v0.2.0 | 0/? | Not started | - |
