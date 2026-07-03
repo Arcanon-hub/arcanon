@@ -1,9 +1,33 @@
-import { test } from "node:test";
+import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createHttpServer } from "./http.js";
+import Database from "../db/sqlite-adapter.js";
+import { QueryEngine } from "../db/query-engine.js";
+import { up as _mig001 } from '../db/migrations/001_initial_schema.js';
+import { up as _mig002 } from '../db/migrations/002_service_type.js';
+import { up as _mig003 } from '../db/migrations/003_exposed_endpoints.js';
+import { up as _mig004 } from '../db/migrations/004_dedup_constraints.js';
+import { up as _mig005 } from '../db/migrations/005_scan_versions.js';
+import { up as _mig006 } from '../db/migrations/006_dedup_repos.js';
+import { up as _mig007 } from '../db/migrations/007_expose_kind.js';
+import { up as _mig008 } from '../db/migrations/008_actors_metadata.js';
+import { up as _mig009 } from '../db/migrations/009_confidence_enrichment.js';
+import { up as _mig010 } from '../db/migrations/010_service_dependencies.js';
+import { up as _mig011 } from '../db/migrations/011_services_boundary_entry.js';
+import { up as _mig013 } from '../db/migrations/013_connections_path_template.js';
+import { up as _mig014 } from '../db/migrations/014_services_base_path.js';
+import { up as _mig015 } from '../db/migrations/015_scan_versions_quality_score.js';
+import { up as _mig016 } from '../db/migrations/016_enrichment_log.js';
+import { up as _mig017 } from '../db/migrations/017_scan_overrides.js';
+import { up as _mig018 } from '../db/migrations/018_actors_label.js';
+import { up as _mig019 } from '../db/migrations/019_connections_protocol_raw.js';
+import { up as _mig020 } from '../db/migrations/020_actor_connections_protocol_raw.js';
+import { up as _mig021 } from '../db/migrations/021_map_versions_kind_repos.js';
+import { up as _mig022 } from '../db/migrations/022_connections_source_target_symbol.js';
+import { up as _mig023 } from '../db/migrations/023_services_source_file.js';
 
 const mockQE = {
   getGraph: () => ({ nodes: [{ id: 1, name: "svc-a" }], edges: [] }),
@@ -288,8 +312,14 @@ test("GET /service/:name returns 503 when queryEngine is null", async () => {
 
 test("POST /scan persists findings and returns 200", async () => {
   const persisted = [];
+  // _db stub required by persistScanResult; applyPendingOverridesSync becomes no-op.
+  const mockDb0 = {
+    transaction: (fn) => fn,
+    prepare: () => ({ all: () => [], run: () => {}, get: () => null }),
+  };
   const server = await makeServer({
     ...mockQE,
+    _db: mockDb0,
     upsertRepo: () => 1,
     beginScan: () => 1,
     endScan: () => {},
@@ -314,8 +344,16 @@ test("POST /scan persists findings and returns 200", async () => {
 test("POST /scan applies beginScan/endScan bracket with correct scanVersionId", async () => {
   const calls = { beginScan: [], persistFindings: [], endScan: [] };
   const FAKE_SCAN_ID = 42;
+  // _db.transaction is required by persistScanResult (scan-service.js); returning the
+  // fn directly (no actual SQLite transaction) is sufficient for this behaviour test.
+  // prepare stub makes applyPendingOverridesSync a no-op (no pending overrides in mock DB).
+  const mockDb = {
+    transaction: (fn) => fn,
+    prepare: () => ({ all: () => [], run: () => {}, get: () => null }),
+  };
   const server = await makeServer({
     ...mockQE,
+    _db: mockDb,
     upsertRepo: () => 1,
     beginScan: (repoId) => { calls.beginScan.push(repoId); return FAKE_SCAN_ID; },
     persistFindings: (repoId, findings, commit, scanVersionId) => {
@@ -343,8 +381,14 @@ test("POST /scan applies beginScan/endScan bracket with correct scanVersionId", 
 
 test("POST /scan does not call endScan when persistFindings throws", async () => {
   const endScanCalls = [];
+  // _db stub required by persistScanResult; applyPendingOverridesSync becomes no-op.
+  const mockDb2 = {
+    transaction: (fn) => fn,
+    prepare: () => ({ all: () => [], run: () => {}, get: () => null }),
+  };
   const server = await makeServer({
     ...mockQE,
+    _db: mockDb2,
     upsertRepo: () => 1,
     beginScan: () => 99,
     persistFindings: () => { throw new Error("db write failed"); },
@@ -604,4 +648,104 @@ test("GET /versions 500 — logger.error called with stack", async () => {
   assert.ok(errCall, "logger.error was not called");
   assert.ok(errCall.extra.stack, "stack missing from logger.error call");
   await server.close();
+});
+
+// ---------------------------------------------------------------------------
+// POST /scan — real pipeline via persistScanResult (CTR-05, PIPE-01, 141-03)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a fully-migrated in-memory SQLite DB for HTTP /scan real-pipeline tests.
+ * Same 23-migration set as scan-service.e2e.test.js (no 012 — reverted).
+ */
+function freshScanDb() {
+  const db = new Database(':memory:');
+  db.pragma('foreign_keys = ON');
+  _mig001(db); _mig002(db); _mig003(db); _mig004(db); _mig005(db); _mig006(db);
+  _mig007(db); _mig008(db); _mig009(db); _mig010(db); _mig011(db); _mig013(db);
+  _mig014(db); _mig015(db); _mig016(db); _mig017(db); _mig018(db); _mig019(db);
+  _mig020(db); _mig021(db); _mig022(db); _mig023(db);
+  return db;
+}
+
+/** Minimal valid findings fixture for HTTP /scan pipeline tests. */
+const HTTP_SCAN_FIXTURE = {
+  service_name: 'test-repo',
+  confidence: 'high',
+  services: [
+    { name: 'svc-a', type: 'service', language: 'node', root_path: 'src/a', confidence: 'high', source_file: 'src/a.js' },
+    { name: 'svc-b', type: 'service', language: 'node', root_path: 'src/b', confidence: 'high', source_file: 'src/b.js' },
+  ],
+  connections: [
+    { source: 'svc-a', target: 'svc-b', protocol: 'rest', method: 'GET', path: '/api', source_file: null, confidence: 'high', evidence: '' },
+  ],
+  schemas: [],
+};
+
+describe("POST /scan — real pipeline via persistScanResult (CTR-05, PIPE-01)", () => {
+  test("POST /scan with valid body returns 200 { status: persisted, repo_id, scan_version_id }", async () => {
+    const db = freshScanDb();
+    const qe = new QueryEngine(db);
+    const server = await createHttpServer(qe, { port: 0 });
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/scan',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify({ repo_path: '/test/repo', findings: HTTP_SCAN_FIXTURE, commit: 'abc123' }),
+    });
+
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.payload);
+    assert.equal(body.status, 'persisted');
+    assert.ok(typeof body.repo_id === 'number', 'repo_id must be a number');
+    assert.ok(typeof body.scan_version_id === 'number', 'scan_version_id must be returned by the pipeline');
+
+    await server.close();
+    db.close();
+  });
+
+  test("POST /scan: scan_versions row has completed_at non-null (pipeline ran end-to-end)", async () => {
+    const db = freshScanDb();
+    const qe = new QueryEngine(db);
+    const server = await createHttpServer(qe, { port: 0 });
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/scan',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify({ repo_path: '/test/repo', findings: HTTP_SCAN_FIXTURE, commit: 'abc123' }),
+    });
+
+    assert.equal(res.statusCode, 200);
+    const { scan_version_id } = JSON.parse(res.payload);
+    assert.ok(typeof scan_version_id === 'number', 'scan_version_id must be in response');
+    const sv = db.prepare('SELECT completed_at FROM scan_versions WHERE id = ?').get(scan_version_id);
+    assert.ok(sv, 'scan_versions row must exist');
+    assert.ok(sv.completed_at !== null && sv.completed_at !== undefined,
+      'completed_at must be non-null after persistScanResult completes (endScan must have run)');
+
+    await server.close();
+    db.close();
+  });
+
+  test("POST /scan with no findings returns 400 (missing-fields guard unchanged)", async () => {
+    const db = freshScanDb();
+    const qe = new QueryEngine(db);
+    const server = await createHttpServer(qe, { port: 0 });
+
+    const res = await server.inject({
+      method: 'POST',
+      url: '/scan',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify({ repo_path: '/test/repo' }), // no findings
+    });
+
+    assert.equal(res.statusCode, 400);
+    const body = JSON.parse(res.payload);
+    assert.ok(typeof body.error === 'string', 'error must be present');
+
+    await server.close();
+    db.close();
+  });
 });
