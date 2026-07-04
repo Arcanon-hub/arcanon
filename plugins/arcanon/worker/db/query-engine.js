@@ -1096,21 +1096,56 @@ export class QueryEngine {
       abs = path.join(repoRootPath, srcRel);
     }
 
+    // PERF-02: consult the per-persistFindings-call file-content cache before
+    // hitting disk. Cache is a Map<absPath, {content:string}|{content:null,warn:string}>
+    // stored on `this._evidenceFileCache` and scoped to a single persistFindings
+    // call (initialized before the connection loop, released in finally).
+    // When null (outside a persistFindings call) we fall through to a direct read.
     let content;
-    try {
-      content = fs.readFileSync(abs, "utf8");
-    } catch (e) {
-      // case 3: file missing or unreadable — warn but don't reject
-      const detail = e.code || e.message || "unknown error";
-      return {
-        ok: true,
-        warn:
-          "[persistFindings] cannot validate evidence: source_file '" +
-          srcRel +
-          "' does not exist or is unreadable (" +
-          detail +
-          ")",
-      };
+    const _cache = this._evidenceFileCache;
+    if (_cache != null) {
+      const hit = _cache.get(abs);
+      if (hit !== undefined) {
+        // Cache hit: reuse stored content or reproduce the unreadable verdict.
+        if (hit.content === null) {
+          return { ok: true, warn: hit.warn };
+        }
+        content = hit.content;
+      } else {
+        // Cache miss: read from disk and populate cache entry.
+        try {
+          content = fs.readFileSync(abs, "utf8");
+          _cache.set(abs, { content });
+        } catch (e) {
+          // case 3: file missing or unreadable — warn but don't reject
+          const detail = e.code || e.message || "unknown error";
+          const warn =
+            "[persistFindings] cannot validate evidence: source_file '" +
+            srcRel +
+            "' does not exist or is unreadable (" +
+            detail +
+            ")";
+          _cache.set(abs, { content: null, warn });
+          return { ok: true, warn };
+        }
+      }
+    } else {
+      // No cache active (direct call outside persistFindings) — read directly.
+      try {
+        content = fs.readFileSync(abs, "utf8");
+      } catch (e) {
+        // case 3: file missing or unreadable — warn but don't reject
+        const detail = e.code || e.message || "unknown error";
+        return {
+          ok: true,
+          warn:
+            "[persistFindings] cannot validate evidence: source_file '" +
+            srcRel +
+            "' does not exist or is unreadable (" +
+            detail +
+            ")",
+        };
+      }
     }
 
     if (content.indexOf(evidence) !== -1) {
@@ -1734,20 +1769,67 @@ export class QueryEngine {
   }
 
   /**
-   * Returns the full service dependency graph (all nodes and edges).
+   * Returns the service dependency graph, optionally paginated or summarised.
    * Used by GET /graph and the D3 web UI.
-   * @returns {{ services: Array, connections: Array, repos: Array }}
+   *
+   * @param {{ limit?: number|null, offset?: number, summary?: boolean }} [opts]
+   *   - summary: when true, returns only aggregate counts — no service or
+   *     connection arrays are serialized. Sub-5ms; suitable for status pings.
+   *   - limit: positive integer → at most N services returned (LIMIT/OFFSET on
+   *     the services query). Connections are scoped to the returned services
+   *     (v0.2.0 services-limit scope). Adds `truncated` + `total_services` to
+   *     the response so callers can detect more pages.
+   *   - offset: pagination offset (default 0). Only meaningful when limit is set.
+   *   All params default to null/0/false — no-arg callers are byte-for-byte
+   *   equivalent to the pre-143-05 behaviour.
+   * @returns {object}
    */
-  getGraph() {
-    const services = this._db
-      .prepare(
-        `
+  getGraph({ limit = null, offset = 0, summary = false } = {}) {
+    // --- SUMMARY MODE (PERF-01) ---
+    // Returns only aggregate counts. No heavy table-scan array assembly.
+    // Suitable for status pings — no services/connections arrays serialized.
+    if (summary) {
+      const service_count =
+        this._db.prepare('SELECT COUNT(*) as n FROM services').get()?.n ?? 0;
+      const connection_count = (() => {
+        try {
+          return this._db.prepare('SELECT COUNT(*) as n FROM connections').get()?.n ?? 0;
+        } catch { return 0; }
+      })();
+      const repo_count =
+        this._db.prepare('SELECT COUNT(*) as n FROM repos').get()?.n ?? 0;
+      // latest_scan_version_id mirrors the reduce() in the full path.
+      const latestRow =
+        this._db.prepare('SELECT MAX(scan_version_id) as max FROM services').get();
+      const latest_scan_version_id = latestRow?.max ?? null;
+      return { service_count, connection_count, repo_count, latest_scan_version_id };
+    }
+
+    // --- PAGINATION SETUP (PERF-01) ---
+    // limit must be a positive finite integer to activate pagination.
+    // Invalid callers (null, 0, negative, non-finite) get the default full path.
+    const paginated =
+      typeof limit === 'number' && Number.isFinite(limit) && limit > 0;
+    let total_services = null;
+    let truncated = false;
+    if (paginated) {
+      const row = this._db.prepare('SELECT COUNT(*) as n FROM services').get();
+      total_services = row?.n ?? 0;
+    }
+
+    // --- SERVICES QUERY ---
+    const servicesSql = `
       SELECT s.id, s.name, s.root_path, s.language, s.type, s.repo_id, r.name as repo_name, r.path as repo_path, s.scan_version_id
       FROM services s
       JOIN repos r ON r.id = s.repo_id
-    `,
-      )
-      .all();
+    `;
+    const services = paginated
+      ? this._db.prepare(servicesSql + ' LIMIT ? OFFSET ?').all(limit, offset)
+      : this._db.prepare(servicesSql).all();
+
+    if (paginated) {
+      truncated = (offset + services.length) < total_services;
+    }
 
     const latest_scan_version_id = services.reduce(
       (max, s) => (s.scan_version_id != null && (max === null || s.scan_version_id > max))
@@ -1838,6 +1920,17 @@ export class QueryEngine {
       row.protocol = canonicalProtocol(row.protocol);
     }
 
+    // PERF-01: When paginated, scope connections to those involving the returned
+    // services (v0.2.0 services-limit scope). Filters in JS after fetching because
+    // the connections query has multiple fallback paths — a single SQL WHERE IN()
+    // across all three try/catch arms would require code triplication.
+    if (paginated && services.length > 0) {
+      const svcNames = new Set(services.map((s) => s.name));
+      connections = connections.filter(
+        (c) => svcNames.has(c.source) || svcNames.has(c.target),
+      );
+    }
+
     const repos = this._db
       .prepare(
         `
@@ -1873,29 +1966,42 @@ export class QueryEngine {
         }
       }
 
-      // protocol_raw column added by migration 020. On pre-020 DBs the SELECT
-      // throws "no such column: ac.protocol_raw" — fall back to the pre-020 SELECT
-      // (no raw column) ONLY on that expected error; re-throw anything else so a
-      // malformed query is not misreported as a legacy schema (Task 6 narrowing).
-      let actorConnStmt;
+      // PERF-02: batch load all actor_connections in one SELECT rather than one
+      // SELECT per actor (N+1 fix). The pre-020 column-presence fallback is kept:
+      // if the prepare throws "no such column: ac.protocol_raw" (expected on
+      // pre-020 DBs), substitute NULL via an alias; re-throw anything else so
+      // malformed SQL is not silently swallowed (Task 6 narrowing).
+      let allActorConns;
       try {
-        actorConnStmt = this._db.prepare(`
-          SELECT ac.protocol, ac.protocol_raw, ac.path, ac.direction, s.name as service_name, s.id as service_id
-          FROM actor_connections ac
-          JOIN services s ON s.id = ac.service_id
-          WHERE ac.actor_id = ?
-        `);
-      } catch (rawErr) {
-        if (String(rawErr.message).includes("no such column")) {
-          actorConnStmt = this._db.prepare(`
-            SELECT ac.protocol, NULL as protocol_raw, ac.path, ac.direction, s.name as service_name, s.id as service_id
+        allActorConns = this._db
+          .prepare(`
+            SELECT ac.actor_id, ac.protocol, ac.protocol_raw, ac.path, ac.direction,
+                   s.name as service_name, s.id as service_id
             FROM actor_connections ac
             JOIN services s ON s.id = ac.service_id
-            WHERE ac.actor_id = ?
-          `);
+          `)
+          .all();
+      } catch (rawErr) {
+        if (String(rawErr.message).includes("no such column")) {
+          allActorConns = this._db
+            .prepare(`
+              SELECT ac.actor_id, ac.protocol, NULL as protocol_raw, ac.path, ac.direction,
+                     s.name as service_name, s.id as service_id
+              FROM actor_connections ac
+              JOIN services s ON s.id = ac.service_id
+            `)
+            .all();
         } else {
           throw rawErr;
         }
+      }
+
+      // Group rows by actor_id for O(1) per-actor lookup.
+      const connsByActor = new Map();
+      for (const row of allActorConns) {
+        if (!connsByActor.has(row.actor_id))
+          connsByActor.set(row.actor_id, []);
+        connsByActor.get(row.actor_id).push(row);
       }
 
       // #42 WARNING 1: normalize each actor connection's protocol at read-time.
@@ -1909,7 +2015,7 @@ export class QueryEngine {
       // read-shaping only; the stored DB rows are never mutated.
       actors = actorRows.map((a) => ({
         ...a,
-        connected_services: actorConnStmt.all(a.id).map((row) => {
+        connected_services: (connsByActor.get(a.id) ?? []).map((row) => {
           const displayedRaw =
             row.protocol_raw != null && row.protocol_raw !== ""
               ? row.protocol_raw
@@ -1984,7 +2090,17 @@ export class QueryEngine {
       }
     }
 
-    return { services, connections, repos, mismatches, actors, latest_scan_version_id, schemas_by_connection };
+    return {
+      services,
+      connections,
+      repos,
+      mismatches,
+      actors,
+      latest_scan_version_id,
+      schemas_by_connection,
+      // PERF-01: pagination signal — present only when limit was requested.
+      ...(paginated ? { truncated, total_services } : {}),
+    };
   }
 
   /**
@@ -2078,9 +2194,26 @@ export class QueryEngine {
         .map((r) => ({ ...r, target_base_path: null }));
     }
 
-    const exposedStmt = this._db.prepare(
-      `SELECT method, path FROM exposed_endpoints WHERE service_id = ?`,
-    );
+    // PERF-02: batch load exposed_endpoints for all unique target services in
+    // one query rather than one query per candidate connection (N+1 fix).
+    // Guard: SQLite IN () with an empty list is a syntax error — early-return
+    // when there are no candidates (Pitfall 5 from 143-RESEARCH.md).
+    const targetIds = [...new Set(rows.map((c) => c.target_id))];
+    if (targetIds.length === 0) return [];
+
+    const batchExposedRows = this._db
+      .prepare(
+        `SELECT service_id, method, path FROM exposed_endpoints WHERE service_id IN (${targetIds.map(() => "?").join(",")})`,
+      )
+      .all(...targetIds);
+
+    // Group by service_id into a Map for O(1) per-connection lookup.
+    const exposedByTarget = new Map();
+    for (const r of batchExposedRows) {
+      if (!exposedByTarget.has(r.service_id))
+        exposedByTarget.set(r.service_id, []);
+      exposedByTarget.get(r.service_id).push(r);
+    }
 
     // Known limitations (deferred, tracked as a follow-up to #43):
     //  - Method-aware matching landed in #46: the consumed method is compared
@@ -2110,7 +2243,8 @@ export class QueryEngine {
       //      introducing new false positives (it may conceal a verb mismatch).
       //  (c) all-paths set of every canonPath (MM-02 — the null-consumed-method
       //      path-only fallback, identical to pre-#46 behavior).
-      const exposedRows = exposedStmt.all(c.target_id);
+      // PERF-02: look up pre-loaded rows from the batch Map (no per-connection query).
+      const exposedRows = exposedByTarget.get(c.target_id) ?? [];
       const exposedByMethod = new Map();
       const exposedWildcardPaths = new Set();
       const exposedAllPaths = new Set();
@@ -2226,6 +2360,13 @@ export class QueryEngine {
     // 2. Upsert connections (resolve source/target names to IDs).
     // connIdx tracks the 0-based position in findings.connections[] so schemas
     // can be routed to exactly one connection via connection_index (CTR-02).
+    //
+    // PERF-02: initialize the per-call source-file content cache used by
+    // _validateEvidence to avoid re-reading the same file once per connection.
+    // The cache is scoped to this single persistFindings call — released in the
+    // finally block below so it cannot serve stale content across scans.
+    this._evidenceFileCache = new Map();
+    try {
     for (const [connIdx, conn] of (findings.connections || []).entries()) {
       const sourceId =
         serviceIdMap.get(conn.source) || this._resolveServiceId(conn.source, repoId);
@@ -2340,6 +2481,11 @@ export class QueryEngine {
       // an actor — the existing service row is the authoritative endpoint.
       // (Pre-#9 the actor block also fired here; the SBUG-01 check skipped it
       // for known services. Behavior unchanged for this case.)
+    }
+    } finally {
+      // PERF-02: release per-call evidence cache so the next persistFindings call
+      // re-reads from disk (prevents stale content across scans).
+      this._evidenceFileCache = null;
     }
 
     // 3. Upsert schemas — CTR-02: each schema attaches ONLY to its declared

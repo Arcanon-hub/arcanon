@@ -372,3 +372,153 @@ describe("evidence rejection in persistFindings", () => {
     assert.equal(n, 1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// PERF-02: read-count spy tests for the per-persistFindings source-file cache
+// ---------------------------------------------------------------------------
+
+describe("PERF-02: evidence source-file read-count cache (143-04)", () => {
+  it("reads each unique source_file at most once per persistFindings call", async () => {
+    const { repoId, qe, tmpRoot } = await freshEngineWithTempRepo();
+    fs.mkdirSync(path.join(tmpRoot, "src"), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpRoot, "src/api.js"),
+      "validToken"
+    );
+
+    // Spy on fs.readFileSync to count calls
+    let readCount = 0;
+    const origReadFileSync = fs.readFileSync;
+    fs.readFileSync = (filePath, enc) => {
+      if (typeof filePath === "string" && filePath.includes("src/api.js")) {
+        readCount++;
+      }
+      return origReadFileSync(filePath, enc);
+    };
+
+    try {
+      // 3 connections all citing the SAME source_file
+      const findings = {
+        services: [
+          { name: "svc-a", root_path: ".", language: "js", confidence: "high" },
+          { name: "svc-b", root_path: ".", language: "js", confidence: "high" },
+        ],
+        connections: [
+          {
+            source: "svc-a", target: "svc-b", protocol: "rest",
+            method: "GET", path: "/x", source_file: "src/api.js",
+            target_file: null, confidence: "high", evidence: "validToken",
+          },
+          {
+            source: "svc-a", target: "svc-b", protocol: "rest",
+            method: "POST", path: "/y", source_file: "src/api.js",
+            target_file: null, confidence: "high", evidence: "validToken",
+          },
+          {
+            source: "svc-a", target: "svc-b", protocol: "rest",
+            method: "DELETE", path: "/z", source_file: "src/api.js",
+            target_file: null, confidence: "high", evidence: "validToken",
+          },
+        ],
+        schemas: [],
+      };
+      qe.persistFindings(repoId, findings);
+    } finally {
+      fs.readFileSync = origReadFileSync;
+    }
+
+    assert.strictEqual(
+      readCount,
+      1,
+      `Expected exactly 1 readFileSync call for src/api.js but got ${readCount} (cache not working)`
+    );
+  });
+
+  it("re-reads source_file on a subsequent persistFindings call (cache released)", async () => {
+    const { repoId, qe, tmpRoot } = await freshEngineWithTempRepo();
+    fs.mkdirSync(path.join(tmpRoot, "src"), { recursive: true });
+    fs.writeFileSync(path.join(tmpRoot, "src/svc.js"), "freshToken");
+
+    let readCount = 0;
+    const origReadFileSync = fs.readFileSync;
+    fs.readFileSync = (filePath, enc) => {
+      if (typeof filePath === "string" && filePath.includes("src/svc.js")) {
+        readCount++;
+      }
+      return origReadFileSync(filePath, enc);
+    };
+
+    try {
+      const makeFindings = (path_, method) => ({
+        services: [
+          { name: "svc-a", root_path: ".", language: "js", confidence: "high" },
+          { name: "svc-b", root_path: ".", language: "js", confidence: "high" },
+        ],
+        connections: [
+          {
+            source: "svc-a", target: "svc-b", protocol: "rest",
+            method, path: path_, source_file: "src/svc.js",
+            target_file: null, confidence: "high", evidence: "freshToken",
+          },
+        ],
+        schemas: [],
+      });
+
+      // Call 1: reads the file once
+      qe.persistFindings(repoId, makeFindings("/a", "GET"));
+      assert.strictEqual(readCount, 1, "First call should read the file once");
+
+      // Call 2: cache has been released — reads again (fresh)
+      qe.persistFindings(repoId, makeFindings("/b", "POST"));
+      assert.strictEqual(readCount, 2, "Second call should re-read the file (cache released between calls)");
+    } finally {
+      fs.readFileSync = origReadFileSync;
+    }
+  });
+
+  it("null sentinel is reused: unreadable file causes one warn per connection that cites it", async () => {
+    const { repoId, qe } = await freshEngineWithTempRepo();
+
+    // source_file does NOT exist on disk
+    let readCount = 0;
+    const origReadFileSync = fs.readFileSync;
+    fs.readFileSync = (filePath, enc) => {
+      if (typeof filePath === "string" && filePath.includes("missing.js")) {
+        readCount++;
+        throw Object.assign(new Error("no such file"), { code: "ENOENT" });
+      }
+      return origReadFileSync(filePath, enc);
+    };
+
+    try {
+      const findings = {
+        services: [
+          { name: "svc-a", root_path: ".", language: "js", confidence: "high" },
+          { name: "svc-b", root_path: ".", language: "js", confidence: "high" },
+        ],
+        connections: [
+          {
+            source: "svc-a", target: "svc-b", protocol: "rest",
+            method: "GET", path: "/x", source_file: "/missing.js",
+            target_file: null, confidence: "high", evidence: "anyToken",
+          },
+          {
+            source: "svc-a", target: "svc-b", protocol: "rest",
+            method: "POST", path: "/y", source_file: "/missing.js",
+            target_file: null, confidence: "high", evidence: "anyToken",
+          },
+        ],
+        schemas: [],
+      };
+      captureStderr(() => qe.persistFindings(repoId, findings));
+    } finally {
+      fs.readFileSync = origReadFileSync;
+    }
+
+    assert.strictEqual(
+      readCount,
+      1,
+      `Expected exactly 1 readFileSync attempt for missing.js but got ${readCount} (null sentinel not cached)`
+    );
+  });
+});

@@ -23,8 +23,128 @@ import { resolveDataDir } from "../lib/data-dir.js";
 
 const dataDir = resolveDataDir();
 
-/** Cache: resolved dbPath → QueryEngine (Phase 137 / ISO-02: keyed by DB file path, not projectRoot) */
+/**
+ * Cache: resolved dbPath → QueryEngine (Phase 137 / ISO-02: keyed by DB file path, not projectRoot).
+ *
+ * PERF-05 (Phase 143): a parallel Map tracks the last-accessed timestamp for
+ * each entry. The idle eviction sweep (sweepIdleEntries) removes entries whose
+ * lastAccessed is older than the TTL. Keeping the value type as QueryEngine
+ * (not { qe, lastAccessed }) preserves all existing consumers that iterate
+ * `for (const [, qe] of pool)` and read `qe._db` — no iteration sites change.
+ */
 const pool = new Map();
+
+/**
+ * Parallel timestamp map: resolved dbPath → Date.now() at last access.
+ * Updated on every pool insert and every cache hit by _touch(dbPath).
+ */
+const poolLastAccessed = new Map();
+
+/**
+ * Default idle TTL: 10 minutes. The sweep runs every 5 minutes (< TTL) so a
+ * request's getQueryEngine() call at the start stamps lastAccessed, ensuring
+ * the handle is never evicted during a request that completes in < 10 minutes.
+ * For requests longer than the TTL (extremely unlikely at developer-tool scale),
+ * the handle will have been touched at request start so eviction cannot race
+ * with the in-flight query. See 143-RESEARCH.md Pitfall 4.
+ */
+const IDLE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+/** Stamp lastAccessed for the given pool key. Called on insert and cache hit. */
+function _touch(dbPath) {
+  poolLastAccessed.set(dbPath, Date.now());
+}
+
+// ---------------------------------------------------------------------------
+// PERF-06: listProjects short-TTL cache (T-143-05-04)
+// ---------------------------------------------------------------------------
+
+/** TTL for the listProjects result cache: 30 seconds. */
+const LIST_PROJECTS_TTL_MS = 30 * 1000;
+
+/**
+ * Short-TTL cache for listProjects results.
+ * Shape: { value: Array, ts: number } | null
+ * Set to null to invalidate (on closeAll and on pool eviction).
+ * Not exported — invalidation is via closeAll() and sweepIdleEntries().
+ */
+let _listProjectsCache = null;
+
+/**
+ * Evict and close every pool entry whose lastAccessed is older than ttlMs.
+ * Per-handle close is wrapped in try/catch so one bad handle does not abort
+ * the sweep. Exported so worker shutdown and tests can invoke directly.
+ *
+ * PERF-06: invalidates the listProjects cache whenever at least one entry is
+ * evicted so a removed project is not served from a stale cached list.
+ *
+ * @param {number} [ttlMs] - Idle TTL in milliseconds. Defaults to IDLE_TTL_MS.
+ */
+export function sweepIdleEntries(ttlMs = IDLE_TTL_MS) {
+  const cutoff = Date.now() - ttlMs;
+  let evicted = false;
+  for (const [key, qe] of pool) {
+    const lastAccessed = poolLastAccessed.get(key) ?? 0;
+    if (lastAccessed < cutoff) {
+      try {
+        qe._db?.close?.();
+      } catch {
+        /* best-effort: ignore close errors */
+      }
+      pool.delete(key);
+      poolLastAccessed.delete(key);
+      evicted = true;
+    }
+  }
+  // Invalidate listProjects cache when the pool composition changes so a
+  // removed project is not served from cache after eviction (T-143-05-04).
+  if (evicted) {
+    _listProjectsCache = null;
+  }
+}
+
+/**
+ * Close every cached DB handle (best-effort, per-handle try/catch) and clear
+ * the pool. A subsequent getQueryEngine() call after closeAll() will re-open
+ * the DB from disk. Intended for graceful worker shutdown.
+ *
+ * PERF-06: also invalidates the listProjects TTL cache so a removed/closed
+ * project is not served from a stale cached list after teardown (T-143-05-04).
+ */
+export function closeAll() {
+  // Invalidate listProjects cache before clearing handles so the next
+  // /projects request reflects the post-teardown state.
+  _listProjectsCache = null;
+  for (const [, qe] of pool) {
+    try {
+      qe._db?.close?.();
+    } catch {
+      /* best-effort: ignore close errors */
+    }
+  }
+  pool.clear();
+  poolLastAccessed.clear();
+}
+
+/**
+ * Test-only exports: direct access to the internal Maps so lifecycle tests can
+ * inject stub entries and back-date lastAccessed timestamps without real DBs.
+ * Do NOT use these in production code.
+ *
+ * @internal
+ */
+export { pool as _pool, poolLastAccessed as _poolLastAccessed };
+
+/**
+ * Start the idle eviction sweep on an unref'd interval.
+ * Guard: skip when NODE_ENV starts with 'test' to avoid timer interference
+ * with test assertions. The .unref() call prevents the interval from keeping
+ * the Node.js process alive even if the guard is not triggered.
+ */
+if (!process.env.NODE_ENV?.startsWith("test")) {
+  // Sweep every 5 minutes — half the default 10-minute idle TTL.
+  setInterval(() => sweepIdleEntries(), 5 * 60 * 1000).unref();
+}
 
 /**
  * Compute the per-project data directory.
@@ -72,7 +192,9 @@ export function getQueryEngine(projectRoot) {
     // If it doesn't (stale/poisoned entry), evict and fall through to re-open.
     if (qe._db && qe._db.name !== dbPath) {
       pool.delete(dbPath);
+      poolLastAccessed.delete(dbPath);
     } else {
+      _touch(dbPath); // PERF-05: stamp lastAccessed on cache hit
       return qe;
     }
   }
@@ -87,6 +209,7 @@ export function getQueryEngine(projectRoot) {
     const db = openDb(resolved);
     const qe = new QueryEngine(db, null); // logger injected at higher level in future phases
     pool.set(dbPath, qe);
+    _touch(dbPath); // PERF-05: stamp lastAccessed on insert
     return qe;
   } catch (err) {
     process.stderr.write(
@@ -99,9 +222,30 @@ export function getQueryEngine(projectRoot) {
 /**
  * List all projects that have a DB.
  * Scans ~/.arcanon/projects/ for impact-map.db files.
+ *
+ * PERF-06: Results are cached for LIST_PROJECTS_TTL_MS (30s) to avoid
+ * repeated synchronous fs + DB reads on every /projects request. The cache
+ * is invalidated by closeAll() and sweepIdleEntries() so a removed or
+ * evicted project is not served from a stale list (T-143-05-04).
+ *
  * @returns {Array<{hash: string, dbPath: string, size: number}>}
  */
 export function listProjects() {
+  // TTL cache hit — serve without re-scanning the filesystem.
+  if (_listProjectsCache !== null && Date.now() - _listProjectsCache.ts < LIST_PROJECTS_TTL_MS) {
+    return _listProjectsCache.value;
+  }
+
+  const result = _listProjectsInternal();
+  _listProjectsCache = { value: result, ts: Date.now() };
+  return result;
+}
+
+/**
+ * Internal implementation of listProjects (uncached).
+ * Scans ~/.arcanon/projects/ for impact-map.db files.
+ */
+function _listProjectsInternal() {
   const projectsDir = path.join(dataDir, "projects");
   if (!fs.existsSync(projectsDir)) return [];
 
@@ -232,7 +376,10 @@ export function getQueryEngineByHash(hash) {
   if (!fs.existsSync(dbPath)) return null;
 
   // Check if already cached (pool is keyed by dbPath — covers both root and hash lookups)
-  if (pool.has(dbPath)) return pool.get(dbPath);
+  if (pool.has(dbPath)) {
+    _touch(dbPath); // PERF-05: stamp lastAccessed on cache hit
+    return pool.get(dbPath);
+  }
 
   try {
     // Open directly (we already have the DB path, not a project root to hash).
@@ -247,6 +394,7 @@ export function getQueryEngineByHash(hash) {
     // Key by dbPath so a subsequent getQueryEngine(root) call for this file
     // finds this entry rather than opening a second handle.
     pool.set(dbPath, qe);
+    _touch(dbPath); // PERF-05: stamp lastAccessed on insert
     return qe;
   } catch (err) {
     process.stderr.write(

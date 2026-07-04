@@ -4,7 +4,7 @@ import fastifyCors from "@fastify/cors";
 import path from "path";
 import fs from "node:fs";
 import { fileURLToPath } from "url";
-import { listProjects, getQueryEngineByHash } from "../db/pool.js";
+import { listProjects, getQueryEngineByHash, closeAll as closeAllDbHandles } from "../db/pool.js";
 import { resolveConfigPath } from "../lib/config-path.js";
 import { getCommitsSince } from "../scan/git-state.js";
 import { extractEvidenceLocation } from "../hub-sync/evidence-location.js";
@@ -191,6 +191,38 @@ async function createHttpServer(queryEngine, options = {}) {
   });
 
   // -----------------------------------------------------------------------
+  // PERF-06: Per-route response-time logging + DB handle lifecycle hooks
+  // -----------------------------------------------------------------------
+
+  // Stamp request start time so onResponse can compute elapsed ms.
+  // performance is a Node 16+ global (guaranteed on Node >=22.13).
+  fastify.addHook('onRequest', (request, _reply, done) => {
+    request._startMs = performance.now();
+    done();
+  });
+
+  // Log every response through httpLog so slow routes are observable.
+  // This is a no-op when no logger is configured (log === null).
+  fastify.addHook('onResponse', (request, reply, done) => {
+    const elapsed = request._startMs != null
+      ? performance.now() - request._startMs
+      : -1;
+    httpLog('INFO', `${request.method} ${request.routeOptions?.url ?? request.url} ${reply.statusCode} ${elapsed.toFixed(1)}ms`, {
+      route: request.routeOptions?.url ?? request.url,
+      method: request.method,
+      status: reply.statusCode,
+      elapsed_ms: elapsed,
+    });
+    done();
+  });
+
+  // Belt-and-suspenders DB handle release on server teardown.
+  // Primary signal path is SIGTERM/SIGINT in worker/index.js (143-03).
+  fastify.addHook('onClose', async (_instance) => {
+    closeAllDbHandles();
+  });
+
+  // -----------------------------------------------------------------------
   // Routes — readiness MUST be first
   // -----------------------------------------------------------------------
 
@@ -326,6 +358,11 @@ async function createHttpServer(queryEngine, options = {}) {
    *     }>
    *   }
    */
+  // PERF-06 (known synchronous route): performs synchronous SQLite reads + one
+  // execFileSync("git rev-list --count") per repo. getCommitsSince has a 30s TTL
+  // cache (143-05) so repeated UI polls do not spawn one subprocess per repo.
+  // Latency budget: <100ms for ≤10 repos when cached; <500ms on first call.
+  // Async offload explicitly deferred (node:sqlite DatabaseSync is sync by design).
   fastify.get("/api/scan-freshness", async (request, reply) => {
     const project = request.query?.project;
     const qe = getQE(request);
@@ -433,6 +470,10 @@ async function createHttpServer(queryEngine, options = {}) {
    *                               exact match otherwise
    *   (neither set)               implicit --all 
    */
+  // PERF-06 (known synchronous route): reads up to 1000 cited source files via
+  // readFileSync. The 1000-connection hard cap (below) bounds the worst case.
+  // Async offload explicitly deferred (node:sqlite DatabaseSync is sync by design).
+  // Latency budget: <2s for ≤1000 connections (local filesystem, cached OS pages).
   fastify.get("/api/verify", async (request, reply) => {
     const projectRoot = request.query?.project;
     if (!projectRoot) {
@@ -550,7 +591,17 @@ async function createHttpServer(queryEngine, options = {}) {
     }
   });
 
-  // 3. GET /graph?project=/path — full service dependency graph
+  // 3. GET /graph?project=/path[&limit=N&offset=M&summary=1] — service dependency graph
+  //
+  // PERF-06 (known synchronous route): getGraph() performs synchronous SQLite reads via
+  // node:sqlite DatabaseSync. Async offload is explicitly deferred (see 143-RESEARCH.md
+  // §PERF-06). Latency budget: <50ms for ≤50 services, <200ms for ≤200 services at
+  // developer-tool scale. Use ?summary=1 for status pings (<5ms, count-only).
+  //
+  // Pagination params (T-143-05-01/02: coerced + clamped before reaching SQL):
+  //   ?limit=N  — max services per page (positive integer; clamped to GRAPH_MAX_LIMIT)
+  //   ?offset=M — pagination offset (non-negative integer; invalid → 0)
+  //   ?summary=1 — return only counts (no service/connection arrays)
   fastify.get("/graph", async (request, reply) => {
     const qe = getQE(request);
     if (!qe) {
@@ -560,7 +611,34 @@ async function createHttpServer(queryEngine, options = {}) {
       });
     }
     try {
-      const graph = qe.getGraph();
+      // PERF-01: parse and validate pagination/summary query params.
+      // All coercion happens here — no unvalidated params reach getGraph/SQL.
+      const GRAPH_MAX_LIMIT = 5000; // documented maximum; prevents unbounded allocation
+      const rawLimit = request.query?.limit;
+      const rawOffset = request.query?.offset;
+      const rawSummary = request.query?.summary;
+
+      let graphLimit = null;
+      if (rawLimit !== undefined && rawLimit !== '') {
+        const n = Number(rawLimit);
+        // Must be a positive finite integer; NaN/0/negative/non-integer → default (full graph)
+        if (Number.isFinite(n) && Number.isInteger(n) && n > 0) {
+          graphLimit = Math.min(n, GRAPH_MAX_LIMIT);
+        }
+      }
+
+      let graphOffset = 0;
+      if (rawOffset !== undefined && rawOffset !== '') {
+        const n = Number(rawOffset);
+        // Must be a non-negative finite integer; invalid → 0
+        if (Number.isFinite(n) && Number.isInteger(n) && n >= 0) {
+          graphOffset = n;
+        }
+      }
+
+      const graphSummary = rawSummary === '1' || rawSummary === 'true';
+
+      const graph = qe.getGraph({ limit: graphLimit, offset: graphOffset, summary: graphSummary });
 
       // Read boundaries from arcanon.config.json in the project root.
       // Always returns boundaries: [] when config is missing or has no boundaries key.
@@ -689,6 +767,9 @@ async function createHttpServer(queryEngine, options = {}) {
   });
 
   // 8. GET /api/logs — return filtered log lines for UI polling
+  // PERF-06 (known synchronous route): reads the worker log file via readFileSync.
+  // The log file is local; reads are typically <5ms. No async offload needed at this scale.
+  // Latency budget: <50ms for ≤10k log lines.
   fastify.get("/api/logs", async (request, reply) => {
     const logDir = options.dataDir;
     if (!logDir) {

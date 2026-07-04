@@ -2180,3 +2180,123 @@ describe("scanRepos — manager transport uses persistScanResult (CTR-05, PIPE-0
     db.close();
   });
 });
+
+// ---------------------------------------------------------------------------
+// scanRepos — bounded concurrency (PERF-04)
+//
+// Proves allSettledBounded:
+//   1. max in-flight never exceeds the configured limit (counter-based, not wall-clock)
+//   2. concurrency=1 yields strictly serial execution
+//   3. options.concurrency defaults to 3 (4 repos, max in-flight ≤ 3)
+// ---------------------------------------------------------------------------
+
+describe('scanRepos — bounded concurrency (PERF-04)', () => {
+  const repoDirs = [];
+
+  before(() => {
+    // Create 5 real git repos — each needs a HEAD commit so scanOneRepo runs fully.
+    for (let i = 0; i < 5; i++) {
+      const { dir } = makeTempRepo();
+      writeFileSync(join(dir, 'index.js'), `module.exports = ${i};`);
+      execSync('git add index.js', { cwd: dir, stdio: 'pipe' });
+      execSync(`git commit -m "add index${i}.js"`, { cwd: dir, stdio: 'pipe' });
+      repoDirs.push(dir);
+    }
+  });
+
+  after(() => {
+    for (const dir of repoDirs) cleanupDir(dir);
+  });
+
+  beforeEach(() => {
+    setAgentRunner(null);
+    setScanLogger(null);
+  });
+
+  function makeBoundedQE() {
+    return {
+      upsertRepo: () => 42,
+      getRepoState: () => null,
+      setRepoState: () => {},
+      getRepoByPath: () => null,
+      beginScan: () => 1,
+      persistFindings: () => {},
+      endScan: () => {},
+      _db: {
+        transaction: (fn) => () => fn(),
+        prepare: () => ({ all: () => [] }),
+      },
+    };
+  }
+
+  const boundedFindings = JSON.stringify({
+    service_name: 'bounded-svc',
+    confidence: 'high',
+    services: [{ name: 'bounded-svc', root_path: '.', language: 'javascript', confidence: 'high' }],
+    connections: [],
+    schemas: [],
+  });
+
+  const isDiscovery = (p) => p.includes('Discovery Agent') || p.includes('structure discovery');
+  const discoveryReply = '```json\n{"languages":["javascript"],"frameworks":[],"service_hints":[]}\n```';
+  const scanReply = `\`\`\`json\n${boundedFindings}\n\`\`\``;
+
+  const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  test('PERF-04: max in-flight never exceeds concurrency=2 (counter-based spy)', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+
+    setAgentRunner(async (prompt) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await delay(30);
+      inFlight--;
+      return isDiscovery(prompt) ? discoveryReply : scanReply;
+    });
+
+    const qe = makeBoundedQE();
+    await scanRepos(repoDirs, { concurrency: 2 }, qe);
+
+    assert.ok(maxInFlight > 0, 'at least one agent call must have run');
+    assert.ok(maxInFlight <= 2, `max in-flight was ${maxInFlight} — must not exceed concurrency limit of 2`);
+  });
+
+  test('PERF-04: concurrency=1 yields strictly serial execution (max in-flight = 1)', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+
+    setAgentRunner(async (prompt) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await delay(20);
+      inFlight--;
+      return isDiscovery(prompt) ? discoveryReply : scanReply;
+    });
+
+    const qe = makeBoundedQE();
+    await scanRepos(repoDirs.slice(0, 3), { concurrency: 1 }, qe);
+
+    assert.equal(maxInFlight, 1, 'concurrency=1 must be strictly serial — max in-flight must be 1');
+  });
+
+  test('PERF-04: options.concurrency defaults to 3 — 4 repos, max in-flight ≤ 3', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+
+    setAgentRunner(async (prompt) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await delay(30);
+      inFlight--;
+      return isDiscovery(prompt) ? discoveryReply : scanReply;
+    });
+
+    const qe = makeBoundedQE();
+    // No concurrency option → defaults to 3; 4 repos ensures a 4th waits for a slot.
+    await scanRepos(repoDirs.slice(0, 4), {}, qe);
+
+    assert.ok(maxInFlight > 0, 'at least one agent call must have run');
+    assert.ok(maxInFlight <= 3, `max in-flight was ${maxInFlight} — must not exceed default concurrency of 3`);
+  });
+});
