@@ -1,6 +1,6 @@
 {
   "name": "arcanon",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "description": "Cross-repo service dependency scanner for Claude Code — maps your architecture, detects drift, and syncs to Arcanon Hub",
   "author": {
     "name": "Arcanon"

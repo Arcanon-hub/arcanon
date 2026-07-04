@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-04
+
+Scan Persistence, Pipeline & Security Hardening — hardens the scan → persist →
+graph core. Resolves GitHub issues #49, #50, #51, #52 across 9 phases (135–143).
+
+### Security
+
+- Closed an RCE-class shell-injection in the MCP server: git and `oasdiff` calls
+  now pass arguments as `execFileSync` argv arrays (never interpolated into a
+  shell string); `commit_range` and spec paths are validated and option-injection
+  is rejected; response evidence is no longer logged. (#51)
+- Hub upload-queue rows are bound to an immutable `(hub_url, org_id)` at enqueue —
+  switching organizations after enqueue can no longer misroute a pending upload;
+  non-retriable 4xx moves a row to `dead` in one drain; legacy unbound rows are
+  held for explicit action, never silently retargeted. (#51)
+
+### Fixed
+
+- Per-project database isolation — removed the process-global DB singleton; a pool
+  keyed by canonical project identity prevents cross-project reads/writes. (#49)
+- Atomic scans — begin → persist → overrides → reconcile → end runs as one
+  transaction that rolls back entirely on failure; a version is completed only
+  after reconciliation; cleanup is repo-scoped. (#49)
+- MCP `impact_scan` no longer reports false success — it honors the real
+  HTTP/pipeline result instead of always returning `triggered`. (#50)
+- `/arcanon:rescan` no longer throws when pending corrections are evaluated, and
+  applies them exactly once. (#50)
+- Incremental scans preserve unchanged findings and correctly remove findings for
+  deleted/renamed files. (#50)
+- `/arcanon:drift graph` works against retained history (fixed fatal SQL); Chroma
+  stays in sync via the scan-completion path with project-namespaced IDs; the UI
+  never renders dangling edges. (#52)
+
+### Changed
+
+- Explicit scan history via immutable per-run snapshots + a project-level run id
+  (accurate added/removed/modified diffs). (#49)
+- One `ScanService` pipeline behind commands, worker, HTTP, and MCP, validating
+  against a single canonical finding contract. (#50)
+- Runtime scaling — getGraph pagination/summary, batched N+1 queries, performance
+  indexes (migrations 021–024 run automatically on upgrade), bounded multi-repo
+  concurrency, DB-pool idle eviction + close-on-shutdown, TTL caches. (#52)
+
 ## [0.1.9] - 2026-06-27
 
 Removed the shadow-DB command trio. The "validate-before-commit" workflow is now
