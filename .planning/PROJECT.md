@@ -229,50 +229,33 @@ Understand and protect your architecture across repositories — see how service
 - ✓ Agent scanner detects network backing-service clients (datastore/broker/search/cache/vector DB) by reasoning, examples-not-allowlist — `arcanon→chromadb` now detectable (SC-01..07, #45) — v0.1.9
 - ✓ `detectMismatches()` is method-aware — `(method, canonicalPath)`-keyed `exposedByMethod` Map, case-insensitive, null-method path-only fallback (MM-01..09, #46) — v0.1.9
 - ✓ v0.1.9 release gate (VER-01..02) — 3 manifests pinned at 0.1.9 + lockfile regen, CHANGELOG `[0.1.9]` BREAKING, zero shadow references, worker 945/945 — v0.1.9
+- ✓ MCP shell-injection closed — git + oasdiff via `execFileSync` argv, `commit_range` validated/option-injection-rejected, evidence not logged (SEC-01..08, #51) — v0.2.0
+- ✓ Hub upload-queue rows bound to immutable `(hub_url, org_id)`; org switch can't misroute a queued upload; dead-on-non-retriable-4xx; legacy rows held not retargeted (SEC-04..07, #51) — v0.2.0
+- ✓ Per-project DB isolation — pool keyed by resolved dbPath, no process-global singleton; real multi-project integration tests (ISO-01/02/11, #49) — v0.2.0
+- ✓ Scan is one transactional unit of work — begin→persist→overrides→reconcile→end rolls back atomically; `completed_at` last; repo-scoped cleanup (ISO-03/04/05/10, #49) — v0.2.0
+- ✓ Explicit history via immutable per-run snapshots + project run-id + full child-state reconciliation; `/arcanon:diff` and drift work against retained history (ISO-06..09, #49) — v0.2.0
+- ✓ One `persistScanResult` pipeline behind commands/manager/HTTP/MCP validating against one canonical `contract.js`; MCP returns real status; rescan applies overrides once; incremental preserves unchanged (PIPE-01..04, CTR-01..05, #50) — v0.2.0
+- ✓ Integration correctness — drift-graph routes through `diffScanVersions`, Chroma sync in the completion path with project-namespaced IDs, UI never renders dangling edges (INTG-01..04, #52) — v0.2.0
+- ✓ Runtime scaling — getGraph pagination, batched N+1 queries, perf indexes (migration 024), bounded multi-repo concurrency, DB-pool idle eviction + close-on-shutdown, TTL caches; ~2.6ms for a 200-svc/1000-conn graph (PERF-01..06, #52) — v0.2.0
 
 ### Active
 
-- v0.2.0 Scan Persistence, Pipeline & Security Hardening — see `.planning/REQUIREMENTS.md`
-
-## Current Milestone: v0.2.0 Scan Persistence, Pipeline & Security Hardening
-
-**Goal:** Fix the scan→persist→graph core so per-project data is isolated, scans
-persist atomically with usable history, one pipeline serves every entry point,
-the MCP/Hub security boundaries hold, and the drift/search integrations + runtime
-scaling that sit on top return correct, performant data.
-
-**Target tracks (dependency-ordered, GitHub issues #49–#52):**
-- **Security (#51)** — replace shell-string execution in `worker/mcp/server.js`
-  (`commit_range`, `oasdiff` spec paths) with `execFileSync`/argv arrays; bind
-  Hub queue rows to an immutable org/URL so an org switch can't misroute a queued
-  upload; mark non-retriable 4xx failures `dead` in one drain. Independent —
-  sequenced early.
-- **Persistence foundation (#49)** — replace the global `openDb()` singleton with
-  a DB factory/pool keyed by canonical project identity; make the full scan a
-  transactional unit of work (begin → persist → overrides → reconcile → end);
-  choose an explicit history/version model; add a project-level run identifier;
-  reconcile all child state (endpoints, actors, schemas, deps, metadata).
-- **Pipeline unification (#50)** — one `ScanService` behind Claude commands, MCP,
-  and HTTP; one canonical contract (crossing values, protocols, `source_file` vs
-  symbol/line, schema↔connection identity); validate at every persistence entry;
-  fix MCP false-success, `/arcanon:rescan` override throw, and incremental delete.
-- **Integrations + scaling (#52)** — repair drift-graph SQL + route through the
-  canonical version/diff API; move Chroma sync into the transactional completion
-  path with project-namespaced IDs; fix UI dangling-edge rendering; then bounded
-  concurrency, batched N+1 queries, pagination, pool eviction, and indexes.
-
-**Key context:** Two root causes verified live — the `openDb()` global singleton
-(`worker/db/database.js:93`) and MCP shell injection (`worker/mcp/server.js:250`,
-plus `oasdiff` at :1055/:1085). #49 is the foundation #50 and #52 build on; #51 is
-independent and ships early. The #49 history-model choice (append-only versioned
-rows vs immutable snapshot DBs) is the milestone's central design decision and
-should be settled in `/gsd-discuss-phase` for that phase before its plans.
+- (none — v0.2.0 shipped 2026-07-04; run `/gsd-new-milestone` to scope the next one)
 
 ## Current State
 
-**Shipped:** v0.1.9 Shadow Trio Removal, Rescan Repair & Scan/Mismatch Fixes (2026-06-29) — 6 phases (129-134), 13 plans, 32 tasks, 52/52 REQs, git range `ca5cb96..af8dfae` (PRs #41/#44/#47/#48). Audit `tech_debt` (no blockers). Preceded by v0.1.8 Native SQLite Migration (Phase 128, PR #38) and the out-of-roadmap v0.1.6/0.1.7 dependency-install hardening.
+**Shipped:** v0.2.0 Scan Persistence, Pipeline & Security Hardening (2026-07-04) — 9 phases (135-143), 21 plans, 38/38 REQs, git range `v0.1.9..8a5496c` (PRs #58/#59/#60/#61/#62/#63/#64/#68/#70 + CI hotfix #69). Audit `passed`, 0 blockers. Fixed GitHub issues #49/#50/#51/#52 as one dependency-ordered milestone. Preceded by v0.1.9 (Phases 129-134, PRs #41/#44/#47/#48) and v0.1.8 Native SQLite Migration (Phase 128, PR #38).
 
-**Scan/graph accuracy today (post-v0.1.9):** One canonical protocol vocabulary (`rest·grpc·events·db·internal·sdk` + infra + `other`) shared scan→persist→getGraph→UI with fallback-not-reject — no protocol is silently dropped. `detectMismatches()` is canonicalized on both sides and method-aware, so parameterized routes and non-HTTP protocols no longer false-flag. The agent scanner detects network backing-service clients (datastore/broker/search/cache/vector DB) by reasoning, so edges like `arcanon→chromadb` surface. Storage runs on Node's built-in `node:sqlite` (no runtime native install). Command surface is lean — the shadow-scan trio is gone; `/arcanon:diff <scanA> <scanB>` is the documented scan-comparison path.
+**Scan/persist/graph core today (post-v0.2.0):**
+- **Isolation & atomicity (#49):** per-project DB pool keyed by resolved dbPath (no process-global singleton); the full scan runs as one transaction (begin → persist → overrides → reconcile → end) that rolls back atomically; `completed_at` stamped last; immutable snapshots retained per run for accurate diff; project run-id groups multi-repo scans.
+- **One pipeline (#50):** every entry point (Claude commands, worker manager, HTTP, MCP) routes through a single `persistScanResult` pipeline validating against one canonical `contract.js`; MCP `impact_scan` returns real status (no false `triggered`); rescan applies pending overrides once without throwing; incremental scans preserve unchanged findings.
+- **Integrations (#52):** `/arcanon:drift graph` routes through retained snapshots via `diffScanVersions`; Chroma sync lives in the scan-completion path with project-namespaced IDs; UI never renders dangling edges.
+- **Scaling (#52):** getGraph pagination, batched N+1 queries, perf indexes (migration 024), bounded multi-repo concurrency, DB-pool idle eviction + close-on-shutdown, TTL caches. A 200-service/1000-connection graph renders in ~2.6ms.
+- **Security (#51):** MCP git/oasdiff calls use `execFileSync` argv (no shell); `commit_range` validated; Hub queue rows bound to immutable `(hub_url, org_id)` so an org switch can't misroute a queued upload; dead-on-non-retriable-4xx.
+
+**Carried scan/graph accuracy (v0.1.9):** canonical protocol vocabulary shared scan→persist→getGraph→UI with fallback-not-reject; method-aware `detectMismatches()`; reasoning-based backing-service client detection; `node:sqlite` storage (no runtime native install).
+
+**Deferred at v0.2.0 close (tracked as GitHub issues):** #71 (pool idle-eviction can close a handle held by a >10-min scan), #72 (agent scan path bypasses the `validateFindings` gate — defense-in-depth), #73 (make CI checks *required* on `main` — they aren't, which let PRs #64/#68 merge red before the #69 fix).
 
 **Operator surface (carried from v0.1.5):** `/arcanon:login` whoami-driven flow, `/arcanon:status` Identity block, `/arcanon:sync` with `X-Org-Id`, credential triple in `~/.arcanon/config.json` (mode 0600), egress `$HOME` masking at MCP/HTTP/logger/export.
 
@@ -285,7 +268,8 @@ should be settled in `/gsd-discuss-phase` for that phase before its plans.
 Open candidates for the next planning cycle (run `/gsd-new-milestone` to scope one):
 
 - **Operator validation closeout** — once arcanon-hub THE-1030 deploys, run the bundled walkthroughs against the live hub, flip VER-04, publish to marketplace.
-- **v0.2.0 Skills & Agents** — design the skills layer on top of shipped hooks, refactor inline `Explore` agent calls, add an MCP-tool-composing investigator agent. Deferred since v0.1.1.
+- **v0.2.0 tech-debt closeout** — the three tracked follow-ups: pool mid-scan eviction (#71), agent-path contract validation (#72), and requiring CI checks on `main` (#73, admin action).
+- **Skills & Agents** — design the skills layer on top of shipped hooks, refactor inline `Explore` agent calls, add an MCP-tool-composing investigator agent. Deferred since v0.1.1.
 - **Scan-accuracy follow-ons** — live `arcanon→chromadb` re-scan verification (#45), a dedicated `db`-bucket mismatch-exclusion test, and trailing-slash/case path-normalization (deferred from #46).
 - **Status PII closeout** — mask `data_dir` + `config_file` in cmdStatus and add a bats grep gate (pre-existing v0.1.4 leak).
 - Windows CI hardening (support works by design but is unverified — no Windows CI).
@@ -437,6 +421,11 @@ Known tech debt: db/database.js has console.log in script-mode guard, getQueryEn
 | Structural Map key over string-join for method-aware matching — v0.1.9 | A `${method}${SEP}${path}` composite key is forgeable (a method literally containing the delimiter collides). The shipped `exposedByMethod` `Map<method,Set<path>>` is collision-free by construction. Caught by cross-AI (codex) round-2 review. | ✓ Good |
 | Cross-AI (codex) review as a verification seam — v0.1.9 | A same-model plan-checker missed the #42 actor-edge gap, the #45 chromadb-incremental gap, and the #46 forgeable-key issue; an independent model caught all three. Findings captured per-phase in `*-REVIEWS.md`. | ✓ Good (pattern reusable) |
 | Pre-push hook mirrors CI — v0.1.9 | PRs kept failing CI on bats then getting fixed reactively. `scripts/pre-push.sh` + `make hooks-install` runs the CI-equivalent suite before push, with OS-conditional HOK-06 latency headroom on Darwin. Root-cause prevention over reactive fixing. | ✓ Good |
+| Immutable snapshot DBs for scan history — v0.2.0 (#49) | The central v0.2.0 design decision: retain a `VACUUM INTO` snapshot per completed run (vs append-only versioned rows) so two scans keep enough data for an accurate added/removed/modified diff, and drift routes through `diffScanVersions`. Snapshot guarded against `:memory:` DBs (a test leak root cause). | ✓ Good |
+| One `persistScanResult` pipeline behind every transport — v0.2.0 (#50) | Claude commands, worker manager, HTTP, and MCP were each duplicating persistence/reconciliation, causing drift (MCP false-success, rescan throw, incremental delete-of-unchanged). One pure module they all call, validating against one canonical `contract.js`. Transports are thin adapters. | ✓ Good |
+| Verify CI-green before merging; the pre-push hook is NOT a substitute — v0.2.0 | CI checks aren't *required* on `main`, so `gh pr merge --auto` merged PRs #64/#68 while CI was red (a logger ENOENT-on-fresh-install bug the populated local `~/.arcanon` hid). Fix: poll `gh pr checks` to green before every merge, and phase verifiers gained a `HOME=$(mktemp -d)` CI-parity run. Durable fix (#73) is making the checks required. | ✓ Good (learned the hard way) |
+| Logging must never throw into its caller — v0.2.0 | `logger.error()` did `appendFileSync` to `<dataDir>/logs/` with no mkdir/try-catch → ENOENT crash on any fresh install's first error log. A logger is best-effort infrastructure; it now `mkdir -p`s and swallows write failures. | ✓ Good |
+| Bind Hub queue rows to immutable (hub_url, org_id) at enqueue — v0.2.0 (#51) | Queued uploads resolved the destination at drain time, so switching orgs after enqueue could misroute a pending upload to the new org. Rows now carry an immutable destination; legacy unbound rows are held, never silently retargeted. | ✓ Good |
 
 ---
-*Last updated: 2026-06-29 — after v0.1.9 milestone close (Shadow Trio Removal, Rescan Repair & Scan/Mismatch Fixes shipped)*
+*Last updated: 2026-07-04 — after v0.2.0 milestone close (Scan Persistence, Pipeline & Security Hardening shipped; issues #49/#50/#51/#52 closed)*
