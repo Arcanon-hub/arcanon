@@ -1096,21 +1096,56 @@ export class QueryEngine {
       abs = path.join(repoRootPath, srcRel);
     }
 
+    // PERF-02: consult the per-persistFindings-call file-content cache before
+    // hitting disk. Cache is a Map<absPath, {content:string}|{content:null,warn:string}>
+    // stored on `this._evidenceFileCache` and scoped to a single persistFindings
+    // call (initialized before the connection loop, released in finally).
+    // When null (outside a persistFindings call) we fall through to a direct read.
     let content;
-    try {
-      content = fs.readFileSync(abs, "utf8");
-    } catch (e) {
-      // case 3: file missing or unreadable — warn but don't reject
-      const detail = e.code || e.message || "unknown error";
-      return {
-        ok: true,
-        warn:
-          "[persistFindings] cannot validate evidence: source_file '" +
-          srcRel +
-          "' does not exist or is unreadable (" +
-          detail +
-          ")",
-      };
+    const _cache = this._evidenceFileCache;
+    if (_cache != null) {
+      const hit = _cache.get(abs);
+      if (hit !== undefined) {
+        // Cache hit: reuse stored content or reproduce the unreadable verdict.
+        if (hit.content === null) {
+          return { ok: true, warn: hit.warn };
+        }
+        content = hit.content;
+      } else {
+        // Cache miss: read from disk and populate cache entry.
+        try {
+          content = fs.readFileSync(abs, "utf8");
+          _cache.set(abs, { content });
+        } catch (e) {
+          // case 3: file missing or unreadable — warn but don't reject
+          const detail = e.code || e.message || "unknown error";
+          const warn =
+            "[persistFindings] cannot validate evidence: source_file '" +
+            srcRel +
+            "' does not exist or is unreadable (" +
+            detail +
+            ")";
+          _cache.set(abs, { content: null, warn });
+          return { ok: true, warn };
+        }
+      }
+    } else {
+      // No cache active (direct call outside persistFindings) — read directly.
+      try {
+        content = fs.readFileSync(abs, "utf8");
+      } catch (e) {
+        // case 3: file missing or unreadable — warn but don't reject
+        const detail = e.code || e.message || "unknown error";
+        return {
+          ok: true,
+          warn:
+            "[persistFindings] cannot validate evidence: source_file '" +
+            srcRel +
+            "' does not exist or is unreadable (" +
+            detail +
+            ")",
+        };
+      }
     }
 
     if (content.indexOf(evidence) !== -1) {
@@ -2257,6 +2292,13 @@ export class QueryEngine {
     // 2. Upsert connections (resolve source/target names to IDs).
     // connIdx tracks the 0-based position in findings.connections[] so schemas
     // can be routed to exactly one connection via connection_index (CTR-02).
+    //
+    // PERF-02: initialize the per-call source-file content cache used by
+    // _validateEvidence to avoid re-reading the same file once per connection.
+    // The cache is scoped to this single persistFindings call — released in the
+    // finally block below so it cannot serve stale content across scans.
+    this._evidenceFileCache = new Map();
+    try {
     for (const [connIdx, conn] of (findings.connections || []).entries()) {
       const sourceId =
         serviceIdMap.get(conn.source) || this._resolveServiceId(conn.source, repoId);
@@ -2371,6 +2413,11 @@ export class QueryEngine {
       // an actor — the existing service row is the authoritative endpoint.
       // (Pre-#9 the actor block also fired here; the SBUG-01 check skipped it
       // for known services. Behavior unchanged for this case.)
+    }
+    } finally {
+      // PERF-02: release per-call evidence cache so the next persistFindings call
+      // re-reads from disk (prevents stale content across scans).
+      this._evidenceFileCache = null;
     }
 
     // 3. Upsert schemas — CTR-02: each schema attaches ONLY to its declared
