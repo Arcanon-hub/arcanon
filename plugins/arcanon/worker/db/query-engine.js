@@ -1769,20 +1769,67 @@ export class QueryEngine {
   }
 
   /**
-   * Returns the full service dependency graph (all nodes and edges).
+   * Returns the service dependency graph, optionally paginated or summarised.
    * Used by GET /graph and the D3 web UI.
-   * @returns {{ services: Array, connections: Array, repos: Array }}
+   *
+   * @param {{ limit?: number|null, offset?: number, summary?: boolean }} [opts]
+   *   - summary: when true, returns only aggregate counts — no service or
+   *     connection arrays are serialized. Sub-5ms; suitable for status pings.
+   *   - limit: positive integer → at most N services returned (LIMIT/OFFSET on
+   *     the services query). Connections are scoped to the returned services
+   *     (v0.2.0 services-limit scope). Adds `truncated` + `total_services` to
+   *     the response so callers can detect more pages.
+   *   - offset: pagination offset (default 0). Only meaningful when limit is set.
+   *   All params default to null/0/false — no-arg callers are byte-for-byte
+   *   equivalent to the pre-143-05 behaviour.
+   * @returns {object}
    */
-  getGraph() {
-    const services = this._db
-      .prepare(
-        `
+  getGraph({ limit = null, offset = 0, summary = false } = {}) {
+    // --- SUMMARY MODE (PERF-01) ---
+    // Returns only aggregate counts. No heavy table-scan array assembly.
+    // Suitable for status pings — no services/connections arrays serialized.
+    if (summary) {
+      const service_count =
+        this._db.prepare('SELECT COUNT(*) as n FROM services').get()?.n ?? 0;
+      const connection_count = (() => {
+        try {
+          return this._db.prepare('SELECT COUNT(*) as n FROM connections').get()?.n ?? 0;
+        } catch { return 0; }
+      })();
+      const repo_count =
+        this._db.prepare('SELECT COUNT(*) as n FROM repos').get()?.n ?? 0;
+      // latest_scan_version_id mirrors the reduce() in the full path.
+      const latestRow =
+        this._db.prepare('SELECT MAX(scan_version_id) as max FROM services').get();
+      const latest_scan_version_id = latestRow?.max ?? null;
+      return { service_count, connection_count, repo_count, latest_scan_version_id };
+    }
+
+    // --- PAGINATION SETUP (PERF-01) ---
+    // limit must be a positive finite integer to activate pagination.
+    // Invalid callers (null, 0, negative, non-finite) get the default full path.
+    const paginated =
+      typeof limit === 'number' && Number.isFinite(limit) && limit > 0;
+    let total_services = null;
+    let truncated = false;
+    if (paginated) {
+      const row = this._db.prepare('SELECT COUNT(*) as n FROM services').get();
+      total_services = row?.n ?? 0;
+    }
+
+    // --- SERVICES QUERY ---
+    const servicesSql = `
       SELECT s.id, s.name, s.root_path, s.language, s.type, s.repo_id, r.name as repo_name, r.path as repo_path, s.scan_version_id
       FROM services s
       JOIN repos r ON r.id = s.repo_id
-    `,
-      )
-      .all();
+    `;
+    const services = paginated
+      ? this._db.prepare(servicesSql + ' LIMIT ? OFFSET ?').all(limit, offset)
+      : this._db.prepare(servicesSql).all();
+
+    if (paginated) {
+      truncated = (offset + services.length) < total_services;
+    }
 
     const latest_scan_version_id = services.reduce(
       (max, s) => (s.scan_version_id != null && (max === null || s.scan_version_id > max))
@@ -1871,6 +1918,17 @@ export class QueryEngine {
     // Read-time canonicalization (preserves protocol_raw verbatim).
     for (const row of connections) {
       row.protocol = canonicalProtocol(row.protocol);
+    }
+
+    // PERF-01: When paginated, scope connections to those involving the returned
+    // services (v0.2.0 services-limit scope). Filters in JS after fetching because
+    // the connections query has multiple fallback paths — a single SQL WHERE IN()
+    // across all three try/catch arms would require code triplication.
+    if (paginated && services.length > 0) {
+      const svcNames = new Set(services.map((s) => s.name));
+      connections = connections.filter(
+        (c) => svcNames.has(c.source) || svcNames.has(c.target),
+      );
     }
 
     const repos = this._db
@@ -2032,7 +2090,17 @@ export class QueryEngine {
       }
     }
 
-    return { services, connections, repos, mismatches, actors, latest_scan_version_id, schemas_by_connection };
+    return {
+      services,
+      connections,
+      repos,
+      mismatches,
+      actors,
+      latest_scan_version_id,
+      schemas_by_connection,
+      // PERF-01: pagination signal — present only when limit was requested.
+      ...(paginated ? { truncated, total_services } : {}),
+    };
   }
 
   /**

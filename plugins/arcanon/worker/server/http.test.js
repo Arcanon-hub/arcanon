@@ -749,3 +749,147 @@ describe("POST /scan — real pipeline via persistScanResult (CTR-05, PIPE-01)",
     db.close();
   });
 });
+
+// ---------------------------------------------------------------------------
+// PERF-01: /graph pagination + summary params (143-05)
+// ---------------------------------------------------------------------------
+
+describe("GET /graph PERF-01 pagination and summary params", () => {
+  // Mock QE that behaves like getGraph({limit, offset, summary}) would.
+  function makePaginationQE(totalServices = 5) {
+    const allServices = Array.from({ length: totalServices }, (_, i) => ({
+      id: i + 1, name: `svc-${i}`, root_path: `/repo/svc-${i}`,
+    }));
+    return {
+      getGraph(opts = {}) {
+        const { limit = null, offset = 0, summary = false } = opts;
+        if (summary) {
+          return {
+            service_count: totalServices,
+            connection_count: totalServices * 2,
+            repo_count: 1,
+            latest_scan_version_id: 42,
+          };
+        }
+        const paginated = typeof limit === 'number' && limit > 0;
+        const page = paginated ? allServices.slice(offset, offset + limit) : allServices;
+        return {
+          services: page,
+          connections: [],
+          repos: [],
+          mismatches: [],
+          actors: [],
+          latest_scan_version_id: 42,
+          schemas_by_connection: {},
+          ...(paginated ? {
+            truncated: (offset + page.length) < allServices.length,
+            total_services: allServices.length,
+          } : {}),
+        };
+      },
+    };
+  }
+
+  test("?summary=1 returns only counts without services/connections arrays", async () => {
+    const server = await makeServer(makePaginationQE(5));
+    const res = await server.inject({ method: 'GET', url: '/graph?summary=1' });
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.payload);
+    assert.equal(body.service_count, 5, 'service_count present in summary mode');
+    assert.equal(body.connection_count, 10, 'connection_count present in summary mode');
+    assert.equal(body.repo_count, 1, 'repo_count present in summary mode');
+    assert.equal(body.latest_scan_version_id, 42);
+    assert.equal(body.services, undefined, 'summary must not include services array');
+    assert.equal(body.connections, undefined, 'summary must not include connections array');
+    await server.close();
+  });
+
+  test("?summary=true also activates summary mode", async () => {
+    const server = await makeServer(makePaginationQE(3));
+    const res = await server.inject({ method: 'GET', url: '/graph?summary=true' });
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.payload);
+    assert.equal(body.service_count, 3);
+    assert.equal(body.services, undefined, 'summary=true must not return services array');
+    await server.close();
+  });
+
+  test("?limit=2 returns exactly 2 services with truncated=true and total_services", async () => {
+    const server = await makeServer(makePaginationQE(5));
+    const res = await server.inject({ method: 'GET', url: '/graph?limit=2' });
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.payload);
+    assert.ok(Array.isArray(body.services), 'services must be an array');
+    assert.equal(body.services.length, 2, 'must return at most limit services');
+    assert.equal(body.truncated, true, 'truncated must be true when more pages exist');
+    assert.equal(body.total_services, 5, 'total_services must reflect full count');
+    await server.close();
+  });
+
+  test("?limit=10 on 5 services returns truncated=false", async () => {
+    const server = await makeServer(makePaginationQE(5));
+    const res = await server.inject({ method: 'GET', url: '/graph?limit=10' });
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.payload);
+    assert.equal(body.services.length, 5, 'all services fit within limit');
+    assert.equal(body.truncated, false, 'truncated=false when all services fit');
+    await server.close();
+  });
+
+  test("no params returns full graph (backward compatible — no truncated field)", async () => {
+    const server = await makeServer(makePaginationQE(5));
+    const res = await server.inject({ method: 'GET', url: '/graph' });
+    assert.equal(res.statusCode, 200);
+    const body = JSON.parse(res.payload);
+    assert.ok(Array.isArray(body.services), 'services must be present');
+    assert.equal(body.services.length, 5, 'all services returned with no params');
+    assert.equal(body.truncated, undefined, 'no truncated field on full graph response');
+    assert.equal(body.total_services, undefined, 'no total_services field on full graph response');
+    await server.close();
+  });
+
+  test("?limit=invalid falls back to full graph (null limit)", async () => {
+    let capturedOpts;
+    const capturingQE = {
+      getGraph(opts = {}) {
+        capturedOpts = opts;
+        return { services: [], connections: [], repos: [], mismatches: [], actors: [],
+                 latest_scan_version_id: null, schemas_by_connection: {} };
+      },
+    };
+    const server = await makeServer(capturingQE);
+    await server.inject({ method: 'GET', url: '/graph?limit=notanumber' });
+    assert.equal(capturedOpts.limit, null, 'invalid limit must default to null (full graph)');
+    await server.close();
+  });
+
+  test("?offset=invalid falls back to offset=0", async () => {
+    let capturedOpts;
+    const capturingQE = {
+      getGraph(opts = {}) {
+        capturedOpts = opts;
+        return { services: [], connections: [], repos: [], mismatches: [], actors: [],
+                 latest_scan_version_id: null, schemas_by_connection: {} };
+      },
+    };
+    const server = await makeServer(capturingQE);
+    await server.inject({ method: 'GET', url: '/graph?limit=5&offset=bad' });
+    assert.equal(capturedOpts.offset, 0, 'invalid offset must default to 0');
+    await server.close();
+  });
+
+  test("?limit exceeds GRAPH_MAX_LIMIT (5000) gets clamped", async () => {
+    let capturedOpts;
+    const capturingQE = {
+      getGraph(opts = {}) {
+        capturedOpts = opts;
+        return { services: [], connections: [], repos: [], mismatches: [], actors: [],
+                 latest_scan_version_id: null, schemas_by_connection: {} };
+      },
+    };
+    const server = await makeServer(capturingQE);
+    await server.inject({ method: 'GET', url: '/graph?limit=99999' });
+    assert.ok(capturedOpts.limit <= 5000, `limit must be clamped to ≤5000, got ${capturedOpts.limit}`);
+    await server.close();
+  });
+});

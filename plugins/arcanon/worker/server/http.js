@@ -4,7 +4,7 @@ import fastifyCors from "@fastify/cors";
 import path from "path";
 import fs from "node:fs";
 import { fileURLToPath } from "url";
-import { listProjects, getQueryEngineByHash } from "../db/pool.js";
+import { listProjects, getQueryEngineByHash, closeAll as closeAllDbHandles } from "../db/pool.js";
 import { resolveConfigPath } from "../lib/config-path.js";
 import { getCommitsSince } from "../scan/git-state.js";
 import { extractEvidenceLocation } from "../hub-sync/evidence-location.js";
@@ -550,7 +550,17 @@ async function createHttpServer(queryEngine, options = {}) {
     }
   });
 
-  // 3. GET /graph?project=/path — full service dependency graph
+  // 3. GET /graph?project=/path[&limit=N&offset=M&summary=1] — service dependency graph
+  //
+  // PERF-06 (known synchronous route): getGraph() performs synchronous SQLite reads via
+  // node:sqlite DatabaseSync. Async offload is explicitly deferred (see 143-RESEARCH.md
+  // §PERF-06). Latency budget: <50ms for ≤50 services, <200ms for ≤200 services at
+  // developer-tool scale. Use ?summary=1 for status pings (<5ms, count-only).
+  //
+  // Pagination params (T-143-05-01/02: coerced + clamped before reaching SQL):
+  //   ?limit=N  — max services per page (positive integer; clamped to GRAPH_MAX_LIMIT)
+  //   ?offset=M — pagination offset (non-negative integer; invalid → 0)
+  //   ?summary=1 — return only counts (no service/connection arrays)
   fastify.get("/graph", async (request, reply) => {
     const qe = getQE(request);
     if (!qe) {
@@ -560,7 +570,34 @@ async function createHttpServer(queryEngine, options = {}) {
       });
     }
     try {
-      const graph = qe.getGraph();
+      // PERF-01: parse and validate pagination/summary query params.
+      // All coercion happens here — no unvalidated params reach getGraph/SQL.
+      const GRAPH_MAX_LIMIT = 5000; // documented maximum; prevents unbounded allocation
+      const rawLimit = request.query?.limit;
+      const rawOffset = request.query?.offset;
+      const rawSummary = request.query?.summary;
+
+      let graphLimit = null;
+      if (rawLimit !== undefined && rawLimit !== '') {
+        const n = Number(rawLimit);
+        // Must be a positive finite integer; NaN/0/negative/non-integer → default (full graph)
+        if (Number.isFinite(n) && Number.isInteger(n) && n > 0) {
+          graphLimit = Math.min(n, GRAPH_MAX_LIMIT);
+        }
+      }
+
+      let graphOffset = 0;
+      if (rawOffset !== undefined && rawOffset !== '') {
+        const n = Number(rawOffset);
+        // Must be a non-negative finite integer; invalid → 0
+        if (Number.isFinite(n) && Number.isInteger(n) && n >= 0) {
+          graphOffset = n;
+        }
+      }
+
+      const graphSummary = rawSummary === '1' || rawSummary === 'true';
+
+      const graph = qe.getGraph({ limit: graphLimit, offset: graphOffset, summary: graphSummary });
 
       // Read boundaries from arcanon.config.json in the project root.
       // Always returns boundaries: [] when config is missing or has no boundaries key.
