@@ -1873,29 +1873,42 @@ export class QueryEngine {
         }
       }
 
-      // protocol_raw column added by migration 020. On pre-020 DBs the SELECT
-      // throws "no such column: ac.protocol_raw" — fall back to the pre-020 SELECT
-      // (no raw column) ONLY on that expected error; re-throw anything else so a
-      // malformed query is not misreported as a legacy schema (Task 6 narrowing).
-      let actorConnStmt;
+      // PERF-02: batch load all actor_connections in one SELECT rather than one
+      // SELECT per actor (N+1 fix). The pre-020 column-presence fallback is kept:
+      // if the prepare throws "no such column: ac.protocol_raw" (expected on
+      // pre-020 DBs), substitute NULL via an alias; re-throw anything else so
+      // malformed SQL is not silently swallowed (Task 6 narrowing).
+      let allActorConns;
       try {
-        actorConnStmt = this._db.prepare(`
-          SELECT ac.protocol, ac.protocol_raw, ac.path, ac.direction, s.name as service_name, s.id as service_id
-          FROM actor_connections ac
-          JOIN services s ON s.id = ac.service_id
-          WHERE ac.actor_id = ?
-        `);
-      } catch (rawErr) {
-        if (String(rawErr.message).includes("no such column")) {
-          actorConnStmt = this._db.prepare(`
-            SELECT ac.protocol, NULL as protocol_raw, ac.path, ac.direction, s.name as service_name, s.id as service_id
+        allActorConns = this._db
+          .prepare(`
+            SELECT ac.actor_id, ac.protocol, ac.protocol_raw, ac.path, ac.direction,
+                   s.name as service_name, s.id as service_id
             FROM actor_connections ac
             JOIN services s ON s.id = ac.service_id
-            WHERE ac.actor_id = ?
-          `);
+          `)
+          .all();
+      } catch (rawErr) {
+        if (String(rawErr.message).includes("no such column")) {
+          allActorConns = this._db
+            .prepare(`
+              SELECT ac.actor_id, ac.protocol, NULL as protocol_raw, ac.path, ac.direction,
+                     s.name as service_name, s.id as service_id
+              FROM actor_connections ac
+              JOIN services s ON s.id = ac.service_id
+            `)
+            .all();
         } else {
           throw rawErr;
         }
+      }
+
+      // Group rows by actor_id for O(1) per-actor lookup.
+      const connsByActor = new Map();
+      for (const row of allActorConns) {
+        if (!connsByActor.has(row.actor_id))
+          connsByActor.set(row.actor_id, []);
+        connsByActor.get(row.actor_id).push(row);
       }
 
       // #42 WARNING 1: normalize each actor connection's protocol at read-time.
@@ -1909,7 +1922,7 @@ export class QueryEngine {
       // read-shaping only; the stored DB rows are never mutated.
       actors = actorRows.map((a) => ({
         ...a,
-        connected_services: actorConnStmt.all(a.id).map((row) => {
+        connected_services: (connsByActor.get(a.id) ?? []).map((row) => {
           const displayedRaw =
             row.protocol_raw != null && row.protocol_raw !== ""
               ? row.protocol_raw
@@ -2078,9 +2091,26 @@ export class QueryEngine {
         .map((r) => ({ ...r, target_base_path: null }));
     }
 
-    const exposedStmt = this._db.prepare(
-      `SELECT method, path FROM exposed_endpoints WHERE service_id = ?`,
-    );
+    // PERF-02: batch load exposed_endpoints for all unique target services in
+    // one query rather than one query per candidate connection (N+1 fix).
+    // Guard: SQLite IN () with an empty list is a syntax error — early-return
+    // when there are no candidates (Pitfall 5 from 143-RESEARCH.md).
+    const targetIds = [...new Set(rows.map((c) => c.target_id))];
+    if (targetIds.length === 0) return [];
+
+    const batchExposedRows = this._db
+      .prepare(
+        `SELECT service_id, method, path FROM exposed_endpoints WHERE service_id IN (${targetIds.map(() => "?").join(",")})`,
+      )
+      .all(...targetIds);
+
+    // Group by service_id into a Map for O(1) per-connection lookup.
+    const exposedByTarget = new Map();
+    for (const r of batchExposedRows) {
+      if (!exposedByTarget.has(r.service_id))
+        exposedByTarget.set(r.service_id, []);
+      exposedByTarget.get(r.service_id).push(r);
+    }
 
     // Known limitations (deferred, tracked as a follow-up to #43):
     //  - Method-aware matching landed in #46: the consumed method is compared
@@ -2110,7 +2140,8 @@ export class QueryEngine {
       //      introducing new false positives (it may conceal a verb mismatch).
       //  (c) all-paths set of every canonPath (MM-02 — the null-consumed-method
       //      path-only fallback, identical to pre-#46 behavior).
-      const exposedRows = exposedStmt.all(c.target_id);
+      // PERF-02: look up pre-loaded rows from the batch Map (no per-connection query).
+      const exposedRows = exposedByTarget.get(c.target_id) ?? [];
       const exposedByMethod = new Map();
       const exposedWildcardPaths = new Set();
       const exposedAllPaths = new Set();
