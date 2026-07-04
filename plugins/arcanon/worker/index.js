@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { createHttpServer } from "./server/http.js";
-import { getQueryEngine } from "./db/pool.js";
+import { getQueryEngine, closeAll as closeAllDbHandles } from "./db/pool.js";
 import { initChromaSync } from "./server/chroma.js";
 import { createLogger } from "./lib/logger.js";
 import { setScanLogger } from "./scan/manager.js";
@@ -88,6 +88,13 @@ logger.log("INFO", "worker started", { port });
 function shutdown(signal) {
   logger.log("INFO", `received ${signal}, shutting down`);
   app.close(() => {
+    // PERF-05: close every cached DB handle before exiting so no project
+    // database file descriptor remains open after the worker process exits.
+    // closeAll() is best-effort (per-handle try/catch in pool.js) — if a
+    // handle's close() throws (e.g. SQLite WAL flush on an interrupted write),
+    // the error is swallowed and the process still exits cleanly. SQLite WAL
+    // mode is designed to survive unclean exits. See 143-RESEARCH.md Open Q3.
+    closeAllDbHandles();
     try {
       fs.rmSync(PID_FILE, { force: true });
     } catch {}
