@@ -8,7 +8,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
@@ -175,5 +175,119 @@ describe('manager.js dep-collector integration (DEP-09/10/11)', () => {
     assert.ok(Array.isArray(depDone.ecosystemsSeen), 'ecosystemsSeen must be an array');
     assert.ok(depDone.ecosystemsSeen.includes('npm'), 'ecosystemsSeen must include npm for package.json fixture');
     assert.equal(depDone.level, 'INFO', 'dep-scan done must be logged at INFO level');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PERF-02 — collectDependencies dedup by root_path
+//
+// Two services sharing a root_path must trigger exactly ONE collectDependencies
+// call (the second reuses the cached result). Two services with distinct
+// root_paths must each trigger their own call.
+//
+// Detection strategy: make every package.json at the tested root_path contain
+// invalid JSON so each collectDependencies invocation emits a
+// 'dep-scan: parser error' WARN through the scan logger. Count those warnings
+// to infer how many times the collector was invoked — no ESM mock needed.
+// ---------------------------------------------------------------------------
+
+describe('manager.js dep-collector dedup by root_path (PERF-02)', () => {
+  let repoDir;
+
+  beforeEach(() => {
+    repoDir = mkFixtureRepo();
+    setScanLogger(null);
+  });
+
+  afterEach(() => {
+    rmSync(repoDir, { recursive: true, force: true });
+    setAgentRunner(null);
+    setScanLogger(null);
+  });
+
+  /**
+   * Agent runner that returns 2 services at the provided root_paths.
+   * Handles the 2-call-per-repo pattern (discovery on odd, deep scan on even).
+   */
+  function makeDedupeAgentRunner(repoBaseDir, serviceRootPaths) {
+    const discoveryJson = JSON.stringify({
+      languages: ['javascript'],
+      frameworks: [],
+      service_hints: serviceRootPaths.map((rp, i) => ({ name: `svc-${i}` })),
+    });
+
+    const findings = {
+      service_name: 'svc-0',
+      confidence: 'high',
+      services: serviceRootPaths.map((rp, i) => ({
+        name: `svc-${i}`,
+        language: 'javascript',
+        root_path: rp,
+        type: 'service',
+        confidence: 'high',
+      })),
+      connections: [],
+      schemas: [],
+    };
+
+    let callCount = 0;
+    return async (_prompt, _path) => {
+      callCount++;
+      if (callCount % 2 === 1) {
+        return '```json\n' + discoveryJson + '\n```';
+      }
+      return '```json\n' + JSON.stringify(findings) + '\n```';
+    };
+  }
+
+  it('PERF-02: two services with same root_path invoke collectDependencies exactly once', async () => {
+    const qe = buildQe();
+
+    // Make api/package.json invalid so every collectDependencies call emits
+    // a 'dep-scan: parser error' WARN — this makes invocation count observable.
+    const apiDir = join(repoDir, 'api');
+    writeFileSync(join(apiDir, 'package.json'), '{ INVALID JSON }');
+
+    const logs = [];
+    setScanLogger({ log: (level, msg, extra) => logs.push({ level, msg, ...extra }) });
+
+    // Both services point to the SAME root_path (api/).
+    setAgentRunner(makeDedupeAgentRunner(repoDir, [apiDir, apiDir]));
+    await scanRepos([repoDir], { full: true }, qe);
+
+    // Before dedup: 2 collectDependencies calls → 2 parser errors.
+    // After dedup: 1 call (shared root_path cache hit) → 1 parser error.
+    const parserErrors = logs.filter(l => l.msg === 'dep-scan: parser error');
+    assert.equal(
+      parserErrors.length,
+      1,
+      `PERF-02: expected 1 collector invocation for shared root_path, got ${parserErrors.length}`,
+    );
+  });
+
+  it('PERF-02: two services with distinct root_paths each invoke collectDependencies (control)', async () => {
+    const qe = buildQe();
+
+    // Create a second service directory with its own invalid package.json.
+    const apiDir = join(repoDir, 'api');
+    const svcBDir = join(repoDir, 'svc-b');
+    mkdirSync(svcBDir, { recursive: true });
+    writeFileSync(join(apiDir, 'package.json'), '{ INVALID JSON }');
+    writeFileSync(join(svcBDir, 'package.json'), '{ ALSO INVALID }');
+
+    const logs = [];
+    setScanLogger({ log: (level, msg, extra) => logs.push({ level, msg, ...extra }) });
+
+    // Services point to DISTINCT root_paths — each needs its own collect call.
+    setAgentRunner(makeDedupeAgentRunner(repoDir, [apiDir, svcBDir]));
+    await scanRepos([repoDir], { full: true }, qe);
+
+    // Distinct root_paths: 2 collector calls → 2 parser errors (both before and after fix).
+    const parserErrors = logs.filter(l => l.msg === 'dep-scan: parser error');
+    assert.equal(
+      parserErrors.length,
+      2,
+      `PERF-02 control: expected 2 collector invocations for distinct root_paths, got ${parserErrors.length}`,
+    );
   });
 });

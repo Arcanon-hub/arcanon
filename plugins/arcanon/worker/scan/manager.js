@@ -949,6 +949,13 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
         });
       }
 
+      // PERF-02: dedup collectDependencies by root_path so co-located services
+      // (common in monorepos) don't re-read the same manifest files. Scoped to
+      // this repo's Phase B pass — a fresh Map per repo prevents cross-repo hits.
+      // On miss: call + cache. On hit: reuse. upsertDependency still runs for
+      // every service so each service gets its own dependency rows (no skipping).
+      const depsByRootPath = new Map();
+
       for (const service of services) {
         await runEnrichmentPass(service, queryEngine._db, _logger, r.repoPath);
 
@@ -957,11 +964,18 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
         // cleanup for dep rows is handled by ON DELETE CASCADE from services(id)
         // when the NEXT scan's endScan() removes a stale service.
         try {
-          const { rows, ecosystems_scanned } = await collectDependencies({
-            repoPath: r.repoPath,
-            rootPath: service.root_path,
-            logger: _logger,
-          });
+          let _depResult;
+          if (!depsByRootPath.has(service.root_path)) {
+            _depResult = await collectDependencies({
+              repoPath: r.repoPath,
+              rootPath: service.root_path,
+              logger: _logger,
+            });
+            depsByRootPath.set(service.root_path, _depResult);
+          } else {
+            _depResult = depsByRootPath.get(service.root_path);
+          }
+          const { rows, ecosystems_scanned } = _depResult;
           for (const row of rows) {
             try {
               queryEngine.upsertDependency({
