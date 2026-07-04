@@ -84,6 +84,47 @@ function _readHubConfig() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// allSettledBounded — pure-JS semaphore, no external dependency (PERF-04)
+//
+// Runs fn over items with at most `limit` concurrent executions.
+// Uses a fixed-pool-of-workers pattern: each worker pulls items from a shared
+// index until exhausted. Results are written index-aligned so the output array
+// matches the order of `items` regardless of completion order.
+//
+// Returns an array of PromiseSettledResult — same shape as Promise.allSettled().
+// limit <= 0 or empty items returns [] (caller uses the legacy unbounded path).
+// ---------------------------------------------------------------------------
+
+/**
+ * @template T, R
+ * @param {T[]} items
+ * @param {number} limit   - maximum concurrent executions; must be > 0
+ * @param {function(T): Promise<R>} fn
+ * @returns {Promise<Array<{status:'fulfilled',value:R}|{status:'rejected',reason:unknown}>>}
+ */
+async function allSettledBounded(items, limit, fn) {
+  if (limit <= 0 || items.length === 0) return [];
+  const results = new Array(items.length);
+  let nextIdx = 0;
+
+  async function runWorker() {
+    while (nextIdx < items.length) {
+      const i = nextIdx++;
+      try {
+        results[i] = { status: 'fulfilled', value: await fn(items[i]) };
+      } catch (err) {
+        results[i] = { status: 'rejected', reason: err };
+      }
+    }
+  }
+
+  // Spawn min(limit, items.length) concurrent worker coroutines.
+  const workers = Array.from({ length: Math.min(limit, items.length) }, runWorker);
+  await Promise.all(workers);
+  return results;
+}
+
 // Register auth/DB extractor enricher .
 registerEnricher("auth-db", extractAuthAndDb);
 
@@ -778,9 +819,12 @@ export async function scanRepos(repoPaths, options = {}, queryEngine) {
   }
 
   // ---------------------------------------------------------------------------
-  // Phase A — Parallel agent invocation via Promise.allSettled fan-out
+  // Phase A — Parallel agent invocation with bounded concurrency (PERF-04)
   // ---------------------------------------------------------------------------
-  const settled = await Promise.allSettled(repoPaths.map((rp) => scanOneRepo(rp)));
+  const concurrency = options.concurrency ?? 3; // default 3; 0 = legacy unbounded opt-out
+  const settled = concurrency > 0
+    ? await allSettledBounded(repoPaths, concurrency, scanOneRepo)
+    : await Promise.allSettled(repoPaths.map((rp) => scanOneRepo(rp)));
 
   // Collect results — rejected promises become skip results (scanOneRepo catches
   // all throws internally, but handle defensively in case of unexpected rejection)
