@@ -191,6 +191,38 @@ async function createHttpServer(queryEngine, options = {}) {
   });
 
   // -----------------------------------------------------------------------
+  // PERF-06: Per-route response-time logging + DB handle lifecycle hooks
+  // -----------------------------------------------------------------------
+
+  // Stamp request start time so onResponse can compute elapsed ms.
+  // performance is a Node 16+ global (guaranteed on Node >=22.13).
+  fastify.addHook('onRequest', (request, _reply, done) => {
+    request._startMs = performance.now();
+    done();
+  });
+
+  // Log every response through httpLog so slow routes are observable.
+  // This is a no-op when no logger is configured (log === null).
+  fastify.addHook('onResponse', (request, reply, done) => {
+    const elapsed = request._startMs != null
+      ? performance.now() - request._startMs
+      : -1;
+    httpLog('INFO', `${request.method} ${request.routeOptions?.url ?? request.url} ${reply.statusCode} ${elapsed.toFixed(1)}ms`, {
+      route: request.routeOptions?.url ?? request.url,
+      method: request.method,
+      status: reply.statusCode,
+      elapsed_ms: elapsed,
+    });
+    done();
+  });
+
+  // Belt-and-suspenders DB handle release on server teardown.
+  // Primary signal path is SIGTERM/SIGINT in worker/index.js (143-03).
+  fastify.addHook('onClose', async (_instance) => {
+    closeAllDbHandles();
+  });
+
+  // -----------------------------------------------------------------------
   // Routes — readiness MUST be first
   // -----------------------------------------------------------------------
 
@@ -326,6 +358,11 @@ async function createHttpServer(queryEngine, options = {}) {
    *     }>
    *   }
    */
+  // PERF-06 (known synchronous route): performs synchronous SQLite reads + one
+  // execFileSync("git rev-list --count") per repo. getCommitsSince has a 30s TTL
+  // cache (143-05) so repeated UI polls do not spawn one subprocess per repo.
+  // Latency budget: <100ms for ≤10 repos when cached; <500ms on first call.
+  // Async offload explicitly deferred (node:sqlite DatabaseSync is sync by design).
   fastify.get("/api/scan-freshness", async (request, reply) => {
     const project = request.query?.project;
     const qe = getQE(request);
@@ -433,6 +470,10 @@ async function createHttpServer(queryEngine, options = {}) {
    *                               exact match otherwise
    *   (neither set)               implicit --all 
    */
+  // PERF-06 (known synchronous route): reads up to 1000 cited source files via
+  // readFileSync. The 1000-connection hard cap (below) bounds the worst case.
+  // Async offload explicitly deferred (node:sqlite DatabaseSync is sync by design).
+  // Latency budget: <2s for ≤1000 connections (local filesystem, cached OS pages).
   fastify.get("/api/verify", async (request, reply) => {
     const projectRoot = request.query?.project;
     if (!projectRoot) {
@@ -726,6 +767,9 @@ async function createHttpServer(queryEngine, options = {}) {
   });
 
   // 8. GET /api/logs — return filtered log lines for UI polling
+  // PERF-06 (known synchronous route): reads the worker log file via readFileSync.
+  // The log file is local; reads are typically <5ms. No async offload needed at this scale.
+  // Latency budget: <50ms for ≤10k log lines.
   fastify.get("/api/logs", async (request, reply) => {
     const logDir = options.dataDir;
     if (!logDir) {
