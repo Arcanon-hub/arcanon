@@ -1,5 +1,35 @@
 # Milestones
 
+## v0.2.0 Scan Persistence, Pipeline & Security Hardening (Shipped: 2026-07-04)
+
+**Phases completed:** 9 phases (135-143), 21 plans, ~50 tasks
+**Requirements:** 38/38 complete (SEC-01..08, ISO-01..11, PIPE-01..04, CTR-01..05, INTG-01..04, PERF-01..06)
+**Git range:** `v0.1.9` → `8a5496c` (PRs #58, #59, #60, #61, #62, #63, #64, #68, #70 + CI hotfix #69) — 65 files, +9,692 / −982
+**Timeline:** 2026-06-29 → 2026-07-04 (~6 days) · audit `passed`, 0 blockers — `.planning/milestones/v0.2.0-MILESTONE-AUDIT.md`
+**Shape:** four GitHub issues (#49/#50/#51/#52) fixed as one dependency-ordered milestone — security (independent) → persistence foundation → pipeline → integrations → scaling. Every phase carries a `VERIFICATION.md = passed`; the cross-phase integration checker confirmed the scan write path composes correctly across six phases without any later phase undoing an earlier one.
+
+**Key accomplishments:**
+
+- **Security (#51 — phases 135-136, PRs #58/#59):** closed an RCE-class shell-injection in the MCP server (git + oasdiff via `execFileSync` argv, `commit_range` validation, redacted error logs); bound Hub upload-queue rows to an immutable `(hub_url, org_id)` so an org switch can't misroute a queued upload, with dead-on-4xx.
+- **Persistence foundation (#49 — phases 137-139, PRs #60/#61/#62):** removed the process-global DB singleton → per-project pool keyed by resolved dbPath; wrapped the full scan write path in one transaction (rollback-atomic, `completed_at` last, repo-scoped cleanup); added immutable snapshots wired into scan completion (migration 021 `map_versions.kind`/`repos_json`), a project run-id, and full child-state reconciliation.
+- **Pipeline (#50 — phases 140-141, PRs #63/#64):** one canonical `contract.js` all persistence paths validate against (`cross-service` crossing, schema↔connection identity, source/symbol split — migrations 022/023); one `persistScanResult` pipeline behind all four transports (commands, manager, HTTP, MCP), fixing the MCP false-success, the rescan override `TypeError`, and the incremental-delete-of-unchanged bug.
+- **Integration correctness (#52a — phase 142, PR #68):** `/arcanon:drift graph` routed through retained snapshots via `diffScanVersions` (fixed two fatal SQL bugs); Chroma sync hooked once into the completion path with project-namespaced IDs; dead `writeScan` removed; UI dangling-edge/ghost-node fix.
+- **Scaling (#52b — phase 143, PR #70):** getGraph pagination, N+1 query batching (detectMismatches / actor connections / evidence cache), performance indexes (migration 024), bounded multi-repo concurrency, DB-pool idle eviction + close-on-shutdown, TTL caches. Benchmarked: a 200-service / 1000-connection graph renders in ~2.6ms.
+
+**Patterns established:**
+
+- **Verify CI-green before merging (learned the hard way):** CI checks are NOT required status checks on `main`, so `gh pr merge --auto` merged PRs #64/#68 while CI was red (a logger `ENOENT`-on-fresh-install bug that only reproduced where no worker had ever run — every CI runner). Fixed in #69; thereafter every merge was gated on actual CI green, and phase verifiers gained a fresh-`HOME` CI-parity check.
+- **Sequential-on-main execution with per-phase executor→verifier→PR:** each phase shipped as its own reviewed PR; the verifier re-ran the full suite against shipped code (not SUMMARY claims).
+- **Reproduce CI env issues locally with `HOME=$(mktemp -d)`** — the fresh-home run surfaces missing-dir/first-install bugs the developer's populated `~/.arcanon` hides.
+
+**Known deferred at close (all tracked as GitHub issues):**
+
+- **#71** (bug) — DB pool idle-eviction can close a handle held by a >10-min running scan (that repo silently fails). Low probability at current scale; fix = re-touch at write time or scan-lock/sweep integration.
+- **#72** (enhancement) — the agent scan path bypasses the canonical `validateFindings` gate (Phase 140 design intent; defense-in-depth follow-up).
+- **#73** (process, priority: high) — make the four CI checks *required* on `main` branch protection so auto-merge can't land red again.
+
+---
+
 ## v0.1.9 Shadow Trio Removal, Rescan Repair & Scan/Mismatch Fixes (Shipped: 2026-06-29)
 
 **Phases completed:** 6 phases (129-134), 13 plans, 32 tasks
