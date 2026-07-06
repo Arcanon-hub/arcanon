@@ -1472,6 +1472,7 @@ describe("runDiscoveryPass", () => {
 describe("concurrent scan locking", () => {
   let repoDir;
   let lockDir;
+  let prevDataDir;
 
   const silentSlog = (_level, _msg, _extra = {}) => {};
 
@@ -1512,11 +1513,15 @@ describe("concurrent scan locking", () => {
 
     // Use a temp directory as lock dir to avoid polluting ~/.arcanon
     lockDir = mkdtempSync(join(tmpdir(), "arcanon-locktest-"));
+    // Save the ambient value (set by worker/test-setup.mjs) so we RESTORE it
+    // rather than delete it — later describe blocks rely on that isolation.
+    prevDataDir = process.env.ARCANON_DATA_DIR;
     process.env.ARCANON_DATA_DIR = lockDir;
   });
 
   after(() => {
-    delete process.env.ARCANON_DATA_DIR;
+    if (prevDataDir === undefined) delete process.env.ARCANON_DATA_DIR;
+    else process.env.ARCANON_DATA_DIR = prevDataDir;
     cleanupDir(repoDir);
     cleanupDir(lockDir);
   });
