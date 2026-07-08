@@ -36,9 +36,9 @@
     "zod": "^3.25.0"
   },
   "scripts": {
-    "test": "find worker -name '*.test.js' -not -path '*/node_modules/*' -print0 | xargs -0 node --test",
-    "test:storage": "node --test worker/db/query-engine-*.test.js",
-    "test:hub-sync": "find worker/hub-sync -name '*.test.js' -print0 | xargs -0 node --test",
-    "test:migrations": "node --test worker/db/migration-*.test.js worker/db/migrations.test.js"
+    "test": "export NODE_OPTIONS=\"--import ./worker/test-setup.mjs\"; find worker -name '*.test.js' -not -path '*/node_modules/*' -print0 | xargs -0 node --test",
+    "test:storage": "export NODE_OPTIONS=\"--import ./worker/test-setup.mjs\"; node --test worker/db/query-engine-*.test.js",
+    "test:hub-sync": "export NODE_OPTIONS=\"--import ./worker/test-setup.mjs\"; find worker/hub-sync -name '*.test.js' -print0 | xargs -0 node --test",
+    "test:migrations": "export NODE_OPTIONS=\"--import ./worker/test-setup.mjs\"; node --test worker/db/migration-*.test.js worker/db/migrations.test.js"
   }
 }

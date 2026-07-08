@@ -24,7 +24,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join, basename, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
@@ -574,6 +574,10 @@ function isProcessRunning(pid) {
 export function acquireScanLock(repoPaths, slog) {
   const hash = scanLockHash(repoPaths);
   const lockDir = resolveDataDir();
+  // A fresh install (or a fresh CI HOME) may not have created the data dir
+  // yet; the first scan must not ENOENT while writing its lock. mkdir -p is
+  // idempotent and cheap. Mirrors the logger's dir-safety guarantee.
+  mkdirSync(lockDir, { recursive: true });
   const lockPath = join(lockDir, `scan-${hash}.lock`);
 
   if (existsSync(lockPath)) {
